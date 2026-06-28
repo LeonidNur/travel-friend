@@ -230,6 +230,39 @@ select {
   font-size: 0.9rem;
 }
 
+.diagnostic-list {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.diagnostic-list__item {
+  display: grid;
+  gap: 2px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(165, 196, 255, 0.1);
+}
+
+.diagnostic-list__item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.diagnostic-list__label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagnostic-list__value {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
 .bottom-navigation {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
