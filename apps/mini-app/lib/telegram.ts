@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   expandViewport,
@@ -9,9 +9,10 @@ import {
   miniAppReady,
   retrieveLaunchParams
 } from '@telegram-apps/sdk';
-import { isThemeParamsDark, useSignal, viewportHeight } from '@telegram-apps/sdk-react';
+import { isThemeParamsDark, viewportHeight } from '@telegram-apps/sdk-react';
 
 export interface TelegramState {
+  isReady: boolean;
   isTelegram: boolean;
   platform: string;
   version: string;
@@ -39,11 +40,23 @@ function getBrowserViewportHeight(): number {
 
 function getBrowserFallbackState(): TelegramState {
   return {
+    isReady: true,
     isTelegram: false,
     platform: 'browser',
     version: 'n/a',
     colorScheme: getBrowserColorScheme(),
     viewportHeight: getBrowserViewportHeight()
+  };
+}
+
+function getLoadingState(): TelegramState {
+  return {
+    isReady: false,
+    isTelegram: false,
+    platform: 'loading',
+    version: 'loading',
+    colorScheme: 'light',
+    viewportHeight: 0
   };
 }
 
@@ -54,6 +67,7 @@ function getTelegramFallbackState(
   const launchParams = retrieveLaunchParams();
 
   return {
+    isReady: true,
     isTelegram: true,
     platform: launchParams.tgWebAppPlatform,
     version: launchParams.tgWebAppVersion,
@@ -74,29 +88,31 @@ function ensureTelegramInitialized(): void {
 }
 
 export function useTelegram(): TelegramState {
-  const isTelegram = useMemo(() => isTMA(), []);
-  const themeIsDark = useSignal(isThemeParamsDark);
-  const currentViewportHeight = useSignal(viewportHeight);
+  const [telegramState, setTelegramState] = useState<TelegramState>(getLoadingState);
 
   useEffect(() => {
-    ensureTelegramInitialized();
-  }, [isTelegram]);
-
-  return useMemo(() => {
-    if (!isTelegram) {
-      return getBrowserFallbackState();
+    if (!isTMA()) {
+      setTelegramState(getBrowserFallbackState());
+      return;
     }
 
     try {
-      return getTelegramFallbackState(themeIsDark ? 'dark' : 'light', currentViewportHeight);
+      ensureTelegramInitialized();
+
+      setTelegramState(
+        getTelegramFallbackState(isThemeParamsDark() ? 'dark' : 'light', viewportHeight())
+      );
     } catch {
-      return {
+      setTelegramState({
+        isReady: true,
         isTelegram: true,
         platform: 'unknown',
         version: 'unknown',
-        colorScheme: themeIsDark ? 'dark' : 'light',
-        viewportHeight: currentViewportHeight
-      };
+        colorScheme: 'light',
+        viewportHeight: 0
+      });
     }
-  }, [currentViewportHeight, isTelegram, themeIsDark]);
+  }, []);
+
+  return telegramState;
 }
