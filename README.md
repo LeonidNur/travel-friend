@@ -1,8 +1,10 @@
 # travel-friend
 
-## Travel Friend — мобильное приложение для поиска попутчиков и совместного планирования путешествий с помощью ИИ.
+## Travel Friend — Telegram Mini App для поиска попутчиков и совместного планирования путешествий с помощью ИИ.
 
 Проект помогает молодым людям находить подходящую компанию для поездки, знакомиться в чате, обсуждать идеи путешествия и превращать разрозненные желания участников в понятный маршрут, бюджет и план действий.
+
+На этапе MVP продукт реализуется не как отдельное мобильное приложение, а как Telegram Mini App. Это позволяет быстрее проверить гипотезу, упростить вход для пользователей и сократить время разработки.
 
 ### 1. Идея проекта
 
@@ -40,24 +42,34 @@ Travel Friend не является просто travel-planner и не явля
 
 ### 4. MVP
 
-Цель MVP — проверить ключевую гипотезу:
+На этапе MVP Travel Friend реализуется как Telegram Mini App, а не как отдельное iOS/Android-приложение.
 
-Люди готовы заполнять профиль, искать компанию для поездки, вступать в чат с потенциальными попутчиками и использовать ИИ, чтобы договориться о совместном путешествии.
+Такой формат выбран потому что:
+
+* пользователям не нужно устанавливать отдельное приложение;
+* проще быстро запустить первую версию;
+* проще тестировать продукт на первых пользователях;
+* у команды уже есть релевантный опыт;
+* Telegram сам закрывает часть пользовательского входа и коммуникационной среды;
+* можно быстрее подготовить демонстрацию для кейс-чемпионата.
 
 В MVP входит
 
-* регистрация пользователя;
+* запуск Telegram Mini App;
+* вход пользователя через Telegram;
 * заполнение профиля;
 * анкета путешественника;
 * поиск потенциальных попутчиков;
 * механика взаимного интереса / мэтча;
 * создание чата после совпадения;
-* групповой или личный чат для обсуждения поездки;
-* AI-помощник внутри чата;
-* генерация черновика поездки на основе предпочтений участников.
+* обсуждение поездки;
+* AI-помощник для согласования поездки;
+* генерация черновика маршрута на основе предпочтений участников.
 
 В MVP не входит
 
+* отдельное мобильное приложение для iOS и Android;
+* публикация в App Store и Google Play;
 * покупка билетов;
 * бронирование отелей;
 * полноценная юридическая верификация документов;
@@ -178,21 +190,33 @@ Travel-анкета помогает понять, с кем пользоват�
 
 Предлагаемый стек для MVP:
 
-* Mobile: React Native + Expo + TypeScript
-* Backend: Supabase + Python FastAPI
-* Database: PostgreSQL через Supabase
-* Auth: Supabase Auth
-* Realtime chat: Supabase Realtime
-* Storage: Supabase Storage
+* Client: Telegram Mini App
+* Frontend: React + TypeScript
+* Telegram integration: Telegram Bot API + Telegram Web Apps SDK
+* Backend: Python FastAPI
+* Database: PostgreSQL
+* Auth: авторизация через Telegram init data
+* Storage: S3-compatible storage или Supabase Storage
 * AI-service: Python FastAPI
 * LLM: внешний API на старте
 * Design: Figma
 * Repository: GitHub
 
+Возможный упрощённый вариант для быстрого старта:
+
+* Frontend: React + Vite + TypeScript
+* Backend: FastAPI
+* Database/Auth/Storage: Supabase
+* Bot: aiogram или python-telegram-bot
+* Deploy: Railway / Render / VPS
+
+Telegram Mini App не отменяет будущую разработку отдельного мобильного приложения. Если MVP подтвердит спрос, текущую продуктовую логику, базу данных и AI-сервис можно будет переиспользовать для iOS/Android-версии.
+
 ### 9. Предварительная структура проекта
 
 travel-friend/
   README.md
+
   docs/
     product-vision.md
     mvp-scope.md
@@ -209,13 +233,25 @@ travel-friend/
       codex.md
       product-architect.md
       ai-copilot-prompts.md
+
   apps/
-    mobile/
+    mini-app/
+      # Telegram Mini App frontend
+
   services/
-    ai-service/
+    api/
+      # Backend API: users, profiles, matching, chats
+
+  ai-service/
+      # AI logic, LLM calls, trip plan generation
+
+  bot/
+      # Telegram bot logic
+
   supabase/
     migrations/
     seed.sql
+
   assets/
     brand/
     mockups/
@@ -239,11 +275,11 @@ travel-friend/
 3. Спроектировать основные экраны.
 4. Спроектировать базу данных.
 5. Создать Figma-прототип.
-6. Поднять Expo-приложение.
-7. Подключить авторизацию.
+6. Поднять Telegram Mini App.
+7. Подключить авторизацию через Telegram.
 8. Реализовать профиль и анкету.
 9. Реализовать поиск попутчиков.
-10. Реализовать чат.
+10. Реализовать чат или связку с Telegram-чатом.
 11. Подключить AI-service.
 12. Подготовить демонстрационный сценарий для кейс-чемпионата.
 
