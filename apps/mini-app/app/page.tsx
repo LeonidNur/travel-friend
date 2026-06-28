@@ -1,62 +1,63 @@
-const cards = [
+const featuredDirections = ['Стамбул', 'Тбилиси', 'Пхукет', 'Барселона'];
+const upcomingTrips = [
   {
-    title: 'Profile',
-    description: 'Show your travel style, languages, and destination preferences.',
-    items: ['Bio', 'Languages', 'Travel style']
+    title: 'Москва → Сочи',
+    meta: '2 человека ищут попутчиков',
+    note: 'Вылет через 9 дней'
   },
   {
-    title: 'Trips',
-    description: 'Create and discover trips with clear dates, routes, and interests.',
-    items: ['Create trip', 'Browse trips', 'Join requests']
-  },
-  {
-    title: 'AI Helper',
-    description: 'Plan routes, estimate costs, and get quick travel recommendations.',
-    items: ['Routes', 'Logistics', 'Prices']
+    title: 'Казань → Санкт-Петербург',
+    meta: 'Готова группа на 4 места',
+    note: 'Нужен удобный маршрут'
   }
-] as const;
+];
 
 export default function HomePage() {
   return (
-    <main className="home-screen">
-      <section className="hero-card">
-        <div className="hero-badge">Telegram Mini App MVP</div>
-        <h1>Travel Friend</h1>
-        <p className="hero-copy">
-          Find people for your next trip, keep plans organized, and get quick help with travel
-          decisions.
+    <section className="page">
+      <article className="hero-card">
+        <p className="section-kicker">Поиск попутчиков</p>
+        <h2 className="hero-card__title">Найдите поездку или людей для следующего маршрута</h2>
+        <p className="hero-card__copy">
+          Смотрите направления, сравнивайте поездки и быстро переходите к чату с будущей
+          группой.
         </p>
+      </article>
 
-        <div className="hero-stats" aria-label="Project highlights">
-          <div>
-            <strong>3</strong>
-            <span>core modules</span>
-          </div>
-          <div>
-            <strong>Mobile</strong>
-            <span>first layout</span>
-          </div>
-          <div>
-            <strong>Ready</strong>
-            <span>for MVP work</span>
-          </div>
-        </div>
-      </section>
+      <section className="card-grid" aria-label="Основные разделы">
+        <article className="surface-card">
+          <p className="surface-card__title">Найти попутчиков</p>
+          <p className="surface-card__copy">
+            Быстрый вход в поиск поездок по датам, направлению и интересам.
+          </p>
+        </article>
 
-      <section className="feature-grid" aria-label="Mini app sections">
-        {cards.map((card) => (
-          <article className="feature-card" key={card.title}>
-            <p className="feature-kicker">{card.title}</p>
-            <h2>{card.title}</h2>
-            <p>{card.description}</p>
-            <ul>
-              {card.items.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </article>
-        ))}
+        <article className="surface-card">
+          <p className="surface-card__title">Популярные направления</p>
+          <div className="chip-row" aria-label="Популярные направления">
+            {featuredDirections.map((direction) => (
+              <span className="chip" key={direction}>
+                {direction}
+              </span>
+            ))}
+          </div>
+        </article>
+
+        <article className="surface-card">
+          <p className="surface-card__title">Ближайшие поездки</p>
+          <div className="list-stack">
+            {upcomingTrips.map((trip) => (
+              <div className="list-item" key={trip.title}>
+                <div>
+                  <h3 className="list-item__title">{trip.title}</h3>
+                  <p className="list-item__meta">{trip.meta}</p>
+                </div>
+                <span className="list-item__note">{trip.note}</span>
+              </div>
+            ))}
+          </div>
+        </article>
       </section>
-    </main>
+    </section>
   );
 }
