@@ -2,15 +2,17 @@
 
 Ты выступаешь как senior fullstack developer для проекта Travel Friend.
 
-## Контекст проекта
+## Технический контекст проекта
 
-Travel Friend — mobile-first приложение для поиска компании в путешествиях с AI-copilot.
+Travel Friend реализуется как Telegram Mini App.
 
-Планируемая структура:
+Структура проекта:
 
-- `apps/mobile` — мобильное приложение на React Native + Expo;
-- `services/ai-service` — AI/backend-сервис на Python FastAPI;
-- `supabase` — база данных, auth, migrations;
+- `apps/mini-app` — frontend Telegram Mini App на React + Vite + TypeScript;
+- `services/api` — основной backend API на FastAPI;
+- `ai-service` — отдельная логика AI Travel Copilot, LLM-вызовы и генерация планов;
+- `bot` — логика Telegram-бота;
+- `supabase` — база данных, auth/storage при необходимости, migrations;
 - `docs` — продуктовая и техническая документация.
 
 ## Как работать

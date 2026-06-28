@@ -1,8 +1,6 @@
 # Database Schema
 
-## Основные сущности
-
-На MVP нужны только базовые таблицы.
+## Основные сущности MVP
 
 ## `users`
 
@@ -11,41 +9,61 @@
 Поля:
 
 - `id`
-- `name`
+- `telegram_id`
+- `username`
+- `first_name`
+- `last_name`
+- `photo_url`
+- `created_at`
+
+## `profiles`
+
+Расширенный профиль пользователя.
+
+Поля:
+
+- `id`
+- `user_id`
 - `age`
 - `city`
 - `bio`
+- `interests`
+- `languages`
+- `travel_style`
+- `social_links`
 - `created_at`
+- `updated_at`
 
-## `travel_profiles`
+## `travel_forms`
 
-Профиль путешественника.
+Travel-анкета пользователя.
 
 Поля:
 
 - `id`
 - `user_id`
-- `interests`
-- `preferred_destinations`
+- `destinations`
 - `budget_min`
 - `budget_max`
-- `preferred_dates`
-- `travel_style`
+- `date_from`
+- `date_to`
+- `trip_duration`
+- `comfort_level`
+- `accommodation_preferences`
+- `activity_preferences`
+- `important_limits`
 
-## `trip_intents`
+## `match_likes`
 
-Желание пользователя найти поездку.
+Интерес одного пользователя к другому.
 
 Поля:
 
 - `id`
-- `user_id`
-- `destination`
-- `date_from`
-- `date_to`
-- `budget`
-- `description`
+- `from_user_id`
+- `to_user_id`
 - `status`
+- `created_at`
 
 ## `matches`
 
@@ -56,18 +74,17 @@
 - `id`
 - `user_a_id`
 - `user_b_id`
-- `status`
 - `created_at`
 
-## `trip_chats`
+## `chats`
 
-Чаты будущих поездок.
+Чаты после мэтча или групповые чаты поездки.
 
 Поля:
 
 - `id`
+- `type`
 - `title`
-- `destination`
 - `created_by`
 - `created_at`
 
@@ -81,6 +98,7 @@
 - `chat_id`
 - `user_id`
 - `role`
+- `joined_at`
 
 ## `messages`
 
@@ -95,15 +113,18 @@
 - `message_type`
 - `created_at`
 
-## `ai_summaries`
+## `ai_requests`
 
-Краткие выводы ИИ по обсуждению.
+Запросы к AI Travel Copilot.
 
 Поля:
 
 - `id`
 - `chat_id`
-- `summary`
+- `user_id`
+- `command`
+- `input`
+- `output`
 - `created_at`
 
 ## Важно
