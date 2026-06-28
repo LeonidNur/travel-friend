@@ -1,34 +1,26 @@
 # Roadmap
 
-## Этап 1 — Подготовка
+## Done
 
-- Описать продуктовую идею.
-- Определить MVP.
-- Описать пользовательские сценарии.
-- Спроектировать базовую структуру данных.
-- Подготовить первые макеты.
+- ✅ Next.js skeleton
+- ✅ базовая mobile navigation
+- ✅ страницы `/`, `/chats`, `/trips`, `/profile`
+- ✅ Telegram SDK environment detection
+- ✅ browser fallback
+- ✅ hydration mismatch fix
 
-## Этап 2 — MVP
+## Next
 
-- Сделать регистрацию.
-- Сделать профиль пользователя.
-- Сделать карточки путешественников.
-- Сделать механику взаимного интереса.
-- Сделать групповой чат поездки.
-- Подключить базовый AI-copilot.
+1. Telegram bot / public URL setup
+2. Telegram auth
+3. server-side `initData` validation
+4. Supabase schema
+5. Profile MVP
+6. Trips MVP
+7. Chats/groups flow
+8. AI assistant inside chats/trips
 
-## Этап 3 — Первые пользователи
+## Notes
 
-- Провести тестирование на небольшой группе.
-- Собрать обратную связь.
-- Проверить, заполняют ли люди профиль.
-- Проверить, пользуются ли поиском компании.
-- Проверить, помогает ли ИИ в чате.
-
-## Этап 4 — Улучшения
-
-- Улучшить фильтры поиска.
-- Добавить доверие и безопасность.
-- Улучшить AI-copilot.
-- Добавить аналитику.
-- Проверить первые варианты монетизации.
+- AI assistant is planned as an embedded feature inside the chat/trip flow.
+- The current app shell is still a foundation; product logic will be added incrementally.
