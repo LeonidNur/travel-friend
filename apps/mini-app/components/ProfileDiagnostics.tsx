@@ -4,39 +4,46 @@ import { useTelegram } from '@/lib/telegram';
 
 export function ProfileDiagnostics() {
   const telegram = useTelegram();
+  const isLoading = !telegram.isReady;
 
   return (
     <section className="surface-card surface-card--compact" aria-label="Telegram diagnostics">
       <p className="surface-card__title">Telegram diagnostics</p>
 
-      {!telegram.isTelegram ? (
+      {isLoading ? (
+        <p className="surface-card__note">Loading Telegram data...</p>
+      ) : !telegram.isTelegram ? (
         <p className="surface-card__note">Development mode (outside Telegram).</p>
       ) : null}
 
       <dl className="diagnostic-list">
         <div className="diagnostic-list__item">
           <dt className="diagnostic-list__label">Is Telegram</dt>
-          <dd className="diagnostic-list__value">{telegram.isTelegram ? 'yes' : 'no'}</dd>
+          <dd className="diagnostic-list__value">
+            {isLoading ? '—' : telegram.isTelegram ? 'yes' : 'no'}
+          </dd>
         </div>
 
         <div className="diagnostic-list__item">
           <dt className="diagnostic-list__label">Platform</dt>
-          <dd className="diagnostic-list__value">{telegram.platform}</dd>
+          <dd className="diagnostic-list__value">{isLoading ? '—' : telegram.platform}</dd>
         </div>
 
         <div className="diagnostic-list__item">
           <dt className="diagnostic-list__label">Version</dt>
-          <dd className="diagnostic-list__value">{telegram.version}</dd>
+          <dd className="diagnostic-list__value">{isLoading ? '—' : telegram.version}</dd>
         </div>
 
         <div className="diagnostic-list__item">
           <dt className="diagnostic-list__label">Color scheme</dt>
-          <dd className="diagnostic-list__value">{telegram.colorScheme}</dd>
+          <dd className="diagnostic-list__value">{isLoading ? '—' : telegram.colorScheme}</dd>
         </div>
 
         <div className="diagnostic-list__item">
           <dt className="diagnostic-list__label">Viewport height</dt>
-          <dd className="diagnostic-list__value">{telegram.viewportHeight}px</dd>
+          <dd className="diagnostic-list__value">
+            {isLoading ? '—' : `${telegram.viewportHeight}px`}
+          </dd>
         </div>
       </dl>
     </section>
