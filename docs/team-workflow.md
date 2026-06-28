@@ -1,24 +1,24 @@
-# Team Workflow
+# Рабочий процесс команды
 
-## Roles
+## Роли
 
-- ChatGPT: architecture, product logic, task decomposition, review.
-- Codex: implementation of small scoped tasks.
-- Developer / Tech Lead: accepts decisions, manages git, reviews result.
-- Backend / AI teammate: Supabase, DB, RAG, LLM, API.
-- UX / UI designer: Figma, UX, UI, design system.
-- Marketing / Product research teammate: market, competitors, users.
+- ChatGPT: архитектура, продуктовая логика, декомпозиция задач и ревью.
+- Codex: реализация небольших задач с чётким скоупом.
+- Разработчик / техлид: принимает решения, управляет git и проверяет результат.
+- Backend / AI-специалист: Supabase, база данных, RAG, LLM, API.
+- UX/UI-дизайнер: Figma, UX, UI, дизайн-система.
+- Маркетинг / исследование продукта: рынок, конкуренты, пользователи.
 
-## Working Rule
+## Правило работы
 
-One branch / PR = one completed task.
+Одна ветка / один PR = одна законченная задача.
 
-## Daily Ritual
+## Ежедневный ритуал
 
-After work, update:
+После работы обновлять:
 
 - `CHANGELOG.md`
 - `docs/dev-log.md`
 - `docs/roadmap.md`
 
-This keeps the current state, decisions, and next steps aligned across the team.
+Это помогает держать в синхроне текущее состояние проекта, принятые решения и следующие шаги.

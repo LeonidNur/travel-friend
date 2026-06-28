@@ -1,26 +1,26 @@
-# Dev Log
+# Дневник разработки
 
-## 2026-06-28 - Day 1
+## 2026-06-28 — День 1
 
-### What was done
+### Что было сделано
 
-- Set up the first Next.js Telegram Mini App skeleton in `apps/mini-app`.
-- Added a mobile-first bottom navigation and routed the app to `/`, `/chats`, `/trips`, and `/profile`.
-- Wired Telegram SDK environment detection so the app can recognize Telegram and read launch parameters when available.
-- Added a browser fallback so the project can still be opened and developed outside Telegram.
-- Fixed the hydration mismatch path by keeping Telegram state client-side and separating loading, Telegram, and browser states.
+- Настроен первый каркас Mini App на Next.js в `apps/mini-app`.
+- Добавлена мобильная нижняя навигация и маршруты `/`, `/chats`, `/trips` и `/profile`.
+- Подключено определение окружения Telegram SDK, чтобы приложение могло понимать, запущено ли оно внутри Telegram.
+- Добавлен резервный режим браузера, чтобы проект можно было открывать и развивать вне Telegram во время локальной разработки.
+- Исправлен путь с hydration mismatch: Telegram state хранится на клиенте, а состояния загрузки, Telegram и браузера разделены.
 
-### Technical decisions
+### Технические решения
 
-- Telegram Mini App is the primary MVP surface instead of a standalone mobile app.
-- AI help will be embedded inside chats and trips, not exposed as a separate tab.
-- Local browser development remains supported so the app can be iterated on without Telegram every time.
-- The current build is intentionally a shell: routes, layout, navigation, and environment detection come first, product logic later.
+- Telegram Mini App выбран как основная MVP-платформа вместо отдельного мобильного приложения.
+- AI-помощник будет встроен в чаты и поездки, а не вынесен в отдельный экран.
+- Локальная разработка в браузере сохранена, чтобы не зависеть от Telegram на каждом шаге.
+- Текущая сборка намеренно является каркасом: сначала маршруты, layout, навигация и определение окружения, затем продуктовая логика.
 
-### What remains next
+### Что дальше
 
-- Telegram bot and public URL setup.
-- Telegram auth flow and server-side `initData` validation.
-- Supabase schema for users, trips, chats, and membership data.
-- Profile MVP, Trips MVP, and Chats/groups flow.
-- Embedded AI assistant inside trip and chat contexts.
+- Настройка Telegram bot и публичного URL.
+- Telegram-аутентификация и серверная проверка `initData`.
+- Схема Supabase для пользователей, поездок, чатов и членства в группах.
+- MVP профиля, MVP поездок и чатовый поток.
+- Встроенный AI-помощник внутри контекста поездки и чата.

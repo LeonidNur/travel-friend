@@ -1,26 +1,26 @@
-# Roadmap
+# Дорожная карта
 
-## Done
+## Готово
 
-- ✅ Next.js skeleton
-- ✅ базовая mobile navigation
+- ✅ каркас Mini App на Next.js
+- ✅ базовая мобильная навигация
 - ✅ страницы `/`, `/chats`, `/trips`, `/profile`
-- ✅ Telegram SDK environment detection
-- ✅ browser fallback
-- ✅ hydration mismatch fix
+- ✅ определение окружения Telegram SDK
+- ✅ резервный режим браузера
+- ✅ исправление несовпадения при гидратации
 
-## Next
+## Дальше
 
-1. Telegram bot / public URL setup
-2. Telegram auth
-3. server-side `initData` validation
-4. Supabase schema
-5. Profile MVP
-6. Trips MVP
-7. Chats/groups flow
-8. AI assistant inside chats/trips
+1. Настроить Telegram bot и публичный URL.
+2. Реализовать Telegram-аутентификацию.
+3. Добавить серверную проверку `initData`.
+4. Спроектировать и подключить схему Supabase.
+5. Сделать MVP профиля.
+6. Сделать MVP поездок.
+7. Реализовать поток чатов и групп.
+8. Встроить AI-помощника внутрь чатов и поездок.
 
-## Notes
+## Примечания
 
-- AI assistant is planned as an embedded feature inside the chat/trip flow.
-- The current app shell is still a foundation; product logic will be added incrementally.
+- AI-помощник должен быть встроен в сценарий чатов и поездок, а не существовать как отдельная вкладка.
+- Текущий каркас приложения — это фундамент, на который постепенно будет наращиваться продуктовая логика.
