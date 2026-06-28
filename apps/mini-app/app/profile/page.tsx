@@ -1,3 +1,5 @@
+import { ProfileDiagnostics } from '@/components/ProfileDiagnostics';
+
 const interests = ['Горы', 'Городские поездки', 'Бюджетные маршруты', 'Долгие выезды'];
 
 export default function ProfilePage() {
@@ -12,6 +14,8 @@ export default function ProfilePage() {
       </article>
 
       <section className="card-grid" aria-label="Профиль пользователя">
+        <ProfileDiagnostics />
+
         <article className="surface-card">
           <p className="surface-card__title">Пользователь</p>
           <p className="surface-card__copy">Имя, город, язык общения и краткое описание профиля.</p>
