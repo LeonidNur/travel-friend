@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "telegram:set-menu": "node scripts/set-telegram-menu-button.mjs"
   },
   "dependencies": {
     "@telegram-apps/sdk-react": "^3.3.9",

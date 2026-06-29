@@ -27,3 +27,11 @@ TELEGRAM_WEB_APP_URL=
 ## Следующий шаг
 
 На следующем этапе WebApp-кнопку будем настраивать через Telegram Bot API.
+
+## Автоматическая настройка кнопки Mini App
+
+Выполните команду:
+
+```bash
+npm run telegram:set-menu
+```
