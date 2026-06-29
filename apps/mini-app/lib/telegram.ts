@@ -2,27 +2,42 @@
 
 import { useEffect, useState } from 'react';
 
-import {
-  expandViewport,
-  init,
-  isTMA,
-  miniAppReady,
-  retrieveLaunchParams
-} from '@telegram-apps/sdk';
-import { isThemeParamsDark, viewportHeight } from '@telegram-apps/sdk-react';
+type TelegramColorScheme = 'dark' | 'light';
+type TelegramSource = 'browser' | 'telegram-webapp';
+
+type TelegramWebApp = {
+  initData?: string;
+  platform?: string;
+  version?: string;
+  colorScheme?: TelegramColorScheme;
+  viewportHeight?: number;
+  ready?: () => void;
+  expand?: () => void;
+};
+
+type TelegramWindow = Window &
+  typeof globalThis & {
+    Telegram?: {
+      WebApp?: TelegramWebApp;
+    };
+  };
 
 export interface TelegramState {
   isReady: boolean;
   isTelegram: boolean;
+  source: TelegramSource;
+  telegramExists: boolean;
+  webAppExists: boolean;
   platform: string;
   version: string;
-  colorScheme: 'dark' | 'light';
+  colorScheme: TelegramColorScheme;
   viewportHeight: number;
+  initDataLength: number;
 }
 
-let isTelegramSdkInitialized = false;
+let isTelegramReadyCalled = false;
 
-function getBrowserColorScheme(): 'dark' | 'light' {
+function getBrowserColorScheme(): TelegramColorScheme {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return 'light';
   }
@@ -38,14 +53,18 @@ function getBrowserViewportHeight(): number {
   return window.innerHeight;
 }
 
-function getBrowserFallbackState(): TelegramState {
+function getBrowserFallbackState(telegramExists = false): TelegramState {
   return {
     isReady: true,
     isTelegram: false,
+    source: 'browser',
+    telegramExists,
+    webAppExists: false,
     platform: 'browser',
     version: 'n/a',
     colorScheme: getBrowserColorScheme(),
-    viewportHeight: getBrowserViewportHeight()
+    viewportHeight: getBrowserViewportHeight(),
+    initDataLength: 0
   };
 }
 
@@ -53,65 +72,86 @@ function getLoadingState(): TelegramState {
   return {
     isReady: false,
     isTelegram: false,
+    source: 'browser',
+    telegramExists: false,
+    webAppExists: false,
     platform: 'loading',
     version: 'loading',
     colorScheme: 'light',
-    viewportHeight: 0
+    viewportHeight: 0,
+    initDataLength: 0
   };
 }
 
-function getTelegramFallbackState(
-  colorScheme: 'dark' | 'light',
-  currentViewportHeight: number
-): TelegramState {
-  const launchParams = retrieveLaunchParams();
+function getTelegramState(telegramWindow: TelegramWindow): TelegramState {
+  const webApp = telegramWindow.Telegram?.WebApp;
+
+  if (!webApp) {
+    return getBrowserFallbackState(Boolean(telegramWindow.Telegram));
+  }
+
+  if (!isTelegramReadyCalled) {
+    webApp.ready?.();
+    webApp.expand?.();
+    isTelegramReadyCalled = true;
+  }
 
   return {
     isReady: true,
     isTelegram: true,
-    platform: launchParams.tgWebAppPlatform,
-    version: launchParams.tgWebAppVersion,
-    colorScheme,
-    viewportHeight: currentViewportHeight
+    source: 'telegram-webapp',
+    telegramExists: true,
+    webAppExists: true,
+    platform: webApp.platform ?? 'unknown',
+    version: webApp.version ?? 'unknown',
+    colorScheme: webApp.colorScheme ?? getBrowserColorScheme(),
+    viewportHeight: typeof webApp.viewportHeight === 'number' ? webApp.viewportHeight : getBrowserViewportHeight(),
+    initDataLength: webApp.initData?.length ?? 0
   };
-}
-
-function ensureTelegramInitialized(): void {
-  if (isTelegramSdkInitialized || !isTMA()) {
-    return;
-  }
-
-  init();
-  miniAppReady();
-  expandViewport();
-  isTelegramSdkInitialized = true;
 }
 
 export function useTelegram(): TelegramState {
   const [telegramState, setTelegramState] = useState<TelegramState>(getLoadingState);
 
   useEffect(() => {
-    if (!isTMA()) {
-      setTelegramState(getBrowserFallbackState());
-      return;
-    }
+    let timeoutId: number | undefined;
+    let cancelled = false;
+    const maxAttempts = 20;
+    const retryDelayMs = 50;
+    let attempts = 0;
 
-    try {
-      ensureTelegramInitialized();
+    const refreshTelegramState = () => {
+      if (cancelled) {
+        return;
+      }
 
-      setTelegramState(
-        getTelegramFallbackState(isThemeParamsDark() ? 'dark' : 'light', viewportHeight())
-      );
-    } catch {
-      setTelegramState({
-        isReady: true,
-        isTelegram: true,
-        platform: 'unknown',
-        version: 'unknown',
-        colorScheme: 'light',
-        viewportHeight: 0
-      });
-    }
+      const telegramWindow = window as TelegramWindow;
+      const webApp = telegramWindow.Telegram?.WebApp;
+
+      if (webApp) {
+        setTelegramState(getTelegramState(telegramWindow));
+        return;
+      }
+
+      attempts += 1;
+
+      if (attempts >= maxAttempts) {
+        setTelegramState(getBrowserFallbackState(Boolean(telegramWindow.Telegram)));
+        return;
+      }
+
+      timeoutId = window.setTimeout(refreshTelegramState, retryDelayMs);
+    };
+
+    refreshTelegramState();
+
+    return () => {
+      cancelled = true;
+
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   return telegramState;

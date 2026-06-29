@@ -5,6 +5,7 @@ import { useTelegram } from '@/lib/telegram';
 export function ProfileDiagnostics() {
   const telegram = useTelegram();
   const isLoading = !telegram.isReady;
+  const initDataState = telegram.initDataLength > 0 ? `yes (${telegram.initDataLength})` : 'no (0)';
 
   return (
     <section className="surface-card surface-card--compact" aria-label="Telegram diagnostics">
@@ -18,10 +19,27 @@ export function ProfileDiagnostics() {
 
       <dl className="diagnostic-list">
         <div className="diagnostic-list__item">
-          <dt className="diagnostic-list__label">Is Telegram</dt>
+          <dt className="diagnostic-list__label">Source</dt>
+          <dd className="diagnostic-list__value">{isLoading ? '—' : telegram.source}</dd>
+        </div>
+
+        <div className="diagnostic-list__item">
+          <dt className="diagnostic-list__label">window.Telegram exists</dt>
           <dd className="diagnostic-list__value">
-            {isLoading ? '—' : telegram.isTelegram ? 'yes' : 'no'}
+            {isLoading ? '—' : telegram.telegramExists ? 'yes' : 'no'}
           </dd>
+        </div>
+
+        <div className="diagnostic-list__item">
+          <dt className="diagnostic-list__label">window.Telegram.WebApp exists</dt>
+          <dd className="diagnostic-list__value">
+            {isLoading ? '—' : telegram.webAppExists ? 'yes' : 'no'}
+          </dd>
+        </div>
+
+        <div className="diagnostic-list__item">
+          <dt className="diagnostic-list__label">initData</dt>
+          <dd className="diagnostic-list__value">{isLoading ? '—' : initDataState}</dd>
         </div>
 
         <div className="diagnostic-list__item">
