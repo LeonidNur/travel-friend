@@ -50,7 +50,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  padding: 12px 12px calc(136px + env(safe-area-inset-bottom));
 }
 
 .app-header {
@@ -264,6 +264,12 @@ select {
 }
 
 .bottom-navigation {
+  position: fixed;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 20;
+  width: min(calc(100vw - 24px), 720px);
+  transform: translateX(-50%);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
@@ -316,7 +322,7 @@ select {
 
 @media (min-width: 640px) {
   .app-shell {
-    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    padding: 16px 16px calc(136px + env(safe-area-inset-bottom));
   }
 
   .app-header {
@@ -324,9 +330,8 @@ select {
   }
 
   .bottom-navigation {
-    max-width: 720px;
-    margin: 0 auto;
-    width: 100%;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    width: min(calc(100vw - 32px), 720px);
   }
 
   .card-grid {
