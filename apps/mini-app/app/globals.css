@@ -11,6 +11,9 @@
   --accent: #7dd3fc;
   --accent-strong: #86efac;
   --shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+  --bottom-navigation-height: 82px;
+  --bottom-navigation-gap: 12px;
+  --shell-padding-inline: 12px;
 }
 
 * {
@@ -50,7 +53,11 @@ select {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  padding: 12px var(--shell-padding-inline)
+    calc(
+      var(--bottom-navigation-height) + var(--bottom-navigation-gap) + 12px +
+        env(safe-area-inset-bottom)
+    );
 }
 
 .app-header {
@@ -275,6 +282,20 @@ select {
   backdrop-filter: blur(18px);
 }
 
+.bottom-navigation-dock {
+  position: fixed;
+  right: var(--shell-padding-inline);
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  left: var(--shell-padding-inline);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.bottom-navigation-dock .bottom-navigation {
+  min-height: var(--bottom-navigation-height);
+  pointer-events: auto;
+}
+
 .bottom-navigation__item {
   display: flex;
   flex-direction: column;
@@ -315,18 +336,26 @@ select {
 }
 
 @media (min-width: 640px) {
+  :root {
+    --bottom-navigation-gap: 16px;
+    --shell-padding-inline: 16px;
+  }
+
   .app-shell {
-    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    padding-top: 16px;
+    padding-bottom: calc(
+      var(--bottom-navigation-height) + var(--bottom-navigation-gap) + 16px +
+        env(safe-area-inset-bottom)
+    );
   }
 
   .app-header {
     padding-inline: 8px;
   }
 
-  .bottom-navigation {
+  .bottom-navigation-dock {
     max-width: 720px;
     margin: 0 auto;
-    width: 100%;
   }
 
   .card-grid {

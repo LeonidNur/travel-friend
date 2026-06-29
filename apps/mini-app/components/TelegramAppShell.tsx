@@ -22,7 +22,9 @@ export function TelegramAppShell({ children }: TelegramAppShellProps) {
       <main className="app-content">
         <div className="app-content__frame">{children}</div>
       </main>
-      <BottomNavigation pathname={pathname} />
+      <div className="bottom-navigation-dock">
+        <BottomNavigation pathname={pathname} />
+      </div>
     </div>
   );
 }
