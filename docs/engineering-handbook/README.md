@@ -15,3 +15,8 @@ Travel Friend мы строим не как набор разрозненных 
 - проект остаётся управляемым даже тогда, когда в нём становится больше экранов, сценариев и интеграций.
 
 Начать лучше с [workflow.md](workflow.md), затем перейти к [decision-making.md](decision-making.md), а после этого держать под рукой [codex-rules.md](codex-rules.md) и [documentation-rules.md](documentation-rules.md).
+
+Для повседневной работы особенно важны два раздела:
+
+- [workflow.md](workflow.md) — как мы ищем ошибки, проверяем гипотезы и доводим задачу до коммита.
+- [documentation-rules.md](documentation-rules.md) — как обновлять документацию так, чтобы она не расходилась с кодом и состоянием проекта.
