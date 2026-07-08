@@ -6,34 +6,41 @@
 - ✅ Telegram Mini App environment
 - ✅ Debug infrastructure
 - ✅ Fixed Bottom Navigation
+- ✅ Profile MVP
+- ✅ Profile Edit Mode
+- ✅ Discover MVP
+- ✅ Public Buddy Profile
+- ✅ Mock Interest / Match Flow
+- ✅ Chats List MVP
+- ✅ Frontend Data Models
+- ✅ Codex skills workflow docs
 
 ## Текущий этап
 
-### Разработка MVP
+### Следующий продуктовый этап
 
-#### Frontend
+#### Продукт
 
-- Profile MVP
-- Search MVP
-- User Card
-- Chat UI
+- согласование Trips MVP
+- chat room MVP
+- общий state/persistence для Discover, Profile и Chats
+- уточнение перехода от interest/match к чату
 
-#### Backend
+#### Инфраструктура
 
-- Проектирование базы данных
-- Supabase
-- Telegram Auth
-- API
-- AI Service
+- подготовка к Supabase/API
+- Telegram Auth на сервере через raw `initData`
+- базовая схема данных для профилей, интереса и чатов
+
+#### AI
+
+- AI внутри чатов позже, после закрепления базовых потоков
 
 #### UX/UI
 
 - дизайн-система
 - wireframes
-- Profile
-- Search
-- Chat
-- Trips
+- уточнение Trips как следующего отдельного сценария
 
 ## Текущий документальный этап
 
@@ -42,9 +49,11 @@
 
 ## Дальше
 
-1. Очистка debug-кода.
-2. Реализация этапа "Разработка MVP".
-3. Уточнение UX/UI и дизайн-системы по мере роста продукта.
+1. Согласовать Trips MVP.
+2. Спроектировать chat room MVP.
+3. Определить общую persistence/state-модель для Discover, Profile и Chats.
+4. Подготовить Supabase/API контур.
+5. Вернуться к AI внутри чатов после стабилизации базовых потоков.
 
 ## Примечания
 

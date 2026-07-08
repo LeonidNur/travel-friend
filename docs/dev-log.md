@@ -1,5 +1,27 @@
 # Дневник разработки
 
+## 2026-07-08 — Синхронизация документации и Codex rules
+
+### Что сделали
+
+- Синхронизировали README, CHANGELOG и roadmap с фактическим состоянием продукта на конец дня.
+- Зафиксировали в документации новые MVP-сценарии: Profile MVP, profile edit mode, Discover MVP, public buddy profile, mock interest/match flow, Chats List MVP и единый frontend data model слой.
+- Уточнили инструкции для Codex: явное перечисление прочитанных инструкций, выбранных и неиспользуемых skills/workflows, планируемых файлов и границ скоупа.
+- Добавили правило про integration awareness, чтобы при изменении существующего flow проверялись соседние сценарии вроде Discover → buddy profile → interest flow → chats.
+- Зафиксировали, что docs-only задачи не должны трогать код приложения и должны завершаться одним документальным заходом на основе дневника разработки.
+
+### Что проверили
+
+- Перечитали и сверили `AGENTS.md`, `docs/engineering-handbook/codex-rules.md`, `docs/engineering-handbook/codex-skills-workflow.md`, `README.md`, `CHANGELOG.md` и `docs/roadmap.md`.
+- Использовали дневник разработки как основной источник фактов, без выдумывания новых функций.
+- Сохранили границы скоупа: документация обновляется, код приложения и `apps/mini-app` не меняются.
+
+### Что осталось
+
+- Реальные backend/API, Supabase, persistence и chat room flow ещё не готовы.
+- Discover, profile и chats пока живут на mock-data и локальном state.
+- Следующий документальный проход должен снова опираться на дневник разработки и не смешивать docs-only работу с продуктовой реализацией.
+
 ## 2026-06-30 — День 3
 
 ### Почему сначала строили инженерную систему

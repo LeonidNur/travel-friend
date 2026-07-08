@@ -1,5 +1,22 @@
 # Журнал изменений
 
+## 2026-07-08
+
+- Добавлен MVP-экран профиля пользователя с локальным edit mode, slider для возраста, chips для интересов и travel preferences.
+- Главная страница переведена в Discover MVP с одной карточкой попутчика за раз и публичными профилями `/buddies/[id]`.
+- Добавлен mock interest/match flow с локальными решениями, списком выбранных пользователей и переходом в `/chats` как placeholder.
+- Экран `/chats` стал Chats List MVP с mock-чатами и статусами `match`, `interest_sent` и `draft`.
+- Вынесен единый frontend data model слой для профилей, travel preferences, интереса и mock-чатов.
+- Обновлена нижняя навигация, чтобы отражать основную группу Chats / Discover / Trips и отдельный Profile.
+- Усилены инструкции Codex в `AGENTS.md` и `docs/engineering-handbook/`.
+- Добавлены правила игнорирования `.DS_Store`.
+
+Known limitations / TODO:
+
+- Все новые MVP-сценарии пока работают на mock-data и локальном state.
+- Реальные backend/API, Supabase, persistence, chat room flow и AI внутри чатов ещё не реализованы.
+- Финальное расположение Profile в навигации и дальнейшая интеграция потоков потребуют отдельного согласования.
+
 ## Day 3 — 2026-06-30
 
 - Завершён первый инфраструктурный этап проекта.

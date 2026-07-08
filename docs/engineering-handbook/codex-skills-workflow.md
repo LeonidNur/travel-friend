@@ -12,6 +12,8 @@ Codex skills помогают не смешивать разные типы ра
 
 Skills позволяют Codex быстрее понять контекст и выбрать подходящий workflow без лишних догадок.
 
+После этого обновления стандартный набор для frontend-задач в проекте считается таким: `frontend-patterns`, `coding-standards`, `verification-loop`, `git-workflow`.
+
 ## Чем отличаются AGENTS.md, skills, subagents и разовое ТЗ
 
 - `AGENTS.md` задаёт общие правила проекта: как работать, чего не делать, как оформлять результат.
@@ -51,11 +53,12 @@ Skills позволяют Codex быстрее понять контекст и 
 - `frontend-patterns`
 - `coding-standards`
 - `verification-loop`
+- `git-workflow`
 
 Подключать при необходимости:
 
 - `e2e-testing` для пользовательских сценариев;
-- `git-workflow`, если задача затрагивает порядок ветвления, коммитов или PR-структуру.
+- `nextjs-turbopack`, если задача затрагивает dev/build поведение Next.js.
 
 ### Telegram Mini App задачи
 
@@ -64,6 +67,7 @@ Skills позволяют Codex быстрее понять контекст и 
 - `frontend-patterns`
 - `coding-standards`
 - `verification-loop`
+- `git-workflow`
 
 Подключать при необходимости:
 
@@ -104,21 +108,20 @@ Skills позволяют Codex быстрее понять контекст и 
 Использовать:
 
 - `documentation-lookup`
-- `coding-standards`
 - `git-workflow`
+- `verification-loop`
 
 Подключать при необходимости:
 
-- `verification-loop`, если нужно проверить, что ссылки, структура или формат документации не сломались;
 - `tdd-workflow` обычно не нужен, если задача действительно затрагивает только документацию и не меняет код.
 
 ### Bugfix / diagnostic задачи
 
 Использовать:
 
-- `verification-loop`
+- `frontend-patterns` или другой релевантный доменный skill
 - `coding-standards`
-- `tdd-workflow`
+- `verification-loop`
 
 Подключать при необходимости:
 

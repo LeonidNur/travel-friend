@@ -4,3 +4,6 @@
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Temporary local files
+.tmp/
