@@ -5,13 +5,7 @@ export interface NavigationItem {
   description: string;
 }
 
-export const navigationItems: NavigationItem[] = [
-  {
-    href: '/',
-    label: 'Home',
-    title: 'Главная',
-    description: 'Поиск попутчиков и поездок'
-  },
+export const bottomNavigationItems: NavigationItem[] = [
   {
     href: '/chats',
     label: 'Chats',
@@ -19,17 +13,29 @@ export const navigationItems: NavigationItem[] = [
     description: 'Группы поездок и переписка'
   },
   {
+    href: '/',
+    label: 'Discover',
+    title: 'Discover',
+    description: 'Поиск попутчиков и поездок'
+  },
+  {
     href: '/trips',
     label: 'Trips',
     title: 'Поездки',
     description: 'Ваши будущие и созданные поездки'
-  },
-  {
-    href: '/profile',
-    label: 'Profile',
-    title: 'Профиль',
-    description: 'Профиль и интересы путешествий'
   }
+];
+
+export const profileNavigationItem: NavigationItem = {
+  href: '/profile',
+  label: 'Profile',
+  title: 'Профиль',
+  description: 'Профиль и интересы путешествий'
+};
+
+export const navigationItems: NavigationItem[] = [
+  ...bottomNavigationItems,
+  profileNavigationItem
 ];
 
 export function getRouteMeta(pathname: string) {
@@ -42,5 +48,9 @@ export function getRouteMeta(pathname: string) {
     };
   }
 
-  return navigationItems.find((item) => item.href === pathname) ?? navigationItems[0];
+  return (
+    navigationItems.find((item) => item.href === pathname) ??
+    navigationItems.find((item) => item.href === '/') ??
+    navigationItems[0]
+  );
 }
