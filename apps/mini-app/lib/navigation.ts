@@ -33,5 +33,14 @@ export const navigationItems: NavigationItem[] = [
 ];
 
 export function getRouteMeta(pathname: string) {
+  if (pathname.startsWith('/buddies/')) {
+    return {
+      href: pathname,
+      label: 'Buddy',
+      title: 'Публичный профиль',
+      description: 'Расширенная анкета потенциального попутчика'
+    };
+  }
+
   return navigationItems.find((item) => item.href === pathname) ?? navigationItems[0];
 }

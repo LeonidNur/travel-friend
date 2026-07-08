@@ -1,73 +1,25 @@
 'use client';
 
 import { ChangeEvent, useEffect, useState } from 'react';
-
-const INTEREST_OPTIONS = [
-  'Кино',
-  'Книги',
-  'Игры',
-  'Аниме',
-  'Музыка',
-  'Спорт',
-  'Еда',
-  'Вечеринки',
-  'Музеи',
-  'История',
-  'Природа',
-  'Фотография',
-  'Архитектура',
-  'Языки',
-  'Технологии'
-] as const;
-
-const TRAVEL_STYLE_OPTIONS = [
-  'Пассивный / пляжный',
-  'Активный / спортивный',
-  'Познавательный / экскурсионный',
-  'Оздоровительный / санаторный',
-  'Развлекательный',
-  'Горный',
-  'Лесной / природный',
-  'Городской',
-  'Сельский / агротуризм',
-  'Водный / море и реки',
-  'Зимний / лыжи и сноуборд',
-  'Экстремальный',
-  'Событийный / фестивали',
-  'Круизный',
-  'Автомобильный / road trip',
-  'Самостоятельный',
-  'Пакетный / турпакет',
-  'Виртуальный / игры и кино',
-  'Медитативный / ретрит',
-  'Волонтёрский',
-  'Этнический',
-  'Интеллектуальный'
-] as const;
-
-const BUDGET_OPTIONS = [
-  { level: 1, label: '$', description: 'Экономно' },
-  { level: 2, label: '$$', description: 'Комфортно, без лишнего' },
-  { level: 3, label: '$$$', description: 'Выше среднего' },
-  { level: 4, label: '$$$$', description: 'Премиум' }
-] as const;
-
-const COMFORT_OPTIONS = [
-  { level: 1, label: 'Уровень 1', description: 'Максимально просто, хостелы и минимум удобств' },
-  { level: 2, label: 'Уровень 2', description: 'Базовый комфорт: чисто, безопасно, без люкса' },
-  { level: 3, label: 'Уровень 3', description: 'Хороший комфорт: удобное жильё и меньше компромиссов' },
-  { level: 4, label: 'Уровень 4', description: 'Высокий комфорт: отели, приватность, удобная логистика' }
-] as const;
+import {
+  BUDGET_OPTIONS,
+  COMFORT_OPTIONS,
+  INTEREST_OPTIONS,
+  TRAVEL_STYLE_OPTIONS,
+  getAvatarInitials,
+  getBudgetLabel,
+  getComfortLabel,
+  toggleMultiValue,
+  type BudgetLevel,
+  type ComfortLevel,
+  type InterestOption,
+  type TravelStyleOption
+} from '@/lib/travel-preferences';
 
 const TRUST_SIGNALS = [
   { title: 'Telegram connected', note: 'Профиль привязан к Telegram Mini App' },
   { title: 'Verification later', note: 'Подтверждение личности и бейджи появятся в следующих этапах MVP' }
 ] as const;
-
-type InterestOption = (typeof INTEREST_OPTIONS)[number];
-type TravelStyleOption = (typeof TRAVEL_STYLE_OPTIONS)[number];
-type BudgetLevel = (typeof BUDGET_OPTIONS)[number]['level'];
-type ComfortLevel = (typeof COMFORT_OPTIONS)[number]['level'];
 
 type ProfileState = {
   name: string;
@@ -103,28 +55,6 @@ const INITIAL_PROFILE: ProfileState = {
   comfortLevel: 3
 };
 
-function getAvatarInitials(name: string) {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  if (parts.length === 0) {
-    return 'TF';
-  }
-
-  return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
-}
-
-function getBudgetLabel(level: BudgetLevel) {
-  return BUDGET_OPTIONS.find((option) => option.level === level)?.description ?? '';
-}
-
-function getComfortLabel(level: ComfortLevel) {
-  return COMFORT_OPTIONS.find((option) => option.level === level)?.description ?? '';
-}
-
 function createDetailItems(profile: ProfileState): DetailItem[] {
   return [
     { label: 'Желаемые направления', value: profile.destinations },
@@ -133,10 +63,6 @@ function createDetailItems(profile: ProfileState): DetailItem[] {
     { label: 'Стиль отдыха', value: profile.travelStyles.join(', ') },
     { label: 'Уровень комфорта', value: getComfortLabel(profile.comfortLevel) }
   ];
-}
-
-function toggleMultiValue<T extends string>(values: readonly T[], value: T): T[] {
-  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
 function DetailList({ items }: { items: readonly DetailItem[] }) {

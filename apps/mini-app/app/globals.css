@@ -168,10 +168,45 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   line-height: 1.55;
 }
 
+.discover-hero__stats {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.discover-stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(165, 196, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(11, 20, 34, 0.46);
+}
+
+.discover-stat__value {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.discover-stat__label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
 .card-grid,
 .list-stack {
   display: grid;
   gap: 12px;
+}
+
+.discover-list {
+  display: grid;
+  gap: 12px;
+  align-items: start;
 }
 
 .surface-card {
@@ -180,6 +215,17 @@ body[data-profile-edit-mode='true'] .app-content__frame {
 
 .surface-card--compact {
   padding: 16px;
+}
+
+.empty-state-card {
+  gap: 10px;
+}
+
+.empty-state-card__title {
+  margin: 0;
+  font-size: 1.4rem;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
 }
 
 .surface-card__title {
@@ -351,6 +397,18 @@ body[data-profile-edit-mode='true'] .app-content__frame {
 .detail-list__item:first-child {
   padding-top: 0;
   border-top: 0;
+}
+
+.detail-list__item--match {
+  padding: 12px;
+  border: 1px solid rgba(134, 239, 172, 0.18);
+  border-radius: 18px;
+  background: rgba(134, 239, 172, 0.07);
+}
+
+.detail-list__item--match:first-child {
+  padding-top: 12px;
+  border-top: 1px solid rgba(134, 239, 172, 0.18);
 }
 
 .detail-list__label {
@@ -532,6 +590,145 @@ body[data-profile-edit-mode='true'] .app-content__frame {
 .profile-button--secondary {
   background: rgba(11, 20, 34, 0.72);
   color: var(--muted);
+}
+
+.buddy-card {
+  display: grid;
+  gap: 14px;
+}
+
+.buddy-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.buddy-card__meta {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.buddy-card__title {
+  margin: 0;
+  font-size: 1.12rem;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.buddy-card__city,
+.buddy-card__tagline,
+.public-profile__tagline,
+.buddy-match__copy,
+.match-stack__lead,
+.match-stack__copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.buddy-card__city {
+  margin-top: 4px;
+  font-size: 0.95rem;
+}
+
+.buddy-card__budget {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(134, 239, 172, 0.22);
+  border-radius: 999px;
+  background: rgba(134, 239, 172, 0.08);
+  color: #dcffe8;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.buddy-card__budget--match {
+  border-color: rgba(134, 239, 172, 0.22);
+  background: rgba(134, 239, 172, 0.08);
+  color: #dcffe8;
+}
+
+.buddy-card__section {
+  display: grid;
+  gap: 8px;
+}
+
+.buddy-card__label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.buddy-card__footer {
+  display: grid;
+  gap: 10px;
+}
+
+.buddy-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.buddy-card__profile-link {
+  width: 100%;
+}
+
+.public-profile__tagline {
+  position: relative;
+  margin-top: 14px;
+}
+
+.match-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.match-stack__lead {
+  color: var(--text);
+}
+
+.match-stack__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(165, 196, 255, 0.1);
+}
+
+.match-stack__dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+}
+
+@media (max-width: 420px) {
+  .discover-hero__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .buddy-card__header,
+  .buddy-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .buddy-card__header {
+    display: grid;
+  }
+
+  .buddy-card__meta {
+    justify-items: start;
+  }
 }
 
 .sr-only {
