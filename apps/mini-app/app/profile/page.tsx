@@ -1,23 +1,85 @@
-const profile = {
-  name: 'Алина Морозова',
-  age: 29,
-  city: 'Санкт-Петербург',
-  description:
-    'Люблю собирать маршруты с понятной логистикой, искать попутчиков с похожим ритмом и оставлять место для спонтанных остановок.',
-  avatarInitials: 'АМ',
-  interests: ['Горы', 'Городские поездки', 'Бюджетные маршруты', 'Долгие выезды'],
-  travelPreferences: [
-    { label: 'Желаемые направления', value: 'Тбилиси, Стамбул, Барселона' },
-    { label: 'Бюджет', value: 'Средний, без лишнего люкса' },
-    { label: 'Даты', value: 'Гибкие, комфортно двигаться в пределах недели' },
-    { label: 'Стиль отдыха', value: 'Баланс городских прогулок и коротких выездов' },
-    { label: 'Уровень комфорта', value: 'Средний плюс, с нормальным жильем и без хаоса' }
-  ],
-  trustSignals: [
-    { title: 'Telegram connected', note: 'Профиль привязан к Telegram Mini App' },
-    { title: 'Verification later', note: 'Подтверждение личности и бейджи появятся в следующих этапах MVP' }
-  ]
-} as const;
+'use client';
+
+import { ChangeEvent, useEffect, useState } from 'react';
+
+const INTEREST_OPTIONS = [
+  'Кино',
+  'Книги',
+  'Игры',
+  'Аниме',
+  'Музыка',
+  'Спорт',
+  'Еда',
+  'Вечеринки',
+  'Музеи',
+  'История',
+  'Природа',
+  'Фотография',
+  'Архитектура',
+  'Языки',
+  'Технологии'
+] as const;
+
+const TRAVEL_STYLE_OPTIONS = [
+  'Пассивный / пляжный',
+  'Активный / спортивный',
+  'Познавательный / экскурсионный',
+  'Оздоровительный / санаторный',
+  'Развлекательный',
+  'Горный',
+  'Лесной / природный',
+  'Городской',
+  'Сельский / агротуризм',
+  'Водный / море и реки',
+  'Зимний / лыжи и сноуборд',
+  'Экстремальный',
+  'Событийный / фестивали',
+  'Круизный',
+  'Автомобильный / road trip',
+  'Самостоятельный',
+  'Пакетный / турпакет',
+  'Виртуальный / игры и кино',
+  'Медитативный / ретрит',
+  'Волонтёрский',
+  'Этнический',
+  'Интеллектуальный'
+] as const;
+
+const BUDGET_OPTIONS = [
+  { level: 1, label: '$', description: 'Экономно' },
+  { level: 2, label: '$$', description: 'Комфортно, без лишнего' },
+  { level: 3, label: '$$$', description: 'Выше среднего' },
+  { level: 4, label: '$$$$', description: 'Премиум' }
+] as const;
+
+const COMFORT_OPTIONS = [
+  { level: 1, label: 'Уровень 1', description: 'Максимально просто, хостелы и минимум удобств' },
+  { level: 2, label: 'Уровень 2', description: 'Базовый комфорт: чисто, безопасно, без люкса' },
+  { level: 3, label: 'Уровень 3', description: 'Хороший комфорт: удобное жильё и меньше компромиссов' },
+  { level: 4, label: 'Уровень 4', description: 'Высокий комфорт: отели, приватность, удобная логистика' }
+] as const;
+
+const TRUST_SIGNALS = [
+  { title: 'Telegram connected', note: 'Профиль привязан к Telegram Mini App' },
+  { title: 'Verification later', note: 'Подтверждение личности и бейджи появятся в следующих этапах MVP' }
+] as const;
+
+type InterestOption = (typeof INTEREST_OPTIONS)[number];
+type TravelStyleOption = (typeof TRAVEL_STYLE_OPTIONS)[number];
+type BudgetLevel = (typeof BUDGET_OPTIONS)[number]['level'];
+type ComfortLevel = (typeof COMFORT_OPTIONS)[number]['level'];
+
+type ProfileState = {
+  name: string;
+  age: number;
+  city: string;
+  destinations: string;
+  dates: string;
+  interests: InterestOption[];
+  budgetLevel: BudgetLevel;
+  travelStyles: TravelStyleOption[];
+  comfortLevel: ComfortLevel;
+};
 
 type DetailItem = {
   label: string;
@@ -28,6 +90,54 @@ type TrustSignal = {
   title: string;
   note: string;
 };
+
+const INITIAL_PROFILE: ProfileState = {
+  name: 'Алина Морозова',
+  age: 29,
+  city: 'Санкт-Петербург',
+  destinations: 'Тбилиси, Стамбул, Барселона',
+  dates: 'Гибкие, в пределах недели',
+  interests: ['Музыка', 'Еда', 'Природа', 'Архитектура'],
+  budgetLevel: 2,
+  travelStyles: ['Городской', 'Познавательный / экскурсионный', 'Самостоятельный'],
+  comfortLevel: 3
+};
+
+function getAvatarInitials(name: string) {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  if (parts.length === 0) {
+    return 'TF';
+  }
+
+  return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
+}
+
+function getBudgetLabel(level: BudgetLevel) {
+  return BUDGET_OPTIONS.find((option) => option.level === level)?.description ?? '';
+}
+
+function getComfortLabel(level: ComfortLevel) {
+  return COMFORT_OPTIONS.find((option) => option.level === level)?.description ?? '';
+}
+
+function createDetailItems(profile: ProfileState): DetailItem[] {
+  return [
+    { label: 'Желаемые направления', value: profile.destinations },
+    { label: 'Бюджет', value: getBudgetLabel(profile.budgetLevel) },
+    { label: 'Даты', value: profile.dates },
+    { label: 'Стиль отдыха', value: profile.travelStyles.join(', ') },
+    { label: 'Уровень комфорта', value: getComfortLabel(profile.comfortLevel) }
+  ];
+}
+
+function toggleMultiValue<T extends string>(values: readonly T[], value: T): T[] {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+}
 
 function DetailList({ items }: { items: readonly DetailItem[] }) {
   return (
@@ -58,14 +168,138 @@ function TrustStack({ items }: { items: readonly TrustSignal[] }) {
   );
 }
 
+function ChipSelector<T extends string>({
+  options,
+  selectedValues,
+  onToggle
+}: {
+  options: readonly T[];
+  selectedValues: readonly T[];
+  onToggle: (value: T) => void;
+}) {
+  return (
+    <div className="chip-selector" role="group">
+      {options.map((option) => {
+        const isSelected = selectedValues.includes(option);
+
+        return (
+          <button
+            type="button"
+            className={`chip chip-button${isSelected ? ' chip-button--selected' : ''}`}
+            key={option}
+            aria-pressed={isSelected}
+            onClick={() => onToggle(option)}
+          >
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function LevelSelector<TLevel extends number>({
+  legend,
+  name,
+  value,
+  options,
+  onChange
+}: {
+  legend: string;
+  name: string;
+  value: TLevel;
+  options: readonly { level: TLevel; label: string; description: string }[];
+  onChange: (nextValue: TLevel) => void;
+}) {
+  return (
+    <fieldset className="profile-form__fieldset">
+      <legend className="profile-form__label">{legend}</legend>
+      <div className="level-grid">
+        {options.map((option) => {
+          const checked = option.level === value;
+
+          return (
+            <label className={`level-card${checked ? ' level-card--selected' : ''}`} key={option.level}>
+              <input
+                className="sr-only"
+                type="radio"
+                name={name}
+                value={option.level}
+                checked={checked}
+                onChange={() => onChange(option.level)}
+              />
+              <span className="level-card__label">{option.label}</span>
+              <span className="level-card__description">{option.description}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 export default function ProfilePage() {
+  const [profile, setProfile] = useState(INITIAL_PROFILE);
+  const [draftProfile, setDraftProfile] = useState(INITIAL_PROFILE);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const detailItems = createDetailItems(profile);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    document.body.dataset.profileEditMode = isEditing ? 'true' : 'false';
+
+    return () => {
+      delete document.body.dataset.profileEditMode;
+    };
+  }, [isEditing]);
+
+  const handleEditStart = () => {
+    setDraftProfile(profile);
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setDraftProfile(profile);
+    setIsEditing(false);
+  };
+
+  const handleSave = () => {
+    setProfile(draftProfile);
+    setIsEditing(false);
+  };
+
+  const handleTextChange =
+    (field: 'name' | 'city' | 'destinations' | 'dates') => (event: ChangeEvent<HTMLInputElement>) => {
+      const nextValue = event.target.value;
+      setDraftProfile((current) => ({ ...current, [field]: nextValue }));
+    };
+
+  const handleAgeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextAge = Number(event.target.value);
+    setDraftProfile((current) => ({ ...current, age: nextAge }));
+  };
+
   return (
     <section className="page">
       <article className="hero-card">
-        <p className="section-kicker">Профиль</p>
+        <div className="profile-header">
+          <p className="section-kicker">Профиль</p>
+          {isEditing ? (
+            <span className="profile-status">Editing</span>
+          ) : (
+            <button type="button" className="profile-action" onClick={handleEditStart}>
+              Edit profile
+            </button>
+          )}
+        </div>
+
         <div className="profile-hero">
           <div className="profile-hero__avatar" aria-hidden="true">
-            {profile.avatarInitials}
+            {getAvatarInitials(profile.name)}
           </div>
           <div className="profile-hero__content">
             <h2 className="hero-card__title profile-hero__title">
@@ -74,12 +308,145 @@ export default function ProfilePage() {
             <p className="profile-hero__city">{profile.city}</p>
           </div>
         </div>
-        <p className="hero-card__copy">{profile.description}</p>
+
         <div className="chip-row" aria-label="Статус профиля">
           <span className="chip chip--accent">Telegram connected</span>
           <span className="chip">Verification later</span>
         </div>
       </article>
+
+      {isEditing ? (
+        <article className="surface-card">
+          <div className="profile-form">
+            <div className="profile-form__section">
+              <p className="surface-card__title">Основное</p>
+              <label className="profile-form__field">
+                <span className="profile-form__label">Имя</span>
+                <input
+                  className="profile-input"
+                  type="text"
+                  value={draftProfile.name}
+                  onChange={handleTextChange('name')}
+                  placeholder="Как вас зовут"
+                />
+              </label>
+
+              <label className="profile-form__field">
+                <span className="profile-form__label">Возраст: {draftProfile.age}</span>
+                <input
+                  className="profile-range"
+                  type="range"
+                  min={18}
+                  max={60}
+                  step={1}
+                  value={draftProfile.age}
+                  onChange={handleAgeChange}
+                />
+              </label>
+
+              <label className="profile-form__field">
+                <span className="profile-form__label">Город</span>
+                <input
+                  className="profile-input"
+                  type="text"
+                  value={draftProfile.city}
+                  onChange={handleTextChange('city')}
+                  placeholder="Город"
+                />
+              </label>
+            </div>
+
+            <div className="profile-form__section">
+              <p className="surface-card__title">Интересы</p>
+              <ChipSelector
+                options={INTEREST_OPTIONS}
+                selectedValues={draftProfile.interests}
+                onToggle={(value) =>
+                  setDraftProfile((current) => ({
+                    ...current,
+                    interests: toggleMultiValue(current.interests, value)
+                  }))
+                }
+              />
+            </div>
+
+            <div className="profile-form__section">
+              <p className="surface-card__title">Travel preferences</p>
+
+              <label className="profile-form__field">
+                <span className="profile-form__label">Направления</span>
+                <input
+                  className="profile-input"
+                  type="text"
+                  value={draftProfile.destinations}
+                  onChange={handleTextChange('destinations')}
+                  placeholder="Например: Стамбул, Тбилиси, Бали"
+                />
+              </label>
+
+              <label className="profile-form__field">
+                <span className="profile-form__label">Даты</span>
+                <input
+                  className="profile-input"
+                  type="text"
+                  value={draftProfile.dates}
+                  onChange={handleTextChange('dates')}
+                  placeholder="Например: август, 7-14 дней"
+                />
+              </label>
+
+              <LevelSelector
+                legend="Бюджет"
+                name="budget"
+                value={draftProfile.budgetLevel}
+                options={BUDGET_OPTIONS}
+                onChange={(budgetLevel) =>
+                  setDraftProfile((current) => ({
+                    ...current,
+                    budgetLevel
+                  }))
+                }
+              />
+
+              <div className="profile-form__field">
+                <span className="profile-form__label">Стиль отдыха</span>
+                <ChipSelector
+                  options={TRAVEL_STYLE_OPTIONS}
+                  selectedValues={draftProfile.travelStyles}
+                  onToggle={(value) =>
+                    setDraftProfile((current) => ({
+                      ...current,
+                      travelStyles: toggleMultiValue(current.travelStyles, value)
+                    }))
+                  }
+                />
+              </div>
+
+              <LevelSelector
+                legend="Уровень комфорта"
+                name="comfort"
+                value={draftProfile.comfortLevel}
+                options={COMFORT_OPTIONS}
+                onChange={(comfortLevel) =>
+                  setDraftProfile((current) => ({
+                    ...current,
+                    comfortLevel
+                  }))
+                }
+              />
+            </div>
+
+            <div className="profile-actions">
+              <button type="button" className="profile-button profile-button--primary" onClick={handleSave}>
+                Save
+              </button>
+              <button type="button" className="profile-button profile-button--secondary" onClick={handleCancel}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </article>
+      ) : null}
 
       <section className="card-grid" aria-label="Профиль пользователя">
         <article className="surface-card">
@@ -95,12 +462,12 @@ export default function ProfilePage() {
 
         <article className="surface-card">
           <p className="surface-card__title">Travel preferences</p>
-          <DetailList items={profile.travelPreferences} />
+          <DetailList items={detailItems} />
         </article>
 
         <article className="surface-card surface-card--wide">
           <p className="surface-card__title">Trust / safety</p>
-          <TrustStack items={profile.trustSignals} />
+          <TrustStack items={TRUST_SIGNALS} />
         </article>
       </section>
     </section>
