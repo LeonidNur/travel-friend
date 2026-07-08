@@ -20,3 +20,4 @@ Travel Friend мы строим не как набор разрозненных 
 
 - [workflow.md](workflow.md) — как мы ищем ошибки, проверяем гипотезы и доводим задачу до коммита.
 - [documentation-rules.md](documentation-rules.md) — как обновлять документацию так, чтобы она не расходилась с кодом и состоянием проекта.
+- [codex-skills-workflow.md](codex-skills-workflow.md) — как выбирать и применять Codex skills, subagents и рабочие правила для задач проекта.
