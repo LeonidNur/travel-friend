@@ -10,27 +10,20 @@ import {
   getBudgetLabel,
   getComfortLabel,
   toggleMultiValue,
-  type BudgetLevel,
-  type ComfortLevel,
   type InterestOption,
   type TravelStyleOption
 } from '@/lib/travel-preferences';
+import type { UserProfile } from '@/lib/types';
 
 const TRUST_SIGNALS = [
   { title: 'Telegram connected', note: 'Профиль привязан к Telegram Mini App' },
   { title: 'Verification later', note: 'Подтверждение личности и бейджи появятся в следующих этапах MVP' }
 ] as const;
 
-type ProfileState = {
-  name: string;
-  age: number;
-  city: string;
+type ProfileState = Omit<UserProfile, 'destinations'> & {
   destinations: string;
-  dates: string;
   interests: InterestOption[];
-  budgetLevel: BudgetLevel;
   travelStyles: TravelStyleOption[];
-  comfortLevel: ComfortLevel;
 };
 
 type DetailItem = {

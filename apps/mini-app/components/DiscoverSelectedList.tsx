@@ -1,12 +1,12 @@
 import Link from 'next/link';
 
-import type { TravelBuddy } from '@/lib/mock-buddies';
+import type { BuddyProfile } from '@/lib/types';
 
 interface DiscoverSelectedListProps {
-  buddies: readonly TravelBuddy[];
+  buddies: readonly BuddyProfile[];
 }
 
-function getStatusCopy(buddy: TravelBuddy) {
+function getStatusCopy(buddy: BuddyProfile) {
   return buddy.likedYou
     ? {
         label: 'Мэтч',

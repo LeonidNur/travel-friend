@@ -1,3 +1,5 @@
+import type { BudgetLevel, ComfortLevel } from '@/lib/types';
+
 export const INTEREST_OPTIONS = [
   'Кино',
   'Книги',
@@ -57,9 +59,6 @@ export const COMFORT_OPTIONS = [
 
 export type InterestOption = (typeof INTEREST_OPTIONS)[number];
 export type TravelStyleOption = (typeof TRAVEL_STYLE_OPTIONS)[number];
-export type BudgetLevel = (typeof BUDGET_OPTIONS)[number]['level'];
-export type ComfortLevel = (typeof COMFORT_OPTIONS)[number]['level'];
-
 export function getAvatarInitials(name: string) {
   const parts = name
     .trim()

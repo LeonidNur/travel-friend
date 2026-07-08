@@ -5,11 +5,16 @@ import { useState } from 'react';
 import { BuddyCard } from '@/components/BuddyCard';
 import { DiscoverSelectedList } from '@/components/DiscoverSelectedList';
 import { InterestOutcomeBanner } from '@/components/InterestOutcomeBanner';
-import { getBuddyMatchSignals, mockBuddies, type TravelBuddy } from '@/lib/mock-buddies';
+import { getBuddyMatchSignals, mockBuddies } from '@/lib/mock-buddies';
+import type { BuddyProfile, InterestDecision } from '@/lib/types';
 
 type MatchState = {
-  buddy: TravelBuddy;
+  buddy: BuddyProfile;
 } | null;
+
+function getInterestDecision(buddy: BuddyProfile): Exclude<InterestDecision, 'rejected'> {
+  return buddy.likedYou ? 'match' : 'interest-sent';
+}
 
 export default function HomePage() {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -26,7 +31,7 @@ export default function HomePage() {
     setActiveIndex((currentIndex) => currentIndex + 1);
   };
 
-  const handleRejected = (buddy: TravelBuddy) => {
+  const handleRejected = (buddy: BuddyProfile) => {
     setRejectedIds((currentRejectedIds) =>
       currentRejectedIds.includes(buddy.id) ? currentRejectedIds : [...currentRejectedIds, buddy.id]
     );
@@ -37,7 +42,7 @@ export default function HomePage() {
     handleNextBuddy();
   };
 
-  const handleInterested = (buddy: TravelBuddy) => {
+  const handleInterested = (buddy: BuddyProfile) => {
     setInterestedIds((currentInterestedIds) =>
       currentInterestedIds.includes(buddy.id) ? currentInterestedIds : [...currentInterestedIds, buddy.id]
     );
@@ -76,7 +81,7 @@ export default function HomePage() {
       {matchState ? (
         <InterestOutcomeBanner
           buddyName={matchState.buddy.name}
-          variant={matchState.buddy.likedYou ? 'match' : 'interest-sent'}
+          variant={getInterestDecision(matchState.buddy)}
         />
       ) : null}
 

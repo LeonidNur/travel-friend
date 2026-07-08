@@ -1,64 +1,4 @@
-type ChatStatus = 'match' | 'interest_sent' | 'draft';
-
-type MockChat = {
-  id: string;
-  buddyName: string;
-  age: number;
-  city: string;
-  destination: string;
-  status: ChatStatus;
-  previewText: string;
-  updatedLabel: string;
-};
-
-const STATUS_LABELS: Record<ChatStatus, string> = {
-  match: 'Мэтч',
-  interest_sent: 'Интерес отправлен',
-  draft: 'Черновик обсуждения'
-};
-
-const MOCK_CHATS: MockChat[] = [
-  {
-    id: 'chat-amina-tbilisi',
-    buddyName: 'Амина',
-    age: 27,
-    city: 'Казань',
-    destination: 'Тбилиси',
-    status: 'match',
-    previewText: 'Можно начать с обсуждения дат, района для жилья и общего бюджета на поездку.',
-    updatedLabel: 'только что'
-  },
-  {
-    id: 'chat-ilya-istanbul',
-    buddyName: 'Илья',
-    age: 30,
-    city: 'Москва',
-    destination: 'Стамбул',
-    status: 'interest_sent',
-    previewText: 'Пока это заготовка: здесь позже будет удобно договориться о перелёте и планах на выходные.',
-    updatedLabel: 'сегодня'
-  },
-  {
-    id: 'chat-sonya-yerevan',
-    buddyName: 'Соня',
-    age: 25,
-    city: 'Ереван',
-    destination: 'Будапешт',
-    status: 'draft',
-    previewText: 'Черновик подсказывает тему для старта: бюджет, темп поездки и интерес к музеям или прогулкам.',
-    updatedLabel: 'сегодня'
-  },
-  {
-    id: 'chat-timur-baku',
-    buddyName: 'Тимур',
-    age: 32,
-    city: 'Санкт-Петербург',
-    destination: 'Баку',
-    status: 'match',
-    previewText: 'Есть взаимный интерес. Когда появится backend, здесь можно будет быстро сверить маршрут и даты.',
-    updatedLabel: 'вчера'
-  }
-];
+import { CHAT_STATUS_LABELS, mockChats } from '@/lib/mock-chats';
 
 export default function ChatsPage() {
   return (
@@ -73,7 +13,7 @@ export default function ChatsPage() {
       </article>
 
       <section className="list-stack" aria-label="Список mock-чатов">
-        {MOCK_CHATS.map((chat) => (
+        {mockChats.map((chat) => (
           <article className="surface-card surface-card--compact chat-card" key={chat.id}>
             <div className="chat-card__header">
               <div>
@@ -82,7 +22,7 @@ export default function ChatsPage() {
                 </p>
                 <p className="chat-card__meta">{chat.city}</p>
               </div>
-              <span className={`chat-status chat-status--${chat.status}`}>{STATUS_LABELS[chat.status]}</span>
+              <span className={`chat-status chat-status--${chat.status}`}>{CHAT_STATUS_LABELS[chat.status]}</span>
             </div>
 
             <p className="chat-card__route">Направление: {chat.destination}</p>

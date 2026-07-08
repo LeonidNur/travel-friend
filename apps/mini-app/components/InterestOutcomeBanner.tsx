@@ -1,8 +1,10 @@
 import Link from 'next/link';
 
+import type { InterestDecision } from '@/lib/types';
+
 interface InterestOutcomeBannerProps {
   buddyName: string;
-  variant: 'match' | 'interest-sent';
+  variant: Exclude<InterestDecision, 'rejected'>;
 }
 
 export function InterestOutcomeBanner({ buddyName, variant }: InterestOutcomeBannerProps) {

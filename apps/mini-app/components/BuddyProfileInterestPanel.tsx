@@ -3,13 +3,13 @@
 import { useState } from 'react';
 
 import { InterestOutcomeBanner } from '@/components/InterestOutcomeBanner';
-import type { TravelBuddy } from '@/lib/mock-buddies';
+import type { BuddyProfile, InterestDecision } from '@/lib/types';
 
 interface BuddyProfileInterestPanelProps {
-  buddy: TravelBuddy;
+  buddy: BuddyProfile;
 }
 
-type ProfileInterestState = 'idle' | 'interest-sent' | 'match';
+type ProfileInterestState = 'idle' | Exclude<InterestDecision, 'rejected'>;
 
 export function BuddyProfileInterestPanel({ buddy }: BuddyProfileInterestPanelProps) {
   const [interestState, setInterestState] = useState<ProfileInterestState>('idle');

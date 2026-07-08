@@ -1,6 +1,4 @@
 import type {
-  BudgetLevel,
-  ComfortLevel,
   InterestOption,
   TravelStyleOption
 } from '@/lib/travel-preferences';
@@ -9,36 +7,11 @@ import {
   getBudgetScale,
   getComfortLabel
 } from '@/lib/travel-preferences';
+import type { BuddyProfile, TravelPreferences } from '@/lib/types';
 
-export interface TravelBuddy {
-  id: string;
-  name: string;
-  age: number;
-  city: string;
-  tagline: string;
-  bio: string;
-  destinations: string[];
-  budgetLevel: BudgetLevel;
-  interests: InterestOption[];
-  travelStyles: TravelStyleOption[];
-  dates: string;
-  comfortLevel: ComfortLevel;
-  compatibilityReason: string;
-  compatibilityDetails: string[];
-  likedYou: boolean;
-  trustSignals: {
-    title: string;
-    note: string;
-  }[];
-}
+export type TravelBuddy = BuddyProfile;
 
-export interface DiscoverCurrentUserProfile {
-  destinations: string[];
-  interests: InterestOption[];
-  budgetLevel: BudgetLevel;
-  travelStyles: TravelStyleOption[];
-  comfortLevel: ComfortLevel;
-}
+export type DiscoverCurrentUserProfile = TravelPreferences;
 
 export interface BuddyMatchSignals {
   matchedDestinations: string[];
@@ -56,7 +29,7 @@ export const currentUserDiscoverProfile: DiscoverCurrentUserProfile = {
   comfortLevel: 3
 };
 
-export const mockBuddies: TravelBuddy[] = [
+export const mockBuddies: BuddyProfile[] = [
   {
     id: 'alina-morozova',
     name: 'Алина Морозова',

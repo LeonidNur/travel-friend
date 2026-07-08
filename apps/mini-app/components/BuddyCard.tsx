@@ -3,12 +3,12 @@ import Link from 'next/link';
 import {
   getBudgetScale,
   getComfortLabel,
-  type BuddyMatchSignals,
-  type TravelBuddy
+  type BuddyMatchSignals
 } from '@/lib/mock-buddies';
+import type { BuddyProfile } from '@/lib/types';
 
 interface BuddyCardProps {
-  buddy: TravelBuddy;
+  buddy: BuddyProfile;
   matchSignals: BuddyMatchSignals;
   onDismiss: () => void;
   onInterested: () => void;
