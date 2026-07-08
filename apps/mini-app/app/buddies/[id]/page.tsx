@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { BuddyProfileInterestPanel } from '@/components/BuddyProfileInterestPanel';
+import { ProfileBackButton } from '@/components/ProfileBackButton';
 import {
   getBuddyById,
   getBuddyInitials,
@@ -78,9 +80,10 @@ export default async function BuddyProfilePage({ params }: BuddyProfilePageProps
     <section className="page">
       <article className="hero-card">
         <div className="profile-header">
-          <p className="section-kicker">Public profile</p>
+          <ProfileBackButton />
           <span className="profile-status">MVP preview</span>
         </div>
+        <p className="section-kicker">Public profile</p>
 
         <div className="profile-hero">
           <div className="profile-hero__avatar" aria-hidden="true">
@@ -178,6 +181,8 @@ export default async function BuddyProfilePage({ params }: BuddyProfilePageProps
             ))}
           </div>
         </article>
+
+        <BuddyProfileInterestPanel buddy={buddy} />
       </section>
     </section>
   );

@@ -25,6 +25,7 @@ export interface TravelBuddy {
   comfortLevel: ComfortLevel;
   compatibilityReason: string;
   compatibilityDetails: string[];
+  likedYou: boolean;
   trustSignals: {
     title: string;
     note: string;
@@ -69,6 +70,7 @@ export const mockBuddies: TravelBuddy[] = [
     travelStyles: ['Городской', 'Познавательный / экскурсионный', 'Самостоятельный'],
     dates: 'Конец августа или первая половина сентября',
     comfortLevel: 3,
+    likedYou: true,
     compatibilityReason: 'Может подойти, если вам близки спокойный темп, городские прогулки и понятный бюджет.',
     compatibilityDetails: [
       'Похоже, вы оба ориентируетесь на сбалансированный маршрут без перегруза активностями.',
@@ -98,6 +100,7 @@ export const mockBuddies: TravelBuddy[] = [
     travelStyles: ['Городской', 'Активный / спортивный', 'Событийный / фестивали'],
     dates: 'Любые длинные выходные в ближайшие 2 месяца',
     comfortLevel: 2,
+    likedYou: false,
     compatibilityReason: 'Может подойти, если нужен активный попутчик для короткой, но насыщенной поездки.',
     compatibilityDetails: [
       'Похоже на сценарий для тех, кто любит много впечатлений за короткое время.',
@@ -127,6 +130,7 @@ export const mockBuddies: TravelBuddy[] = [
     travelStyles: ['Лесной / природный', 'Активный / спортивный', 'Медитативный / ретрит'],
     dates: 'Середина сентября, 7-10 дней',
     comfortLevel: 3,
+    likedYou: true,
     compatibilityReason: 'Может подойти, если вам важны природа, активный день и спокойный бытовой комфорт.',
     compatibilityDetails: [
       'Есть пересечение по интересу к природе и размеренному отдыху после активного дня.',
@@ -156,6 +160,7 @@ export const mockBuddies: TravelBuddy[] = [
     travelStyles: ['Автомобильный / road trip', 'Самостоятельный', 'Лесной / природный'],
     dates: 'Октябрь, до 10 дней',
     comfortLevel: 4,
+    likedYou: false,
     compatibilityReason: 'Может подойти, если для вас важны гибкий маршрут и комфорт в дороге.',
     compatibilityDetails: [
       'Формат подходит тем, кто любит самостоятельные решения и не хочет жёсткий тайминг.',
