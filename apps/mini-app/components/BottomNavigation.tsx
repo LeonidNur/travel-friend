@@ -8,14 +8,18 @@ interface BottomNavigationProps {
   pathname: string;
 }
 
+function isNavigationItemActive(itemHref: string, pathname: string) {
+  return pathname === itemHref || pathname.startsWith(`${itemHref}/`);
+}
+
 export function BottomNavigation({ pathname }: BottomNavigationProps) {
-  const isProfileActive = profileNavigationItem.href === pathname;
+  const isProfileActive = isNavigationItemActive(profileNavigationItem.href, pathname);
 
   return (
     <nav className="bottom-navigation" aria-label="Main navigation">
       <div className="bottom-navigation__group" aria-label="Primary navigation">
         {bottomNavigationItems.map((item) => {
-          const isActive = item.href === pathname;
+          const isActive = isNavigationItemActive(item.href, pathname);
 
           return (
             <Link

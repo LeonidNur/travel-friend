@@ -48,6 +48,15 @@ export function getRouteMeta(pathname: string) {
     };
   }
 
+  if (pathname.startsWith('/chats/')) {
+    return {
+      href: pathname,
+      label: 'Chat',
+      title: 'Чат поездки',
+      description: 'Локальная MVP-переписка по будущей поездке'
+    };
+  }
+
   return (
     navigationItems.find((item) => item.href === pathname) ??
     navigationItems.find((item) => item.href === '/') ??

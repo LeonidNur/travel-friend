@@ -36,13 +36,32 @@ export type InterestDecision = 'match' | 'interest-sent' | 'rejected';
 
 export type ChatStatus = 'match' | 'interest_sent' | 'draft';
 
-export type MockChat = {
+export type ChatParticipant = {
   id: string;
-  buddyName: string;
+  name: string;
   age: number;
   city: string;
+  isCurrentUser?: boolean;
+  buddyProfileId?: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  kind: 'participant' | 'system';
+  authorId?: string;
+  text: string;
+  sentAtLabel: string;
+  actionLabel?: string;
+  actionHref?: string;
+};
+
+export type MockChat = {
+  id: string;
+  title: string;
   destination: string;
   status: ChatStatus;
   previewText: string;
   updatedLabel: string;
+  participants: ChatParticipant[];
+  messages: ChatMessage[];
 };
