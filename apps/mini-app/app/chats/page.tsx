@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { CHAT_STATUS_LABELS, mockChats } from '@/lib/mock-chats';
 
 export default function ChatsPage() {
@@ -14,13 +16,16 @@ export default function ChatsPage() {
 
       <section className="list-stack" aria-label="Список mock-чатов">
         {mockChats.map((chat) => (
-          <article className="surface-card surface-card--compact chat-card" key={chat.id}>
+          <Link className="surface-card surface-card--compact chat-card chat-card--link" key={chat.id} href={`/chats/${chat.id}`}>
             <div className="chat-card__header">
               <div>
-                <p className="surface-card__title">
-                  {chat.buddyName}, {chat.age}
+                <p className="surface-card__title">{chat.title}</p>
+                <p className="chat-card__meta">
+                  {chat.participants
+                    .filter((participant) => !participant.isCurrentUser)
+                    .map((participant) => `${participant.name}, ${participant.age} · ${participant.city}`)
+                    .join(' · ')}
                 </p>
-                <p className="chat-card__meta">{chat.city}</p>
               </div>
               <span className={`chat-status chat-status--${chat.status}`}>{CHAT_STATUS_LABELS[chat.status]}</span>
             </div>
@@ -30,9 +35,9 @@ export default function ChatsPage() {
 
             <div className="chat-card__footer">
               <span className="chat-card__updated">{chat.updatedLabel}</span>
-              <span className="chat-card__hint">Реальная переписка появится позже</span>
+              <span className="chat-card__hint">Открыть чат</span>
             </div>
-          </article>
+          </Link>
         ))}
       </section>
     </section>
