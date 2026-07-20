@@ -884,6 +884,10 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   line-height: 1.3;
 }
 
+.trip-card__status {
+  justify-self: start;
+}
+
 .trip-card__meta {
   color: var(--muted);
   font-size: 0.9rem;
