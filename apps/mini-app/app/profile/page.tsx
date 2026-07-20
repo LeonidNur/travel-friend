@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, useEffect, useState } from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import {
   BUDGET_OPTIONS,
   COMFORT_OPTIONS,
@@ -14,6 +14,10 @@ import {
   type TravelStyleOption
 } from '@/lib/travel-preferences';
 import { currentUserProfile } from '@/lib/mock-current-user';
+import {
+  validateProfile,
+  type ProfileValidationErrors
+} from '@/lib/profile-validation';
 import type { UserProfile } from '@/lib/types';
 
 const TRUST_SIGNALS = [
@@ -166,6 +170,9 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(INITIAL_PROFILE);
   const [draftProfile, setDraftProfile] = useState(INITIAL_PROFILE);
   const [isEditing, setIsEditing] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ProfileValidationErrors>({});
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const cityInputRef = useRef<HTMLInputElement>(null);
 
   const detailItems = createDetailItems(profile);
 
@@ -183,16 +190,40 @@ export default function ProfilePage() {
 
   const handleEditStart = () => {
     setDraftProfile(profile);
+    setValidationErrors({});
     setIsEditing(true);
   };
 
   const handleCancel = () => {
     setDraftProfile(profile);
+    setValidationErrors({});
     setIsEditing(false);
   };
 
   const handleSave = () => {
-    setProfile(draftProfile);
+    const validationResult = validateProfile(draftProfile);
+
+    if (!validationResult.isValid) {
+      setValidationErrors(validationResult.errors);
+
+      if (validationResult.errors.name) {
+        nameInputRef.current?.focus();
+      } else if (validationResult.errors.city) {
+        cityInputRef.current?.focus();
+      }
+
+      return;
+    }
+
+    const savedProfile = {
+      ...draftProfile,
+      name: draftProfile.name.trim(),
+      city: draftProfile.city.trim()
+    };
+
+    setProfile(savedProfile);
+    setDraftProfile(savedProfile);
+    setValidationErrors({});
     setIsEditing(false);
   };
 
@@ -200,6 +231,18 @@ export default function ProfilePage() {
     (field: 'name' | 'city' | 'destinations' | 'dates') => (event: ChangeEvent<HTMLInputElement>) => {
       const nextValue = event.target.value;
       setDraftProfile((current) => ({ ...current, [field]: nextValue }));
+
+      if (field === 'name' || field === 'city') {
+        setValidationErrors((current) => {
+          if (!current[field]) {
+            return current;
+          }
+
+          return field === 'name'
+            ? { city: current.city }
+            : { name: current.name };
+        });
+      }
     };
 
   const handleAgeChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -247,12 +290,20 @@ export default function ProfilePage() {
               <label className="profile-form__field">
                 <span className="profile-form__label">Имя</span>
                 <input
+                  ref={nameInputRef}
                   className="profile-input"
                   type="text"
                   value={draftProfile.name}
                   onChange={handleTextChange('name')}
                   placeholder="Как вас зовут"
+                  aria-invalid={validationErrors.name ? 'true' : undefined}
+                  aria-describedby={validationErrors.name ? 'profile-name-error' : undefined}
                 />
+                {validationErrors.name ? (
+                  <p className="profile-field-error" id="profile-name-error" role="alert">
+                    {validationErrors.name}
+                  </p>
+                ) : null}
               </label>
 
               <label className="profile-form__field">
@@ -271,12 +322,20 @@ export default function ProfilePage() {
               <label className="profile-form__field">
                 <span className="profile-form__label">Город</span>
                 <input
+                  ref={cityInputRef}
                   className="profile-input"
                   type="text"
                   value={draftProfile.city}
                   onChange={handleTextChange('city')}
                   placeholder="Город"
+                  aria-invalid={validationErrors.city ? 'true' : undefined}
+                  aria-describedby={validationErrors.city ? 'profile-city-error' : undefined}
                 />
+                {validationErrors.city ? (
+                  <p className="profile-field-error" id="profile-city-error" role="alert">
+                    {validationErrors.city}
+                  </p>
+                ) : null}
               </label>
             </div>
 

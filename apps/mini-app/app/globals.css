@@ -1099,9 +1099,20 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   color: rgba(174, 190, 212, 0.72);
 }
 
+.profile-input[aria-invalid='true'] {
+  border-color: #fda4af;
+}
+
 .profile-range {
   width: 100%;
   accent-color: #7dd3fc;
+}
+
+.profile-field-error {
+  margin: 0;
+  color: #fda4af;
+  font-size: 0.86rem;
+  line-height: 1.35;
 }
 
 .chip-selector {
