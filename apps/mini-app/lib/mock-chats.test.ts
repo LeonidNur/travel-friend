@@ -23,20 +23,27 @@ registerHooks({
 const { canSendMessagesForChatStatus }: typeof ChatLifecycleModule = await import(
   new URL('./chat-lifecycle.ts', import.meta.url).href
 );
-const { getChatById }: typeof MockChatsModule = await import(new URL('./mock-chats.ts', import.meta.url).href);
+const { getChatById, isDirectChat, mockChats }: typeof MockChatsModule = await import(
+  new URL('./mock-chats.ts', import.meta.url).href
+);
 const { getActiveTripByChatId, getTripsByChatId }: typeof MockTripsModule = await import(
   new URL('./mock-trips.ts', import.meta.url).href
 );
 
-test('keeps the chat linked to Timur trip send-enabled', () => {
-  const trip = getActiveTripByChatId('chat-sonya-yerevan');
+test('keeps Maria and Timur chats linked to active trips and send-enabled', () => {
+  const mariaTrip = getActiveTripByChatId('chat-amina-tbilisi');
+  const timurTrip = getActiveTripByChatId('chat-sonya-yerevan');
 
-  assert.ok(trip);
+  assert.ok(mariaTrip);
+  assert.ok(timurTrip);
 
-  const chat = getChatById(trip.chatId);
+  const mariaChat = getChatById(mariaTrip.chatId);
+  const timurChat = getChatById(timurTrip.chatId);
 
-  assert.ok(chat);
-  assert.equal(canSendMessagesForChatStatus(chat.status), true);
+  assert.ok(mariaChat);
+  assert.ok(timurChat);
+  assert.equal(canSendMessagesForChatStatus(mariaChat.status), true);
+  assert.equal(canSendMessagesForChatStatus(timurChat.status), true);
 });
 
 test('keeps the interest-sent chat without a trip', () => {
@@ -47,11 +54,10 @@ test('keeps the interest-sent chat without a trip', () => {
   assert.equal(getTripsByChatId(chat.id).length, 0);
 });
 
-test('keeps the group mock chat in a non-sendable draft state', () => {
-  const chat = getChatById('chat-timur-baku');
+test('does not expose the removed group mock chat', () => {
+  assert.equal(getChatById('chat-timur-baku'), undefined);
+});
 
-  assert.ok(chat);
-  assert.equal(chat.status, 'draft');
-  assert.equal(canSendMessagesForChatStatus(chat.status), false);
-  assert.equal(getTripsByChatId(chat.id).length, 0);
+test('keeps all current mock chats direct', () => {
+  assert.equal(mockChats.every(isDirectChat), true);
 });
