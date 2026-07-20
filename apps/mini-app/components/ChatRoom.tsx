@@ -3,7 +3,14 @@
 import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 
-import { getChatCompanion, getChatParticipantById, getChatTitle, isDirectChat, type LocalChatMessage } from '@/lib/mock-chats';
+import {
+  getChatCompanion,
+  getChatParticipantById,
+  getChatTitle,
+  isDirectChat,
+  type LocalChatMessage
+} from '@/lib/mock-chats';
+import { canSendMessagesForChatStatus, getChatMessageAccessNotice } from '@/lib/chat-lifecycle';
 import { getAvatarInitials } from '@/lib/travel-preferences';
 import type { MockChat } from '@/lib/types';
 
@@ -19,6 +26,7 @@ function getMessageClassName(isCurrentUser: boolean) {
 export function ChatRoom({ chat, tripId }: ChatRoomProps) {
   const companion = getChatCompanion(chat);
   const companionProfileHref = isDirectChat(chat) && companion?.buddyProfileId ? `/buddies/${companion.buddyProfileId}` : null;
+  const canSendMessages = canSendMessagesForChatStatus(chat.status);
   const [draftMessage, setDraftMessage] = useState('');
   const [localMessages, setLocalMessages] = useState<LocalChatMessage[]>([]);
 
@@ -29,7 +37,7 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
 
     const trimmedMessage = draftMessage.trim();
 
-    if (!trimmedMessage) {
+    if (!canSendMessages || !trimmedMessage) {
       return;
     }
 
@@ -80,7 +88,7 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
         <p className="surface-card__copy">
           Временный экран для проверки логики переписки. Новые сообщения живут только в памяти текущего экрана.
         </p>
-        {tripId ? (
+        {canSendMessages && tripId ? (
           <Link className="navigation-link" href={`/trips/${tripId}`}>
             План поездки
           </Link>
@@ -142,25 +150,31 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
           })}
         </div>
 
-        <form className="chat-room__composer" onSubmit={handleSubmit}>
-          <label className="sr-only" htmlFor="chat-room-message">
-            Сообщение
-          </label>
-          <textarea
-            id="chat-room-message"
-            className="profile-input chat-room__input"
-            value={draftMessage}
-            onChange={(event) => setDraftMessage(event.target.value)}
-            placeholder="Напишите сообщение для старта обсуждения"
-            rows={3}
-          />
-          <div className="chat-room__composer-footer">
-            <p className="chat-room__composer-note">Пустое сообщение не отправляется. История не сохраняется после перезагрузки.</p>
-            <button className="profile-button profile-button--primary" type="submit">
-              Отправить
-            </button>
+        {canSendMessages ? (
+          <form className="chat-room__composer" onSubmit={handleSubmit}>
+            <label className="sr-only" htmlFor="chat-room-message">
+              Сообщение
+            </label>
+            <textarea
+              id="chat-room-message"
+              className="profile-input chat-room__input"
+              value={draftMessage}
+              onChange={(event) => setDraftMessage(event.target.value)}
+              placeholder="Напишите сообщение для старта обсуждения"
+              rows={3}
+            />
+            <div className="chat-room__composer-footer">
+              <p className="chat-room__composer-note">Пустое сообщение не отправляется. История не сохраняется после перезагрузки.</p>
+              <button className="profile-button profile-button--primary" type="submit">
+                Отправить
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="chat-room__composer" role="status">
+            <p className="chat-room__composer-note">{getChatMessageAccessNotice(chat.status)}</p>
           </div>
-        </form>
+        )}
       </section>
     </section>
   );
