@@ -1,5 +1,5 @@
-import { CURRENT_USER_CHAT_PARTICIPANT_ID, getChatById } from '@/lib/mock-chats';
-import type { Trip } from '@/lib/types';
+import { CURRENT_USER_CHAT_PARTICIPANT_ID, mockChats } from '@/lib/mock-chats';
+import type { MockChat, Trip } from '@/lib/types';
 
 const mockTrips: Trip[] = [
   {
@@ -76,21 +76,20 @@ const mockTrips: Trip[] = [
   }
 ];
 
-function validateMockTrips(trips: readonly Trip[]): void {
-  const usedChatIds = new Set<string>();
+function isActiveTripStatus(status: Trip['status']): boolean {
+  return status === 'draft' || status === 'planning';
+}
+
+export function validateMockTrips(trips: readonly Trip[], chats: readonly MockChat[] = mockChats): void {
+  const activeTripCountsByChatId = new Map<string, number>();
+  const chatsById = new Map(chats.map((chat) => [chat.id, chat]));
 
   for (const trip of trips) {
-    const chat = getChatById(trip.chatId);
+    const chat = chatsById.get(trip.chatId);
 
     if (!chat) {
       throw new Error(`Chat "${trip.chatId}" not found for mock trip "${trip.id}".`);
     }
-
-    if (usedChatIds.has(trip.chatId)) {
-      throw new Error(`Chat "${trip.chatId}" is used by more than one mock trip.`);
-    }
-
-    usedChatIds.add(trip.chatId);
 
     const chatParticipantIds = new Set(chat.participants.map((participant) => participant.id));
     const tripParticipantIds = new Set(trip.participantIds);
@@ -114,6 +113,16 @@ function validateMockTrips(trips: readonly Trip[]): void {
     if (!hasMatchingParticipantSets) {
       throw new Error(`Participants for mock trip "${trip.id}" do not match chat "${trip.chatId}".`);
     }
+
+    if (isActiveTripStatus(trip.status)) {
+      const activeTripCount = (activeTripCountsByChatId.get(trip.chatId) ?? 0) + 1;
+
+      if (activeTripCount > 1) {
+        throw new Error(`Chat "${trip.chatId}" has more than one active mock trip.`);
+      }
+
+      activeTripCountsByChatId.set(trip.chatId, activeTripCount);
+    }
   }
 }
 
@@ -127,6 +136,16 @@ export function getTripById(id: string): Trip | undefined {
   return mockTrips.find((trip) => trip.id === id);
 }
 
-export function getTripByChatId(chatId: string): Trip | undefined {
-  return mockTrips.find((trip) => trip.chatId === chatId);
+export function getTripsByChatId(chatId: string, trips: readonly Trip[] = mockTrips): readonly Trip[] {
+  return trips.filter((trip) => trip.chatId === chatId);
+}
+
+export function getActiveTripByChatId(chatId: string, trips: readonly Trip[] = mockTrips): Trip | undefined {
+  const activeTrips = getTripsByChatId(chatId, trips).filter((trip) => isActiveTripStatus(trip.status));
+
+  if (activeTrips.length > 1) {
+    throw new Error(`Chat "${chatId}" has more than one active trip.`);
+  }
+
+  return activeTrips[0];
 }
