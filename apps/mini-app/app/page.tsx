@@ -4,55 +4,45 @@ import { useState } from 'react';
 
 import { BuddyCard } from '@/components/BuddyCard';
 import { DiscoverSelectedList } from '@/components/DiscoverSelectedList';
+import { useInterestDecisions } from '@/components/InterestDecisionProvider';
 import { InterestOutcomeBanner } from '@/components/InterestOutcomeBanner';
+import {
+  getPositiveInterestDecision,
+  getRemainingDiscoverCandidates,
+  getSelectedDiscoverBuddies,
+  getViewedDiscoverCount,
+  type PositiveInterestDecision
+} from '@/lib/interest-decisions';
 import { getBuddyMatchSignals, getDiscoverCandidates } from '@/lib/mock-buddies';
-import type { BuddyProfile, InterestDecision } from '@/lib/types';
+import type { BuddyProfile } from '@/lib/types';
 
-type MatchState = {
+type DiscoverOutcome = {
   buddy: BuddyProfile;
+  decision: PositiveInterestDecision;
 } | null;
 
 const discoverCandidates = getDiscoverCandidates();
 
-function getInterestDecision(buddy: BuddyProfile): Exclude<InterestDecision, 'rejected'> {
-  return buddy.likedYou ? 'match' : 'interest-sent';
-}
-
 export default function HomePage() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [interestedIds, setInterestedIds] = useState<string[]>([]);
-  const [rejectedIds, setRejectedIds] = useState<string[]>([]);
-  const [matchState, setMatchState] = useState<MatchState>(null);
+  const { decisions, setDecision } = useInterestDecisions();
+  const [outcome, setOutcome] = useState<DiscoverOutcome>(null);
 
-  const activeBuddy = discoverCandidates[activeIndex] ?? null;
-  const viewedCount = interestedIds.length + rejectedIds.length;
-  const remainingCount = Math.max(discoverCandidates.length - viewedCount, 0);
-  const interestedBuddies = discoverCandidates.filter((buddy) => interestedIds.includes(buddy.id));
-
-  const handleNextBuddy = () => {
-    setActiveIndex((currentIndex) => currentIndex + 1);
-  };
+  const remainingCandidates = getRemainingDiscoverCandidates(discoverCandidates, decisions);
+  const activeBuddy = remainingCandidates[0] ?? null;
+  const viewedCount = getViewedDiscoverCount(discoverCandidates, decisions);
+  const remainingCount = remainingCandidates.length;
+  const selectedBuddies = getSelectedDiscoverBuddies(discoverCandidates, decisions);
 
   const handleRejected = (buddy: BuddyProfile) => {
-    setRejectedIds((currentRejectedIds) =>
-      currentRejectedIds.includes(buddy.id) ? currentRejectedIds : [...currentRejectedIds, buddy.id]
-    );
-    setInterestedIds((currentInterestedIds) =>
-      currentInterestedIds.filter((currentBuddyId) => currentBuddyId !== buddy.id)
-    );
-    setMatchState(null);
-    handleNextBuddy();
+    setDecision(buddy.id, 'rejected');
+    setOutcome(null);
   };
 
   const handleInterested = (buddy: BuddyProfile) => {
-    setInterestedIds((currentInterestedIds) =>
-      currentInterestedIds.includes(buddy.id) ? currentInterestedIds : [...currentInterestedIds, buddy.id]
-    );
-    setRejectedIds((currentRejectedIds) =>
-      currentRejectedIds.filter((currentBuddyId) => currentBuddyId !== buddy.id)
-    );
-    setMatchState({ buddy });
-    handleNextBuddy();
+    const decision = getPositiveInterestDecision(buddy);
+
+    setDecision(buddy.id, decision);
+    setOutcome({ buddy, decision });
   };
 
   return (
@@ -74,16 +64,16 @@ export default function HomePage() {
             <span className="discover-stat__label">Просмотрено</span>
           </div>
           <div className="discover-stat">
-            <span className="discover-stat__value">{interestedIds.length}</span>
+            <span className="discover-stat__value">{selectedBuddies.length}</span>
             <span className="discover-stat__label">Локально отмечено “Подходит”</span>
           </div>
         </div>
       </article>
 
-      {matchState ? (
+      {outcome ? (
         <InterestOutcomeBanner
-          buddyName={matchState.buddy.name}
-          variant={getInterestDecision(matchState.buddy)}
+          buddyName={outcome.buddy.name}
+          variant={outcome.decision}
         />
       ) : null}
 
@@ -98,7 +88,7 @@ export default function HomePage() {
         </section>
       ) : (
         <section className="discover-list" aria-label="Состояние конца колоды">
-          <DiscoverSelectedList buddies={interestedBuddies} />
+          <DiscoverSelectedList selections={selectedBuddies} />
         </section>
       )}
     </section>
