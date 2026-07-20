@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { getBuddyById } from './mock-buddies';
 import type { BuddyProfile, InterestDecision } from './types';
 import type { InterestDecisions } from './interest-decisions';
 import type * as InterestDecisionsModule from './interest-decisions';
@@ -31,6 +32,13 @@ const discoverCandidates = [
 test('returns match only when a buddy has already liked the current user', () => {
   assert.equal(getPositiveInterestDecision({ likedYou: true }), 'match');
   assert.equal(getPositiveInterestDecision({ likedYou: false }), 'interest-sent');
+});
+
+test('returns match for Timur, consistent with the existing matched chat fixture', () => {
+  const timur = getBuddyById('timur-safonov');
+
+  assert.ok(timur);
+  assert.equal(getPositiveInterestDecision(timur), 'match');
 });
 
 test('keeps the first interest decision for a buddy', () => {
