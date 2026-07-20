@@ -5,12 +5,14 @@ import { useState } from 'react';
 import { BuddyCard } from '@/components/BuddyCard';
 import { DiscoverSelectedList } from '@/components/DiscoverSelectedList';
 import { InterestOutcomeBanner } from '@/components/InterestOutcomeBanner';
-import { getBuddyMatchSignals, mockBuddies } from '@/lib/mock-buddies';
+import { getBuddyMatchSignals, getDiscoverCandidates } from '@/lib/mock-buddies';
 import type { BuddyProfile, InterestDecision } from '@/lib/types';
 
 type MatchState = {
   buddy: BuddyProfile;
 } | null;
+
+const discoverCandidates = getDiscoverCandidates();
 
 function getInterestDecision(buddy: BuddyProfile): Exclude<InterestDecision, 'rejected'> {
   return buddy.likedYou ? 'match' : 'interest-sent';
@@ -22,10 +24,10 @@ export default function HomePage() {
   const [rejectedIds, setRejectedIds] = useState<string[]>([]);
   const [matchState, setMatchState] = useState<MatchState>(null);
 
-  const activeBuddy = mockBuddies[activeIndex] ?? null;
+  const activeBuddy = discoverCandidates[activeIndex] ?? null;
   const viewedCount = interestedIds.length + rejectedIds.length;
-  const remainingCount = Math.max(mockBuddies.length - viewedCount, 0);
-  const interestedBuddies = mockBuddies.filter((buddy) => interestedIds.includes(buddy.id));
+  const remainingCount = Math.max(discoverCandidates.length - viewedCount, 0);
+  const interestedBuddies = discoverCandidates.filter((buddy) => interestedIds.includes(buddy.id));
 
   const handleNextBuddy = () => {
     setActiveIndex((currentIndex) => currentIndex + 1);

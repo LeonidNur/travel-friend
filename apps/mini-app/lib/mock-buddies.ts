@@ -1,13 +1,11 @@
-import type {
-  InterestOption,
-  TravelStyleOption
-} from '@/lib/travel-preferences';
+import type { InterestOption, TravelStyleOption } from './travel-preferences';
 import {
   getAvatarInitials,
   getBudgetScale,
   getComfortLabel
-} from '@/lib/travel-preferences';
-import type { BuddyProfile, TravelPreferences } from '@/lib/types';
+} from './travel-preferences';
+import { CURRENT_USER_ID, currentUserDiscoverProfile } from './mock-current-user';
+import type { BuddyProfile, TravelPreferences } from './types';
 
 export type TravelBuddy = BuddyProfile;
 
@@ -21,45 +19,7 @@ export interface BuddyMatchSignals {
   isComfortMatch: boolean;
 }
 
-export const currentUserDiscoverProfile: DiscoverCurrentUserProfile = {
-  destinations: ['Тбилиси', 'Стамбул', 'Барселона'],
-  interests: ['Музыка', 'Еда', 'Природа', 'Архитектура'],
-  budgetLevel: 2,
-  travelStyles: ['Городской', 'Познавательный / экскурсионный', 'Самостоятельный'],
-  comfortLevel: 3
-};
-
 export const mockBuddies: BuddyProfile[] = [
-  {
-    id: 'alina-morozova',
-    name: 'Алина Морозова',
-    age: 29,
-    city: 'Санкт-Петербург',
-    tagline: 'Люблю города у моря, локальную еду и планы без перегруза.',
-    bio: 'Ищу попутчика для тёплых городских поездок на 5-8 дней. Люблю сочетать прогулки по районам, локальную еду и пару дней без спешки.',
-    destinations: ['Стамбул', 'Тбилиси', 'Барселона'],
-    budgetLevel: 2,
-    interests: ['Еда', 'Архитектура', 'Музыка', 'Фотография'],
-    travelStyles: ['Городской', 'Познавательный / экскурсионный', 'Самостоятельный'],
-    dates: 'Конец августа или первая половина сентября',
-    comfortLevel: 3,
-    likedYou: true,
-    compatibilityReason: 'Может подойти, если вам близки спокойный темп, городские прогулки и понятный бюджет.',
-    compatibilityDetails: [
-      'Похоже, вы оба ориентируетесь на сбалансированный маршрут без перегруза активностями.',
-      'Есть пересечение по интересам к городской атмосфере, еде и комфортной самостоятельной поездке.'
-    ],
-    trustSignals: [
-      {
-        title: 'Telegram connected',
-        note: 'Профиль открыт из Telegram Mini App.'
-      },
-      {
-        title: 'Profile active',
-        note: 'Анкета заполнена и выглядит как готовая к первому контакту.'
-      }
-    ]
-  },
   {
     id: 'timur-safonov',
     name: 'Тимур Сафонов',
@@ -152,6 +112,34 @@ export const mockBuddies: BuddyProfile[] = [
   }
 ];
 
+export function assertDiscoverCandidateFixtures(
+  buddies: readonly BuddyProfile[],
+  currentUserId: string = CURRENT_USER_ID
+): void {
+  const buddyIds = new Set<string>();
+
+  for (const buddy of buddies) {
+    if (buddy.id === currentUserId) {
+      throw new Error(`Current user id "${currentUserId}" cannot be a Discover candidate.`);
+    }
+
+    if (buddyIds.has(buddy.id)) {
+      throw new Error(`Duplicate buddy id "${buddy.id}" found in Discover fixtures.`);
+    }
+
+    buddyIds.add(buddy.id);
+  }
+}
+
+assertDiscoverCandidateFixtures(mockBuddies);
+
+export function getDiscoverCandidates(
+  buddies: readonly BuddyProfile[] = mockBuddies,
+  currentUserId: string = CURRENT_USER_ID
+): BuddyProfile[] {
+  return buddies.filter((buddy) => buddy.id !== currentUserId);
+}
+
 function findSharedValues<T extends string>(currentValues: readonly T[], buddyValues: readonly T[]) {
   return buddyValues.filter((value) => currentValues.includes(value));
 }
@@ -174,3 +162,4 @@ export function getBuddyMatchSignals(
 }
 
 export { getAvatarInitials as getBuddyInitials, getBudgetScale, getComfortLabel };
+export { currentUserDiscoverProfile };

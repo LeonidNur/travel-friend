@@ -13,6 +13,7 @@ import {
   type InterestOption,
   type TravelStyleOption
 } from '@/lib/travel-preferences';
+import { currentUserProfile } from '@/lib/mock-current-user';
 import type { UserProfile } from '@/lib/types';
 
 const TRUST_SIGNALS = [
@@ -36,17 +37,21 @@ type TrustSignal = {
   note: string;
 };
 
-const INITIAL_PROFILE: ProfileState = {
-  name: 'Алина Морозова',
-  age: 29,
-  city: 'Санкт-Петербург',
-  destinations: 'Тбилиси, Стамбул, Барселона',
-  dates: 'Гибкие, в пределах недели',
-  interests: ['Музыка', 'Еда', 'Природа', 'Архитектура'],
-  budgetLevel: 2,
-  travelStyles: ['Городской', 'Познавательный / экскурсионный', 'Самостоятельный'],
-  comfortLevel: 3
-};
+function createProfileState(profile: UserProfile): ProfileState {
+  return {
+    name: profile.name,
+    age: profile.age,
+    city: profile.city,
+    destinations: profile.destinations.join(', '),
+    dates: profile.dates,
+    interests: profile.interests,
+    budgetLevel: profile.budgetLevel,
+    travelStyles: profile.travelStyles,
+    comfortLevel: profile.comfortLevel
+  };
+}
+
+const INITIAL_PROFILE = createProfileState(currentUserProfile);
 
 function createDetailItems(profile: ProfileState): DetailItem[] {
   return [
