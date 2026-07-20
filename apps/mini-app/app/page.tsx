@@ -48,11 +48,12 @@ export default function HomePage() {
   return (
     <section className="page">
       <article className="hero-card">
-        <p className="section-kicker">Discover MVP</p>
+        <p className="section-kicker">Демо-режим</p>
         <h2 className="hero-card__title">Смотрите по одной анкете и быстро решайте, хотите ли открыть профиль</h2>
         <p className="hero-card__copy">
           На карточке видно только базовые характеристики. После нажатия на кнопку решения
-          откроется следующая анкета из mock-набора.
+          откроется следующая демонстрационная анкета. Выбор сохраняется только в текущем сеансе
+          и не отправляется другому пользователю.
         </p>
         <div className="discover-hero__stats" aria-label="Статистика discovery">
           <div className="discover-stat">

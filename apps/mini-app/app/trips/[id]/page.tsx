@@ -46,7 +46,7 @@ export default async function TripDetailsPage({ params }: TripDetailsPageProps) 
           <p className="section-kicker">Поездка</p>
           <h2 className="empty-state-card__title">Поездка не найдена</h2>
           <p className="surface-card__copy">
-            Возможно, эта поездка отсутствует в текущем mock-наборе или ссылка устарела.
+            Возможно, этой поездки нет в текущем наборе демонстрационных данных или ссылка устарела.
           </p>
           <Link className="profile-button profile-button--secondary" href="/trips">
             Вернуться к списку поездок
@@ -67,6 +67,10 @@ export default async function TripDetailsPage({ params }: TripDetailsPageProps) 
         </Link>
         <p className="section-kicker">Поездка</p>
         <h2 className="trip-details-header__title">План поездки</h2>
+        <p className="surface-card__copy">
+          План поездки показан для проверки сценария. Статусы категорий не синхронизируются и не
+          подтверждаются другими участниками.
+        </p>
         <div className="trip-details-header__meta">
           <p className="trip-details-header__participants">Участники: {participants}</p>
           {chat ? (

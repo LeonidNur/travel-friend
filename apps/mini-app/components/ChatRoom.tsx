@@ -61,9 +61,9 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
           <Link className="profile-button profile-button--secondary profile-back-button" href="/chats">
             Назад к чатам
           </Link>
-          <span className="profile-status">Local-only MVP</span>
+          <span className="profile-status">Демо-режим</span>
         </div>
-        <p className="section-kicker">Chat room</p>
+        <p className="section-kicker">Диалог</p>
         {companionProfileHref ? (
           <Link className="profile-hero chat-room__profile-link" href={companionProfileHref}>
             <div className="profile-hero__avatar" aria-hidden="true">
@@ -86,7 +86,8 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
           </div>
         )}
         <p className="surface-card__copy">
-          Временный экран для проверки логики переписки. Новые сообщения живут только в памяти текущего экрана.
+          Это демонстрационный диалог: показанная история нужна для проверки сценария и не отражает
+          реальную переписку.
         </p>
         {canSendMessages && tripId ? (
           <Link className="navigation-link" href={`/trips/${tripId}`}>
@@ -164,9 +165,12 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
               rows={3}
             />
             <div className="chat-room__composer-footer">
-              <p className="chat-room__composer-note">Пустое сообщение не отправляется. История не сохраняется после перезагрузки.</p>
+              <p className="chat-room__composer-note">
+                Новое сообщение видно только на текущем экране: оно не отправляется другому участнику и исчезнет
+                после ухода со страницы или перезагрузки.
+              </p>
               <button className="profile-button profile-button--primary" type="submit">
-                Отправить
+                Добавить сообщение
               </button>
             </div>
           </form>

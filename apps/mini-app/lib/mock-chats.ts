@@ -1,13 +1,7 @@
-import type { ChatMessage, ChatParticipant, ChatStatus, MockChat } from '@/lib/types';
+import type { ChatMessage, ChatParticipant, MockChat } from '@/lib/types';
 import { getBuddyById } from '@/lib/mock-buddies';
 
 export const CURRENT_USER_CHAT_PARTICIPANT_ID = 'current-user';
-
-export const CHAT_STATUS_LABELS: Record<ChatStatus, string> = {
-  match: 'Мэтч',
-  interest_sent: 'Интерес отправлен',
-  draft: 'Черновик обсуждения'
-};
 
 const CURRENT_USER_PARTICIPANT: ChatParticipant = {
   id: CURRENT_USER_CHAT_PARTICIPANT_ID,

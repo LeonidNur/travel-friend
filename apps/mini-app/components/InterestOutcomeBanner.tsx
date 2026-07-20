@@ -13,18 +13,18 @@ export function InterestOutcomeBanner({ buddyName, variant }: InterestOutcomeBan
   return (
     <article className="surface-card surface-card--compact surface-card--wide interest-banner">
       <div className="interest-banner__header">
-        <p className="section-kicker">{isMatch ? 'Mock match' : 'Mock interest'}</p>
+        <p className="section-kicker">Демо-режим</p>
         <span className="interest-banner__status">{buddyName}</span>
       </div>
-      <h3 className="interest-banner__title">{isMatch ? 'У вас мэтч' : 'Интерес отправлен'}</h3>
+      <h3 className="interest-banner__title">{isMatch ? 'Совпадение интереса' : 'Интерес отмечен'}</h3>
       <p className="surface-card__copy">
         {isMatch
-          ? 'Мэтч — можно перейти к обсуждению поездки.'
-          : 'Интерес отправлен — чат будет доступен после ответа.'}
+          ? 'Демо-мэтч показан на основе заранее заданного интереса в демонстрационных данных. Реальный пользователь его не подтверждал, чат не создаётся.'
+          : 'Интерес сохранён только в текущем сеансе и пока не отправляется другому пользователю.'}
       </p>
       {isMatch ? (
         <Link className="profile-button profile-button--primary interest-banner__action" href="/chats">
-          Перейти к чатам
+          Посмотреть примеры чатов
         </Link>
       ) : null}
     </article>
