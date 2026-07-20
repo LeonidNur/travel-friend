@@ -140,7 +140,3 @@ test('keeps Timur chat linked to its active trip', () => {
 test('keeps Egor chat without an active trip', () => {
   assert.equal(getActiveTripByChatId('chat-ilya-istanbul'), undefined);
 });
-
-test('keeps the group draft chat without trips', () => {
-  assert.equal(getTripsByChatId('chat-timur-baku').length, 0);
-});

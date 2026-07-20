@@ -118,43 +118,6 @@ export const mockChats: MockChat[] = [
         sentAtLabel: 'сегодня'
       })
     ]
-  },
-  {
-    id: 'chat-timur-baku',
-    title: 'Тимур',
-    destination: 'Баку',
-    status: 'draft',
-    previewText: 'Групповой mock-чат ещё не активирован.',
-    updatedLabel: 'вчера',
-    participants: [
-      CURRENT_USER_PARTICIPANT,
-      {
-        id: 'timur',
-        name: 'Тимур',
-        age: 32,
-        city: 'Санкт-Петербург'
-      },
-      {
-        id: 'olga',
-        name: 'Ольга',
-        age: 28,
-        city: 'Минск'
-      }
-    ],
-    messages: [
-      createParticipantMessage({
-        id: 'message-timur-1',
-        authorId: 'timur',
-        text: 'Я могу собрать первый черновик по маршруту и посмотреть, где удобнее жить.',
-        sentAtLabel: 'вчера'
-      }),
-      createParticipantMessage({
-        id: 'message-olga-1',
-        authorId: 'olga',
-        text: 'Мне важно, чтобы был спокойный темп. Потом уже можно добавить музеи и еду по районам.',
-        sentAtLabel: 'вчера'
-      })
-    ]
   }
 ];
 
