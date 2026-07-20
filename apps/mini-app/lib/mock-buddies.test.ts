@@ -62,15 +62,23 @@ test('keeps every Discover candidate available as a public buddy profile', () =>
   }
 });
 
-test('uses updated current-user interests and budget for Discover match signals', () => {
+test('derives all match signals from an updated session profile', () => {
   const savedSession = saveCurrentUserProfile(createCurrentUserProfileSession(), {
     ...currentUserProfile,
+    destinations: ['Берлин'],
     interests: ['Вечеринки'],
-    budgetLevel: 3
+    budgetLevel: 3,
+    travelStyles: ['Активный / спортивный'],
+    comfortLevel: 2
   } satisfies UserProfile);
+  const sessionProfile = getCurrentUserProfile(savedSession);
+  const buddy = mockBuddies[0];
 
-  const matchSignals = getBuddyMatchSignals(mockBuddies[0], getCurrentUserProfile(savedSession));
+  const matchSignals = getBuddyMatchSignals(buddy, sessionProfile);
 
   assert.deepEqual(matchSignals.matchedInterests, ['Вечеринки']);
+  assert.deepEqual(matchSignals.matchedDestinations, ['Берлин']);
+  assert.deepEqual(matchSignals.matchedTravelStyles, ['Активный / спортивный']);
   assert.equal(matchSignals.isBudgetMatch, true);
+  assert.equal(matchSignals.isComfortMatch, true);
 });
