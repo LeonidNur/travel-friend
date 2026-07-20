@@ -33,9 +33,9 @@ export function BuddyProfileInterestPanel({ buddy }: BuddyProfileInterestPanelPr
     return (
       <article className="surface-card surface-card--compact surface-card--wide interest-panel">
         <div className="interest-panel__content">
-          <p className="section-kicker">Mock interest</p>
+          <p className="section-kicker">Демо-режим</p>
           <h3 className="interest-panel__title">Вы решили, что этот профиль не подходит</h3>
-          <p className="surface-card__copy">Решение уже зафиксировано для текущей сессии.</p>
+          <p className="surface-card__copy">Решение сохранено только в текущем сеансе.</p>
         </div>
       </article>
     );
@@ -44,10 +44,10 @@ export function BuddyProfileInterestPanel({ buddy }: BuddyProfileInterestPanelPr
   return (
     <article className="surface-card surface-card--compact surface-card--wide interest-panel">
       <div className="interest-panel__content">
-        <p className="section-kicker">Mock interest</p>
+        <p className="section-kicker">Демо-режим</p>
         <h3 className="interest-panel__title">Если профиль подходит, можно зафиксировать интерес</h3>
         <p className="surface-card__copy">
-          Это локальный сценарий MVP без чатов и сохранения на сервере.
+          Действие сохранится только в текущем сеансе и пока не отправляется другому пользователю.
         </p>
       </div>
       <button

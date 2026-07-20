@@ -18,10 +18,10 @@ export default async function ChatRoomPage({ params }: ChatRoomPageProps) {
     return (
       <section className="page">
         <article className="surface-card surface-card--compact empty-state-card">
-          <p className="section-kicker">Chat not found</p>
+          <p className="section-kicker">Чат не найден</p>
           <h2 className="empty-state-card__title">Чат не найден</h2>
           <p className="surface-card__copy">
-            Возможно, этот `chat id` отсутствует в текущем mock-наборе или ссылка устарела.
+            Возможно, этого чата нет в текущем наборе демонстрационных диалогов или ссылка устарела.
           </p>
           <Link className="profile-button profile-button--secondary" href="/chats">
             Вернуться к списку чатов

@@ -47,13 +47,13 @@ export default async function BuddyProfilePage({ params }: BuddyProfilePageProps
     return (
       <section className="page">
         <article className="surface-card surface-card--compact empty-state-card">
-          <p className="section-kicker">Profile not found</p>
+          <p className="section-kicker">Профиль не найден</p>
           <h2 className="empty-state-card__title">Публичный профиль не найден</h2>
           <p className="surface-card__copy">
-            Возможно, анкета была удалена или этот `id` не существует в текущем mock-наборе.
+            Возможно, анкета была удалена или её нет в текущем наборе демонстрационных профилей.
           </p>
           <Link className="profile-button profile-button--secondary buddy-card__profile-link" href="/">
-            Вернуться в discover
+            Вернуться к просмотру
           </Link>
         </article>
       </section>
@@ -155,7 +155,7 @@ export default async function BuddyProfilePage({ params }: BuddyProfilePageProps
           <p className="surface-card__title">Почему может подойти</p>
           <div className="match-stack">
             <p className="match-stack__lead">
-              Это только рекомендация-заглушка для MVP, а не подтверждённый вывод системы.
+              Это демонстрационная рекомендация, а не подтверждённый вывод системы.
             </p>
             <p className="match-stack__copy">{buddy.compatibilityReason}</p>
             {buddy.compatibilityDetails.map((detail) => (
