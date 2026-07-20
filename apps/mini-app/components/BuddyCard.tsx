@@ -33,7 +33,7 @@ export function BuddyCard({ buddy, matchSignals, onDismiss, onInterested }: Budd
         </div>
         <div className="buddy-card__meta">
           <span
-            className={`buddy-card__budget${matchSignals.isBudgetMatch ? ' buddy-card__budget--match' : ''}`}
+            className={`${getChipClassName(matchSignals.isBudgetMatch)} buddy-card__budget`}
             aria-label={`Бюджет ${getBudgetScale(buddy.budgetLevel)}`}
           >
             {getBudgetScale(buddy.budgetLevel)}
