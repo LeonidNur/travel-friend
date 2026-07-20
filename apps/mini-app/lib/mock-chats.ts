@@ -69,9 +69,7 @@ export const mockChats: MockChat[] = [
         id: 'message-system-trip-planning',
         kind: 'system',
         text: 'Начато совместное планирование поездки.',
-        sentAtLabel: '10:18',
-        actionLabel: 'Открыть план поездки',
-        actionHref: '/trips'
+        sentAtLabel: '10:18'
       },
       createParticipantMessage({
         id: 'message-amina-2',
