@@ -9,10 +9,6 @@ type IsEqual<Actual, Expected> = (
   (<Value>() => Value extends Actual ? 1 : 2) extends
   (<Value>() => Value extends Expected ? 1 : 2) ? true : false
 );
-type Assert<Condition extends true> = Condition;
-type UnknownBuddyDecisionIsOptional = Assert<
-  IsEqual<InterestDecisions[string], InterestDecision | undefined>
->;
 
 const interestDecisionsModule: typeof InterestDecisionsModule = await import(
   new URL('./interest-decisions.ts', import.meta.url).href
@@ -48,6 +44,7 @@ test('keeps the first interest decision for a buddy', () => {
 test('returns no decision for an unknown buddy id', () => {
   const decisions: InterestDecisions = { 'maria-ivanova': 'match' };
 
+  assert.ok(true satisfies IsEqual<InterestDecisions[string], InterestDecision | undefined>);
   assert.equal(decisions['unknown-buddy'], undefined);
 });
 
