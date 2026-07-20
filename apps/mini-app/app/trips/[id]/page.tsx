@@ -3,8 +3,11 @@
 import Link from 'next/link';
 import { use } from 'react';
 
+import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTripSession } from '@/components/InterestDecisionProvider';
+import { getDisplayedChatParticipant } from '@/lib/current-user-chat-participant';
 import { getChatById } from '@/lib/mock-chats';
+import type { CurrentUserProfile } from '@/lib/mock-current-user';
 import { TRIP_CATEGORY_ORDER } from '@/lib/types';
 import type { TripCategoryId, TripCategoryStatus } from '@/lib/types';
 
@@ -30,9 +33,9 @@ const TRIP_CATEGORY_STATUS_LABELS: Record<TripCategoryStatus, string> = {
   empty: 'Не обсуждалось'
 };
 
-function getParticipantsLabel(chatId: string) {
+function getParticipantsLabel(chatId: string, currentUserProfile: CurrentUserProfile) {
   const participantNames = getChatById(chatId)?.participants
-    .map((participant) => participant.name)
+    .map((participant) => getDisplayedChatParticipant(participant, currentUserProfile).name)
     .join(', ');
 
   return participantNames || 'Участники не найдены';
@@ -41,6 +44,7 @@ function getParticipantsLabel(chatId: string) {
 export default function TripDetailsPage({ params }: TripDetailsPageProps) {
   const { id } = use(params);
   const { getTrip } = useTripSession();
+  const { profile } = useCurrentUserProfile();
   const trip = getTrip(id);
 
   if (!trip) {
@@ -61,7 +65,7 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
   }
 
   const chat = getChatById(trip.chatId);
-  const participants = getParticipantsLabel(trip.chatId);
+  const participants = getParticipantsLabel(trip.chatId, profile);
 
   return (
     <section className="page">

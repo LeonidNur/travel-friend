@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 
+import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTripSession } from '@/components/InterestDecisionProvider';
 import {
+  CURRENT_USER_CHAT_PARTICIPANT_ID,
   getChatCompanion,
   getChatParticipantById,
   getChatTitle,
@@ -12,6 +14,7 @@ import {
   type LocalChatMessage
 } from '@/lib/mock-chats';
 import { canSendMessagesForChatStatus, getChatMessageAccessNotice } from '@/lib/chat-lifecycle';
+import { getDisplayedChatParticipant } from '@/lib/current-user-chat-participant';
 import { getAvatarInitials } from '@/lib/travel-preferences';
 import type { MockChat } from '@/lib/types';
 
@@ -25,6 +28,7 @@ function getMessageClassName(isCurrentUser: boolean) {
 }
 
 export function ChatRoom({ chat, tripId }: ChatRoomProps) {
+  const { profile } = useCurrentUserProfile();
   const { getActiveTrip, startPlanning } = useTripSession();
   const companion = getChatCompanion(chat);
   const companionProfileHref = isDirectChat(chat) && companion?.buddyProfileId ? `/buddies/${companion.buddyProfileId}` : null;
@@ -35,6 +39,10 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
   const canStartPlanning = chat.status === 'match' && !activeTripId;
 
   const messages = useMemo(() => [...chat.messages, ...localMessages], [chat.messages, localMessages]);
+  const participants = useMemo(
+    () => chat.participants.map((participant) => getDisplayedChatParticipant(participant, profile)),
+    [chat.participants, profile]
+  );
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -50,7 +58,7 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
       {
         id: `local-message-${current.length + 1}`,
         kind: 'participant',
-        authorId: 'current-user',
+        authorId: CURRENT_USER_CHAT_PARTICIPANT_ID,
         text: trimmedMessage,
         sentAtLabel: 'только что'
       }
@@ -115,10 +123,10 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
       <article className="surface-card surface-card--compact">
         <div className="chat-room__participants-header">
           <p className="surface-card__title">Участники</p>
-          <span className="chat-room__participants-count">{chat.participants.length} участника</span>
+          <span className="chat-room__participants-count">{participants.length} участника</span>
         </div>
         <div className="chat-room__participants" aria-label="Участники чата">
-          {chat.participants.map((participant) => (
+          {participants.map((participant) => (
             <div className="chat-room__participant" key={participant.id}>
               <div className="chat-room__participant-avatar" aria-hidden="true">
                 {getAvatarInitials(participant.name)}
