@@ -89,7 +89,9 @@ export default function DebugTelegramPage() {
   }, [refreshDiagnostics]);
 
   useEffect(() => {
-    refreshDiagnostics();
+    const animationFrameId = requestAnimationFrame(refreshDiagnostics);
+
+    return () => cancelAnimationFrame(animationFrameId);
   }, [refreshDiagnostics]);
 
   return (
