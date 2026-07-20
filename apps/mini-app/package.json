@@ -12,7 +12,6 @@
     "telegram:set-menu": "node scripts/set-telegram-menu-button.mjs"
   },
   "dependencies": {
-    "@telegram-apps/sdk-react": "^3.3.9",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
