@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { ChatRoom } from '@/components/ChatRoom';
 import { getChatById } from '@/lib/mock-chats';
+import { getTripByChatId } from '@/lib/mock-trips';
 
 interface ChatRoomPageProps {
   params: Promise<{
@@ -30,5 +31,7 @@ export default async function ChatRoomPage({ params }: ChatRoomPageProps) {
     );
   }
 
-  return <ChatRoom chat={chat} />;
+  const trip = getTripByChatId(chat.id);
+
+  return <ChatRoom chat={chat} tripId={trip?.id} />;
 }

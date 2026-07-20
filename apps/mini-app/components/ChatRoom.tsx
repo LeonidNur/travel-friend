@@ -9,13 +9,14 @@ import type { MockChat } from '@/lib/types';
 
 interface ChatRoomProps {
   chat: MockChat;
+  tripId?: string;
 }
 
 function getMessageClassName(isCurrentUser: boolean) {
   return `chat-room__message${isCurrentUser ? ' chat-room__message--outgoing' : ' chat-room__message--incoming'}`;
 }
 
-export function ChatRoom({ chat }: ChatRoomProps) {
+export function ChatRoom({ chat, tripId }: ChatRoomProps) {
   const companion = getChatCompanion(chat);
   const companionProfileHref = isDirectChat(chat) && companion?.buddyProfileId ? `/buddies/${companion.buddyProfileId}` : null;
   const [draftMessage, setDraftMessage] = useState('');
@@ -79,6 +80,11 @@ export function ChatRoom({ chat }: ChatRoomProps) {
         <p className="surface-card__copy">
           Временный экран для проверки логики переписки. Новые сообщения живут только в памяти текущего экрана.
         </p>
+        {tripId ? (
+          <Link className="navigation-link" href={`/trips/${tripId}`}>
+            План поездки
+          </Link>
+        ) : null}
       </article>
 
       <article className="surface-card surface-card--compact">

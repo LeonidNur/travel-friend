@@ -56,14 +56,25 @@ export default async function TripDetailsPage({ params }: TripDetailsPageProps) 
     );
   }
 
+  const chat = getChatById(trip.chatId);
   const participants = getParticipantsLabel(trip.chatId);
 
   return (
     <section className="page">
       <article className="surface-card trip-details-header">
+        <Link className="navigation-link" href="/trips" aria-label="Вернуться к списку поездок">
+          ← Назад
+        </Link>
         <p className="section-kicker">Поездка</p>
         <h2 className="trip-details-header__title">План поездки</h2>
-        <p className="trip-details-header__participants">Участники: {participants}</p>
+        <div className="trip-details-header__meta">
+          <p className="trip-details-header__participants">Участники: {participants}</p>
+          {chat ? (
+            <Link className="navigation-link" href={`/chats/${trip.chatId}`}>
+              Перейти в чат
+            </Link>
+          ) : null}
+        </div>
       </article>
 
       <section className="trip-details" aria-label="План поездки">
