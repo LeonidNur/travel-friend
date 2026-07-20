@@ -10,6 +10,7 @@
     "start": "next start",
     "test": "tsx --test lib/*.test.ts",
     "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm test && npm run typecheck && npm run build",
     "telegram:set-menu": "node scripts/set-telegram-menu-button.mjs"
   },
   "dependencies": {
