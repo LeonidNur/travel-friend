@@ -24,10 +24,12 @@ const { canSendMessagesForChatStatus }: typeof ChatLifecycleModule = await impor
   new URL('./chat-lifecycle.ts', import.meta.url).href
 );
 const { getChatById }: typeof MockChatsModule = await import(new URL('./mock-chats.ts', import.meta.url).href);
-const { getTripByChatId }: typeof MockTripsModule = await import(new URL('./mock-trips.ts', import.meta.url).href);
+const { getActiveTripByChatId, getTripsByChatId }: typeof MockTripsModule = await import(
+  new URL('./mock-trips.ts', import.meta.url).href
+);
 
 test('keeps the chat linked to Timur trip send-enabled', () => {
-  const trip = getTripByChatId('chat-sonya-yerevan');
+  const trip = getActiveTripByChatId('chat-sonya-yerevan');
 
   assert.ok(trip);
 
@@ -42,7 +44,7 @@ test('keeps the interest-sent chat without a trip', () => {
 
   assert.ok(chat);
   assert.equal(chat.status, 'interest_sent');
-  assert.equal(getTripByChatId(chat.id), undefined);
+  assert.equal(getTripsByChatId(chat.id).length, 0);
 });
 
 test('keeps the group mock chat in a non-sendable draft state', () => {
@@ -51,4 +53,5 @@ test('keeps the group mock chat in a non-sendable draft state', () => {
   assert.ok(chat);
   assert.equal(chat.status, 'draft');
   assert.equal(canSendMessagesForChatStatus(chat.status), false);
+  assert.equal(getTripsByChatId(chat.id).length, 0);
 });
