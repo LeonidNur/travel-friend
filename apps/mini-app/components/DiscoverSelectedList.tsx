@@ -1,13 +1,13 @@
 import Link from 'next/link';
 
-import type { BuddyProfile } from '@/lib/types';
+import type { PositiveInterestDecision, SelectedDiscoverBuddy } from '@/lib/interest-decisions';
 
 interface DiscoverSelectedListProps {
-  buddies: readonly BuddyProfile[];
+  selections: readonly SelectedDiscoverBuddy[];
 }
 
-function getStatusCopy(buddy: BuddyProfile) {
-  return buddy.likedYou
+function getStatusCopy(decision: PositiveInterestDecision) {
+  return decision === 'match'
     ? {
         label: 'Мэтч',
         description: 'Мэтч — можно перейти к обсуждению поездки.',
@@ -20,8 +20,8 @@ function getStatusCopy(buddy: BuddyProfile) {
       };
 }
 
-export function DiscoverSelectedList({ buddies }: DiscoverSelectedListProps) {
-  if (buddies.length === 0) {
+export function DiscoverSelectedList({ selections }: DiscoverSelectedListProps) {
+  if (selections.length === 0) {
     return (
       <article className="surface-card surface-card--compact empty-state-card">
         <p className="section-kicker">Discover complete</p>
@@ -44,8 +44,8 @@ export function DiscoverSelectedList({ buddies }: DiscoverSelectedListProps) {
       </p>
 
       <div className="selected-buddies-list" aria-label="Выбранные попутчики">
-        {buddies.map((buddy) => {
-          const status = getStatusCopy(buddy);
+        {selections.map(({ buddy, decision }) => {
+          const status = getStatusCopy(decision);
 
           return (
             <article className="selected-buddy-item" key={buddy.id}>
@@ -57,7 +57,7 @@ export function DiscoverSelectedList({ buddies }: DiscoverSelectedListProps) {
                   </p>
                 </div>
                 <span
-                  className={`selected-buddy-item__status${buddy.likedYou ? ' selected-buddy-item__status--match' : ''}`}
+                  className={`selected-buddy-item__status${decision === 'match' ? ' selected-buddy-item__status--match' : ''}`}
                 >
                   {status.label}
                 </span>
