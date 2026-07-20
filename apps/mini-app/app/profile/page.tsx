@@ -1,6 +1,16 @@
 'use client';
 
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
+import {
+  createProfileDraft,
+  toUserProfile,
+  type ProfileDraft
+} from '@/lib/current-user-profile-session';
+import {
+  validateProfile,
+  type ProfileValidationErrors
+} from '@/lib/profile-validation';
 import {
   BUDGET_OPTIONS,
   COMFORT_OPTIONS,
@@ -9,27 +19,14 @@ import {
   getAvatarInitials,
   getBudgetLabel,
   getComfortLabel,
-  toggleMultiValue,
-  type InterestOption,
-  type TravelStyleOption
+  toggleMultiValue
 } from '@/lib/travel-preferences';
-import { currentUserProfile } from '@/lib/mock-current-user';
-import {
-  validateProfile,
-  type ProfileValidationErrors
-} from '@/lib/profile-validation';
 import type { UserProfile } from '@/lib/types';
 
 const TRUST_SIGNALS = [
   { title: 'Telegram connected', note: 'Профиль привязан к Telegram Mini App' },
   { title: 'Verification later', note: 'Подтверждение личности и бейджи появятся в следующих этапах MVP' }
 ] as const;
-
-type ProfileState = Omit<UserProfile, 'destinations'> & {
-  destinations: string;
-  interests: InterestOption[];
-  travelStyles: TravelStyleOption[];
-};
 
 type DetailItem = {
   label: string;
@@ -41,25 +38,9 @@ type TrustSignal = {
   note: string;
 };
 
-function createProfileState(profile: UserProfile): ProfileState {
-  return {
-    name: profile.name,
-    age: profile.age,
-    city: profile.city,
-    destinations: profile.destinations.join(', '),
-    dates: profile.dates,
-    interests: profile.interests,
-    budgetLevel: profile.budgetLevel,
-    travelStyles: profile.travelStyles,
-    comfortLevel: profile.comfortLevel
-  };
-}
-
-const INITIAL_PROFILE = createProfileState(currentUserProfile);
-
-function createDetailItems(profile: ProfileState): DetailItem[] {
+function createDetailItems(profile: UserProfile): DetailItem[] {
   return [
-    { label: 'Желаемые направления', value: profile.destinations },
+    { label: 'Желаемые направления', value: profile.destinations.join(', ') },
     { label: 'Бюджет', value: getBudgetLabel(profile.budgetLevel) },
     { label: 'Даты', value: profile.dates },
     { label: 'Стиль отдыха', value: profile.travelStyles.join(', ') },
@@ -167,8 +148,8 @@ function LevelSelector<TLevel extends number>({
 }
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState(INITIAL_PROFILE);
-  const [draftProfile, setDraftProfile] = useState(INITIAL_PROFILE);
+  const { profile, saveProfile } = useCurrentUserProfile();
+  const [draftProfile, setDraftProfile] = useState<ProfileDraft>(() => createProfileDraft(profile));
   const [isEditing, setIsEditing] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ProfileValidationErrors>({});
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -189,13 +170,13 @@ export default function ProfilePage() {
   }, [isEditing]);
 
   const handleEditStart = () => {
-    setDraftProfile(profile);
+    setDraftProfile(createProfileDraft(profile));
     setValidationErrors({});
     setIsEditing(true);
   };
 
   const handleCancel = () => {
-    setDraftProfile(profile);
+    setDraftProfile(createProfileDraft(profile));
     setValidationErrors({});
     setIsEditing(false);
   };
@@ -215,14 +196,10 @@ export default function ProfilePage() {
       return;
     }
 
-    const savedProfile = {
-      ...draftProfile,
-      name: draftProfile.name.trim(),
-      city: draftProfile.city.trim()
-    };
+    const savedProfile = toUserProfile(draftProfile);
 
-    setProfile(savedProfile);
-    setDraftProfile(savedProfile);
+    saveProfile(savedProfile);
+    setDraftProfile(createProfileDraft(savedProfile));
     setValidationErrors({});
     setIsEditing(false);
   };

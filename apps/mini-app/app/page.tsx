@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { BuddyCard } from '@/components/BuddyCard';
+import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { DiscoverSelectedList } from '@/components/DiscoverSelectedList';
 import { useInterestDecisions } from '@/components/InterestDecisionProvider';
 import { InterestOutcomeBanner } from '@/components/InterestOutcomeBanner';
@@ -24,6 +25,7 @@ type DiscoverOutcome = {
 const discoverCandidates = getDiscoverCandidates();
 
 export default function HomePage() {
+  const { profile } = useCurrentUserProfile();
   const { decisions, setDecision } = useInterestDecisions();
   const [outcome, setOutcome] = useState<DiscoverOutcome>(null);
 
@@ -82,7 +84,7 @@ export default function HomePage() {
         <section className="discover-list" aria-label="Активная карточка попутчика">
           <BuddyCard
             buddy={activeBuddy}
-            matchSignals={getBuddyMatchSignals(activeBuddy)}
+            matchSignals={getBuddyMatchSignals(activeBuddy, profile)}
             onDismiss={() => handleRejected(activeBuddy)}
             onInterested={() => handleInterested(activeBuddy)}
           />
