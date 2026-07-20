@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { getChatById } from '@/lib/mock-chats';
 import { getTrips } from '@/lib/mock-trips';
 import type { Trip } from '@/lib/types';
@@ -64,10 +66,10 @@ function TripCard({ trip }: { trip: Trip }) {
   const { direction, dates, participants } = getTripCardData(trip);
 
   return (
-    <article className="surface-card surface-card--compact trip-card">
+    <Link className="surface-card surface-card--compact trip-card trip-card--link" href={`/trips/${trip.id}`}>
       <h2 className="trip-card__title">{direction}</h2>
       <p className="trip-card__meta">Даты: {dates}</p>
       <p className="trip-card__meta">Участники: {participants}</p>
-    </article>
+    </Link>
   );
 }

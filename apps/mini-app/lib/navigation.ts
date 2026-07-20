@@ -57,6 +57,15 @@ export function getRouteMeta(pathname: string) {
     };
   }
 
+  if (pathname.startsWith('/trips/')) {
+    return {
+      href: pathname,
+      label: 'Trip',
+      title: 'План поездки',
+      description: 'Актуальные договорённости и открытые вопросы'
+    };
+  }
+
   return (
     navigationItems.find((item) => item.href === pathname) ??
     navigationItems.find((item) => item.href === '/') ??
