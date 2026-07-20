@@ -103,8 +103,8 @@ export const mockChats: MockChat[] = [
     id: 'chat-sonya-yerevan',
     title: 'Тимур Сафонов',
     destination: 'Ереван',
-    status: 'draft',
-    previewText: 'Черновик подсказывает тему для старта: бюджет, темп поездки и интерес к музеям или прогулкам.',
+    status: 'match',
+    previewText: 'Можно обсудить бюджет, темп поездки и выбрать между музеями и прогулками.',
     updatedLabel: 'сегодня',
     participants: [
       CURRENT_USER_PARTICIPANT,
@@ -123,8 +123,8 @@ export const mockChats: MockChat[] = [
     id: 'chat-timur-baku',
     title: 'Тимур',
     destination: 'Баку',
-    status: 'match',
-    previewText: 'Есть взаимный интерес. Когда появится backend, здесь можно будет быстро сверить маршрут и даты.',
+    status: 'draft',
+    previewText: 'Групповой mock-чат ещё не активирован.',
     updatedLabel: 'вчера',
     participants: [
       CURRENT_USER_PARTICIPANT,
