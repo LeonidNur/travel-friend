@@ -41,8 +41,8 @@ export const mockBuddies: BuddyProfile[] = [
     ],
     trustSignals: [
       {
-        title: 'Telegram connected',
-        note: 'Профиль привязан к Mini App.'
+        title: 'Demo profile',
+        note: 'Демонстрационный профиль: Telegram-идентичность не подтверждена.'
       },
       {
         title: 'Safety placeholder',
@@ -71,8 +71,8 @@ export const mockBuddies: BuddyProfile[] = [
     ],
     trustSignals: [
       {
-        title: 'Telegram connected',
-        note: 'Открыт из Telegram Mini App.'
+        title: 'Demo profile',
+        note: 'Демонстрационный профиль: Telegram-идентичность не подтверждена.'
       },
       {
         title: 'Comfort preferences set',
@@ -101,8 +101,8 @@ export const mockBuddies: BuddyProfile[] = [
     ],
     trustSignals: [
       {
-        title: 'Telegram connected',
-        note: 'Профиль привязан к приложению.'
+        title: 'Demo profile',
+        note: 'Демонстрационный профиль: Telegram-идентичность не подтверждена.'
       },
       {
         title: 'Road trip plans',

@@ -103,9 +103,12 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
           </Link>
         ) : null}
         {canStartPlanning ? (
-          <button className="profile-button profile-button--primary" type="button" onClick={handleStartPlanning}>
-            Начать планирование
-          </button>
+          <>
+            <button className="profile-button profile-button--primary" type="button" onClick={handleStartPlanning}>
+              Начать планирование
+            </button>
+            <p className="surface-card__note">Новая поездка будет доступна только до перезагрузки.</p>
+          </>
         ) : null}
       </article>
 

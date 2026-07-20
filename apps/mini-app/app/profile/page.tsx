@@ -24,8 +24,8 @@ import {
 import type { UserProfile } from '@/lib/types';
 
 const TRUST_SIGNALS = [
-  { title: 'Telegram connected', note: 'Профиль привязан к Telegram Mini App' },
-  { title: 'Verification later', note: 'Подтверждение личности и бейджи появятся в следующих этапах MVP' }
+  { title: 'Telegram integration later', note: 'Интеграция с Telegram появится в следующих этапах MVP' },
+  { title: 'Verification later', note: 'Проверка личности и бейджи появятся в следующих этапах MVP' }
 ] as const;
 
 type DetailItem = {
@@ -254,9 +254,12 @@ export default function ProfilePage() {
         </div>
 
         <div className="chip-row" aria-label="Статус профиля">
-          <span className="chip chip--accent">Telegram connected</span>
+          <span className="chip chip--accent">Demo profile</span>
           <span className="chip">Verification later</span>
         </div>
+        <p className="surface-card__note">
+          Изменения профиля действуют только в этой демо-сессии и сбросятся после перезагрузки.
+        </p>
       </article>
 
       {isEditing ? (
