@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 
+import { useTripSession } from '@/components/InterestDecisionProvider';
 import {
   getChatCompanion,
   getChatParticipantById,
@@ -24,11 +25,14 @@ function getMessageClassName(isCurrentUser: boolean) {
 }
 
 export function ChatRoom({ chat, tripId }: ChatRoomProps) {
+  const { getActiveTrip, startPlanning } = useTripSession();
   const companion = getChatCompanion(chat);
   const companionProfileHref = isDirectChat(chat) && companion?.buddyProfileId ? `/buddies/${companion.buddyProfileId}` : null;
   const canSendMessages = canSendMessagesForChatStatus(chat.status);
   const [draftMessage, setDraftMessage] = useState('');
   const [localMessages, setLocalMessages] = useState<LocalChatMessage[]>([]);
+  const activeTripId = getActiveTrip(chat.id)?.id ?? tripId;
+  const canStartPlanning = chat.status === 'match' && !activeTripId;
 
   const messages = useMemo(() => [...chat.messages, ...localMessages], [chat.messages, localMessages]);
 
@@ -52,6 +56,10 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
       }
     ]);
     setDraftMessage('');
+  };
+
+  const handleStartPlanning = () => {
+    startPlanning(chat);
   };
 
   return (
@@ -89,10 +97,15 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
           Это демонстрационный диалог: показанная история нужна для проверки сценария и не отражает
           реальную переписку.
         </p>
-        {canSendMessages && tripId ? (
-          <Link className="navigation-link" href={`/trips/${tripId}`}>
+        {canSendMessages && activeTripId ? (
+          <Link className="navigation-link" href={`/trips/${activeTripId}`}>
             План поездки
           </Link>
+        ) : null}
+        {canStartPlanning ? (
+          <button className="profile-button profile-button--primary" type="button" onClick={handleStartPlanning}>
+            Начать планирование
+          </button>
         ) : null}
       </article>
 

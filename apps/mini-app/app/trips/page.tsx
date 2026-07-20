@@ -1,7 +1,9 @@
+'use client';
+
 import Link from 'next/link';
 
+import { useTripSession } from '@/components/InterestDecisionProvider';
 import { getChatById } from '@/lib/mock-chats';
-import { getTrips } from '@/lib/mock-trips';
 import type { Trip } from '@/lib/types';
 
 function getDatesValue(trip: Trip) {
@@ -31,7 +33,7 @@ function getTripCardData(trip: Trip) {
 }
 
 export default function TripsPage() {
-  const trips = getTrips();
+  const { trips } = useTripSession();
 
   return (
     <section className="page">
