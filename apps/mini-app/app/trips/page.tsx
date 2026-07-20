@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { useTripSession } from '@/components/InterestDecisionProvider';
 import { getChatById } from '@/lib/mock-chats';
+import { getTripStatusLabel } from '@/lib/trip-status';
 import type { Trip } from '@/lib/types';
 
 function getDatesValue(trip: Trip) {
@@ -71,6 +72,7 @@ function TripCard({ trip }: { trip: Trip }) {
   return (
     <Link className="surface-card surface-card--compact trip-card trip-card--link" href={`/trips/${trip.id}`}>
       <h2 className="trip-card__title">{direction}</h2>
+      <span className="chat-status trip-card__status">{getTripStatusLabel(trip.status)}</span>
       <p className="trip-card__meta">Даты: {dates}</p>
       <p className="trip-card__meta">Участники: {participants}</p>
     </Link>
