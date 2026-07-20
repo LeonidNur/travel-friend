@@ -45,6 +45,15 @@ select {
   font: inherit;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 3px;
+}
+
 .app-shell {
   min-height: 100svh;
   display: flex;
@@ -165,12 +174,6 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   color: var(--accent-strong);
 }
 
-.navigation-link:focus-visible {
-  border-radius: 4px;
-  outline: 2px solid var(--accent-strong);
-  outline-offset: 3px;
-}
-
 .hero-card__title {
   position: relative;
   margin: 12px 0 10px;
@@ -276,7 +279,6 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   border-color: rgba(125, 211, 252, 0.28);
   background: linear-gradient(180deg, rgba(18, 30, 48, 0.96) 0%, rgba(8, 15, 26, 0.98) 100%);
   transform: translateY(-1px);
-  outline: none;
 }
 
 .chat-card__header,
@@ -448,7 +450,6 @@ body[data-profile-edit-mode='true'] .app-content__frame {
 .chat-room__profile-link:focus-visible {
   transform: translateY(-1px);
   opacity: 0.96;
-  outline: none;
 }
 
 .chat-room__timeline {
@@ -700,7 +701,6 @@ body[data-profile-edit-mode='true'] .app-content__frame {
 .chip-button:focus-visible {
   border-color: rgba(125, 211, 252, 0.32);
   color: var(--text);
-  outline: none;
   transform: translateY(-1px);
 }
 
@@ -767,7 +767,6 @@ body[data-profile-edit-mode='true'] .app-content__frame {
 .profile-button:hover,
 .profile-button:focus-visible {
   transform: translateY(-1px);
-  outline: none;
 }
 
 .profile-status {
@@ -872,8 +871,6 @@ body[data-profile-edit-mode='true'] .app-content__frame {
 .trip-card--link:focus-visible {
   border-color: rgba(125, 211, 252, 0.4);
   background: linear-gradient(180deg, rgba(18, 30, 48, 0.96) 0%, rgba(8, 15, 26, 0.98) 100%);
-  outline: 3px solid rgba(125, 211, 252, 0.5);
-  outline-offset: 3px;
   transform: translateY(-1px);
 }
 
@@ -1102,12 +1099,6 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   color: rgba(174, 190, 212, 0.72);
 }
 
-.profile-input:focus-visible,
-.profile-range:focus-visible {
-  outline: 2px solid rgba(125, 211, 252, 0.32);
-  outline-offset: 2px;
-}
-
 .profile-range {
   width: 100%;
   accent-color: #7dd3fc;
@@ -1142,6 +1133,11 @@ body[data-profile-edit-mode='true'] .app-content__frame {
 .level-card:has(input:focus-visible) {
   border-color: rgba(125, 211, 252, 0.28);
   transform: translateY(-1px);
+}
+
+.level-card:has(input:focus-visible) {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 3px;
 }
 
 .level-card--selected {
@@ -1446,7 +1442,6 @@ body[data-profile-edit-mode='true'] .bottom-navigation {
   color: var(--text);
   background: rgba(125, 211, 252, 0.08);
   transform: translateY(-1px);
-  outline: none;
 }
 
 .bottom-navigation__item[data-active='true'] {
