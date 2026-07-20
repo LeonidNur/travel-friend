@@ -1,5 +1,5 @@
 import { CURRENT_USER_CHAT_PARTICIPANT_ID, mockChats } from '@/lib/mock-chats';
-import type { MockChat, Trip } from '@/lib/types';
+import type { MockChat, Trip, TripCategories } from '@/lib/types';
 
 const mockTrips: Trip[] = [
   {
@@ -42,7 +42,7 @@ const mockTrips: Trip[] = [
     id: 'trip-timur-yerevan',
     chatId: 'chat-sonya-yerevan',
     participantIds: [CURRENT_USER_CHAT_PARTICIPANT_ID, 'timur-safonov'],
-    status: 'draft',
+    status: 'ready',
     categories: {
       direction: {
         status: 'confirmed',
@@ -132,8 +132,8 @@ export function getTrips(): readonly Trip[] {
   return mockTrips;
 }
 
-export function getTripById(id: string): Trip | undefined {
-  return mockTrips.find((trip) => trip.id === id);
+export function getTripById(id: string, trips: readonly Trip[] = mockTrips): Trip | undefined {
+  return trips.find((trip) => trip.id === id);
 }
 
 export function getTripsByChatId(chatId: string, trips: readonly Trip[] = mockTrips): readonly Trip[] {
@@ -148,4 +148,63 @@ export function getActiveTripByChatId(chatId: string, trips: readonly Trip[] = m
   }
 
   return activeTrips[0];
+}
+
+function createDraftTripCategories(destination: string): TripCategories {
+  return {
+    direction: {
+      status: 'needs_decision',
+      summary: `Нужно подтвердить направление: ${destination}.`
+    },
+    dates: {
+      status: 'needs_decision',
+      summary: 'Нужно обсудить даты поездки.'
+    },
+    budget: {
+      status: 'empty',
+      summary: 'Бюджет пока не обсуждался.'
+    },
+    transport: {
+      status: 'empty',
+      summary: 'Транспорт пока не обсуждался.'
+    },
+    accommodation: {
+      status: 'empty',
+      summary: 'Жильё пока не обсуждалось.'
+    },
+    activities: {
+      status: 'empty',
+      summary: 'Активности пока не обсуждались.'
+    },
+    notes: {
+      status: 'empty',
+      summary: 'Заметок пока нет.'
+    }
+  };
+}
+
+export function createDraftTrip(
+  chat: MockChat,
+  trips: readonly Trip[],
+  tripId: string
+): Trip {
+  if (chat.status !== 'match') {
+    throw new Error(`Chat "${chat.id}" cannot start planning before a match.`);
+  }
+
+  if (getActiveTripByChatId(chat.id, trips)) {
+    throw new Error(`Chat "${chat.id}" already has an active trip.`);
+  }
+
+  if (getTripById(tripId, trips)) {
+    throw new Error(`Trip "${tripId}" already exists.`);
+  }
+
+  return {
+    id: tripId,
+    chatId: chat.id,
+    participantIds: chat.participants.map((participant) => participant.id),
+    status: 'draft',
+    categories: createDraftTripCategories(chat.destination)
+  };
 }

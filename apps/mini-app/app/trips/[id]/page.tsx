@@ -1,7 +1,10 @@
-import Link from 'next/link';
+'use client';
 
+import Link from 'next/link';
+import { use } from 'react';
+
+import { useTripSession } from '@/components/InterestDecisionProvider';
 import { getChatById } from '@/lib/mock-chats';
-import { getTripById } from '@/lib/mock-trips';
 import { TRIP_CATEGORY_ORDER } from '@/lib/types';
 import type { TripCategoryId, TripCategoryStatus } from '@/lib/types';
 
@@ -35,9 +38,10 @@ function getParticipantsLabel(chatId: string) {
   return participantNames || 'Участники не найдены';
 }
 
-export default async function TripDetailsPage({ params }: TripDetailsPageProps) {
-  const { id } = await params;
-  const trip = getTripById(id);
+export default function TripDetailsPage({ params }: TripDetailsPageProps) {
+  const { id } = use(params);
+  const { getTrip } = useTripSession();
+  const trip = getTrip(id);
 
   if (!trip) {
     return (

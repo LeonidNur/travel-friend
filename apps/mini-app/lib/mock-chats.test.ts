@@ -30,15 +30,15 @@ const { getActiveTripByChatId, getTripsByChatId }: typeof MockTripsModule = awai
   new URL('./mock-trips.ts', import.meta.url).href
 );
 
-test('keeps Maria and Timur chats linked to active trips and send-enabled', () => {
+test('keeps Maria chat linked to its active trip and both matched chats send-enabled', () => {
   const mariaTrip = getActiveTripByChatId('chat-amina-tbilisi');
   const timurTrip = getActiveTripByChatId('chat-sonya-yerevan');
 
   assert.ok(mariaTrip);
-  assert.ok(timurTrip);
+  assert.equal(timurTrip, undefined);
 
   const mariaChat = getChatById(mariaTrip.chatId);
-  const timurChat = getChatById(timurTrip.chatId);
+  const timurChat = getChatById('chat-sonya-yerevan');
 
   assert.ok(mariaChat);
   assert.ok(timurChat);

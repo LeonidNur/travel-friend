@@ -3,6 +3,7 @@ import { registerHooks } from 'node:module';
 import { test } from 'node:test';
 
 import type { Trip, TripStatus } from './types';
+import type * as MockChatsModule from './mock-chats';
 import type * as MockTripsModule from './mock-trips';
 
 registerHooks({
@@ -20,11 +21,15 @@ registerHooks({
 });
 
 const {
+  createDraftTrip,
   getActiveTripByChatId,
   getTrips,
   getTripsByChatId,
   validateMockTrips
 }: typeof MockTripsModule = await import(new URL('./mock-trips.ts', import.meta.url).href);
+const { getChatById }: typeof MockChatsModule = await import(
+  new URL('./mock-chats.ts', import.meta.url).href
+);
 
 function createTrip(id: string, status: TripStatus): Trip {
   const sourceTrip = getTrips()[0];
@@ -129,12 +134,54 @@ test('does not silently choose an active trip when the invariant is broken', () 
   );
 });
 
+test('creates a draft trip linked to the matched chat with its participants', () => {
+  const chat = getChatById('chat-sonya-yerevan');
+
+  assert.ok(chat);
+
+  const trip = createDraftTrip(chat, getTrips(), 'session-trip-chat-sonya-yerevan');
+
+  assert.equal(trip.id, 'session-trip-chat-sonya-yerevan');
+  assert.equal(trip.chatId, chat.id);
+  assert.equal(trip.status, 'draft');
+  assert.deepEqual(trip.participantIds, chat.participants.map((participant) => participant.id));
+  assert.ok(
+    Object.values(trip.categories).every(
+      (category) => category.status === 'empty' || category.status === 'needs_decision'
+    )
+  );
+});
+
+test('rejects creation of a second active trip for the same chat', () => {
+  const chat = getChatById('chat-sonya-yerevan');
+
+  assert.ok(chat);
+
+  const firstDraft = createDraftTrip(chat, getTrips(), 'session-trip-chat-sonya-yerevan');
+
+  assert.throws(
+    () => createDraftTrip(chat, [...getTrips(), firstDraft], 'session-trip-chat-sonya-yerevan-duplicate'),
+    /already has an active trip/
+  );
+});
+
+test('returns the created draft as the active trip for its chat', () => {
+  const chat = getChatById('chat-sonya-yerevan');
+
+  assert.ok(chat);
+
+  const draftTrip = createDraftTrip(chat, getTrips(), 'session-trip-chat-sonya-yerevan');
+
+  assert.equal(getActiveTripByChatId(chat.id, [...getTrips(), draftTrip]), draftTrip);
+});
+
 test('keeps Maria chat linked to its active trip', () => {
   assert.equal(getActiveTripByChatId('chat-amina-tbilisi')?.id, 'trip-maria-georgia');
 });
 
-test('keeps Timur chat linked to its active trip', () => {
-  assert.equal(getActiveTripByChatId('chat-sonya-yerevan')?.id, 'trip-timur-yerevan');
+test('keeps Timur historical trip while leaving the matched chat without an active trip', () => {
+  assert.equal(getTripsByChatId('chat-sonya-yerevan').map((trip) => trip.id).join(','), 'trip-timur-yerevan');
+  assert.equal(getActiveTripByChatId('chat-sonya-yerevan'), undefined);
 });
 
 test('keeps Egor chat without an active trip', () => {
