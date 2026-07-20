@@ -43,7 +43,21 @@ test('keeps Maria chat linked to its active trip and both matched chats send-ena
   assert.ok(mariaChat);
   assert.ok(timurChat);
   assert.equal(canSendMessagesForChatStatus(mariaChat.status), true);
+  assert.equal(timurChat.status, 'match');
   assert.equal(canSendMessagesForChatStatus(timurChat.status), true);
+});
+
+test('keeps Timur matched chat linked to its historical ready trip', () => {
+  const timurChat = getChatById('chat-sonya-yerevan');
+  const timurTrips = getTripsByChatId('chat-sonya-yerevan');
+
+  assert.ok(timurChat);
+  assert.equal(timurChat.status, 'match');
+  assert.deepEqual(
+    timurTrips.map(({ id, status }) => ({ id, status })),
+    [{ id: 'trip-timur-yerevan', status: 'ready' }]
+  );
+  assert.equal(getActiveTripByChatId(timurChat.id), undefined);
 });
 
 test('keeps the interest-sent chat without a trip', () => {

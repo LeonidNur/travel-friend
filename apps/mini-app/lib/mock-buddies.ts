@@ -33,7 +33,7 @@ export const mockBuddies: BuddyProfile[] = [
     travelStyles: ['Городской', 'Активный / спортивный', 'Событийный / фестивали'],
     dates: 'Любые длинные выходные в ближайшие 2 месяца',
     comfortLevel: 2,
-    likedYou: false,
+    likedYou: true,
     compatibilityReason: 'Может подойти, если нужен активный попутчик для короткой, но насыщенной поездки.',
     compatibilityDetails: [
       'Похоже на сценарий для тех, кто любит много впечатлений за короткое время.',
