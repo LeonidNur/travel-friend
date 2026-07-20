@@ -834,6 +834,28 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   line-height: 1.45;
 }
 
+.trip-card {
+  display: grid;
+  gap: 6px;
+}
+
+.trip-card__title,
+.trip-card__meta {
+  margin: 0;
+}
+
+.trip-card__title {
+  font-size: 1.06rem;
+  line-height: 1.3;
+}
+
+.trip-card__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .trust-stack {
   position: relative;
   display: grid;
