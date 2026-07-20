@@ -65,3 +65,34 @@ export type MockChat = {
   participants: ChatParticipant[];
   messages: ChatMessage[];
 };
+
+export type TripStatus = 'draft' | 'planning' | 'ready';
+
+export type TripCategoryStatus = 'confirmed' | 'needs_decision' | 'empty';
+
+export const TRIP_CATEGORY_ORDER = [
+  'direction',
+  'dates',
+  'budget',
+  'transport',
+  'accommodation',
+  'activities',
+  'notes'
+] as const;
+
+export type TripCategoryId = (typeof TRIP_CATEGORY_ORDER)[number];
+
+export type TripCategory = {
+  status: TripCategoryStatus;
+  summary: string;
+};
+
+export type TripCategories = Record<TripCategoryId, TripCategory>;
+
+export type Trip = {
+  id: string;
+  chatId: string;
+  participantIds: string[];
+  status: TripStatus;
+  categories: TripCategories;
+};
