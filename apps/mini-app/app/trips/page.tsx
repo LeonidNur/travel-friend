@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 
+import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTripSession } from '@/components/InterestDecisionProvider';
+import { getDisplayedChatParticipant } from '@/lib/current-user-chat-participant';
 import { getChatById } from '@/lib/mock-chats';
+import type { CurrentUserProfile } from '@/lib/mock-current-user';
 import { getTripStatusLabel } from '@/lib/trip-status';
 import type { Trip } from '@/lib/types';
 
@@ -21,9 +24,9 @@ function getDirectionHeading(summary: string) {
   return summary.replace(/[.!?]+$/, '');
 }
 
-function getTripCardData(trip: Trip) {
+function getTripCardData(trip: Trip, currentUserProfile: CurrentUserProfile) {
   const participantNames = getChatById(trip.chatId)?.participants
-    .map((participant) => participant.name)
+    .map((participant) => getDisplayedChatParticipant(participant, currentUserProfile).name)
     .join(', ');
 
   return {
@@ -35,6 +38,7 @@ function getTripCardData(trip: Trip) {
 
 export default function TripsPage() {
   const { trips } = useTripSession();
+  const { profile } = useCurrentUserProfile();
 
   return (
     <section className="page">
@@ -59,7 +63,7 @@ export default function TripsPage() {
       ) : (
         <section className="list-stack" aria-label="Список поездок">
           {trips.map((trip) => (
-            <TripCard key={trip.id} trip={trip} />
+            <TripCard currentUserProfile={profile} key={trip.id} trip={trip} />
           ))}
         </section>
       )}
@@ -67,8 +71,14 @@ export default function TripsPage() {
   );
 }
 
-function TripCard({ trip }: { trip: Trip }) {
-  const { direction, dates, participants } = getTripCardData(trip);
+function TripCard({
+  currentUserProfile,
+  trip
+}: {
+  currentUserProfile: CurrentUserProfile;
+  trip: Trip;
+}) {
+  const { direction, dates, participants } = getTripCardData(trip, currentUserProfile);
 
   return (
     <Link className="surface-card surface-card--compact trip-card trip-card--link" href={`/trips/${trip.id}`}>

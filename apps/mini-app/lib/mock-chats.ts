@@ -1,7 +1,8 @@
 import type { ChatMessage, ChatParticipant, MockChat } from '@/lib/types';
 import { getBuddyById } from '@/lib/mock-buddies';
+import { CURRENT_USER_ID } from '@/lib/mock-current-user';
 
-export const CURRENT_USER_CHAT_PARTICIPANT_ID = 'current-user';
+export const CURRENT_USER_CHAT_PARTICIPANT_ID = CURRENT_USER_ID;
 
 const CURRENT_USER_PARTICIPANT: ChatParticipant = {
   id: CURRENT_USER_CHAT_PARTICIPANT_ID,
