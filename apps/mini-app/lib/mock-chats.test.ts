@@ -3,6 +3,7 @@ import { registerHooks } from 'node:module';
 import { test } from 'node:test';
 
 import type * as ChatLifecycleModule from './chat-lifecycle';
+import type * as MockBuddiesModule from './mock-buddies';
 import type * as MockChatsModule from './mock-chats';
 import type * as MockTripsModule from './mock-trips';
 
@@ -22,6 +23,9 @@ registerHooks({
 
 const { canSendMessagesForChatStatus }: typeof ChatLifecycleModule = await import(
   new URL('./chat-lifecycle.ts', import.meta.url).href
+);
+const { getBuddyById }: typeof MockBuddiesModule = await import(
+  new URL('./mock-buddies.ts', import.meta.url).href
 );
 const { getChatById, isDirectChat, mockChats }: typeof MockChatsModule = await import(
   new URL('./mock-chats.ts', import.meta.url).href
@@ -45,6 +49,23 @@ test('keeps Maria chat linked to its active trip and both matched chats send-ena
   assert.equal(canSendMessagesForChatStatus(mariaChat.status), true);
   assert.equal(timurChat.status, 'match');
   assert.equal(canSendMessagesForChatStatus(timurChat.status), true);
+});
+
+test('keeps Maria profile, chat, and trip on the same canonical date window', () => {
+  const canonicalDateWindow = 'Конец августа, 7–8 дней';
+  const mariaProfile = getBuddyById('maria-ivanova');
+  const mariaChat = getChatById('chat-amina-tbilisi');
+  const mariaTrip = getActiveTripByChatId('chat-amina-tbilisi');
+
+  assert.ok(mariaProfile);
+  assert.ok(mariaChat);
+  assert.ok(mariaTrip);
+  assert.equal(mariaProfile.dates, canonicalDateWindow);
+  assert.equal(
+    mariaChat.messages.find((message) => message.id === 'message-amina-1')?.text,
+    'Привет. Я как раз смотрю даты на конец августа, 7–8 дней и район ближе к старому городу.'
+  );
+  assert.equal(mariaTrip.categories.dates.summary, `${canonicalDateWindow}; даты ещё уточняем.`);
 });
 
 test('keeps Timur matched chat linked to its historical ready trip', () => {
