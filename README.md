@@ -51,13 +51,21 @@ Telegram Mini App не отменяет будущую отдельную моб
 - публичные профили попутчиков на маршруте `/buddies/[id]`
 - mock interest/match flow с локальными решениями и переходом в `/chats` как placeholder
 - Chats List MVP с mock-чатами и статусами `match`, `interest_sent` и `draft`
-- Chat Room MVP на динамическом маршруте `/chats/[id]` с переходом из Chats List, mock-историей сообщений, своими/чужими/системными сообщениями, local-only отправкой, fallback для неизвестного `chat id`, переходом в публичный профиль собеседника и временным переходом в `/trips`
+- Chat Room MVP на динамическом маршруте `/chats/[id]` с переходом из Chats List, mock-историей сообщений, своими/чужими/системными сообщениями, local-only отправкой, fallback для неизвестного `chat id`, переходом в публичный профиль собеседника и переходом в конкретный связанный Trip
+- Chat Room mock-flow стабилизирован: экран корректно работает с `active` и `historical` trip, а сценарии Chats / Trips приведены к согласованному состоянию
+- Trips frontend data model
+- Trips List MVP
+- read-only Trip Details
+- единый порядок категорий и текстовые состояния категорий
+- двусторонняя навигация Chat ↔ Trip: Chat Room ведёт в конкретный связанный Trip, а Trip Details ведёт в конкретный Chat
+- local session trip creation из matched Chat
+- session-aware отображение участников
 - в Chat Room скрыта Bottom Navigation, а длинные и многострочные сообщения уже исправлены
 - проверка Chat Room выполнена локально, через Vercel Preview и внутри Telegram Mini App
 - единый frontend data model слой для профилей, travel preferences, чатов и решений интереса
 - обновлённая нижняя навигация с основной группой Chats / Discover / Trips и отдельным Profile
 
-Сейчас эти сценарии в основном работают на mock-data и локальном state. Реальные backend/API, Supabase, persistence, realtime и AI пока не реализованы; Chat Room MVP остаётся local-only, а сообщения исчезают после reload.
+Сейчас эти сценарии работают как mock/local-state checkpoint. Реальные backend/API, Supabase, persistence, realtime, серверный Telegram Auth и AI пока не реализованы; Chat Room MVP остаётся local-only, а сообщения исчезают после reload. При этом Chat Room уже корректно различает `active` и `historical` trip, а mock-сценарии Chats и Trips сведены к согласованному состоянию.
 
 ### Почему мы отказались от ngrok
 
@@ -107,7 +115,8 @@ Telegram Mini App не отменяет будущую отдельную моб
 - интеграция Telegram WebApp проверяется в реальном окружении, а не только локально;
 - есть инженерный контур для диагностики проблем;
 - появились первые фокусные экраны и потоки: Profile, Discover, public buddy profile, interest/match и Chats list;
-- продуктовая логика ещё будет наращиваться постепенно, но backend/Supabase/persistence/realtime/AI пока остаются впереди, а текущий Chat Room MVP остаётся временным frontend-flow;
+- завершена стабилизация Chats / Trips frontend-flow: Chat Room, Trips mock-flow и навигация Chat ↔ Trips приведены к согласованному состоянию;
+- frontend checkpoint завершён на уровне mock/local-state, но backend/Supabase/persistence/realtime/серверный Telegram Auth/AI пока остаются впереди;
 - это уже не черновой каркас, а рабочая основа для MVP с постоянным URL, понятным процессом разработки и синхронизированной документацией.
 
 ## Идея проекта
@@ -361,10 +370,12 @@ npm run build
 
 Ближайший порядок разработки:
 
-1. Согласование Trips MVP.
-2. Уточнение Trip ↔ Chat модели и статусов полей Trips.
-3. Подготовка Supabase/API и backend contracts после завершения frontend-flow.
-4. AI внутри чатов позже, после закрепления чатов, поездок и backend-контура.
+1. Backend contracts и Supabase schema.
+2. Telegram Auth через raw `initData`.
+3. Persistence профиля, интересов, чатов и поездок.
+4. Realtime chat flow после базовой persistence.
+5. AI только после рабочего backend-контура.
+6. Групповой flow как отдельный открытый вопрос.
 
 ## Долгосрочное видение
 

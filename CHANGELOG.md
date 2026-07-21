@@ -1,9 +1,27 @@
 # Журнал изменений
 
+## 2026-07-21
+
+- За 20-21 июля завершён frontend checkpoint по Trips и Chat ↔ Trip flow.
+- Добавлены Trips data model, Trips List и read-only Trip Details.
+- Зафиксированы двусторонняя Chat ↔ Trip navigation, где Chat Room ведёт в конкретный Trip, а Trip Details ведёт в конкретный Chat, local session trips и поддержка `active` / `historical` trip.
+- Обновлено session-aware отображение участников поездки.
+- Пройдены profile validation, unified `npm test`, ESLint, `npm run check` и dependency/security audit.
+- Удалён неиспользуемый Telegram SDK.
+- Завершён review mock-flow и добавлены новые unit-тесты под frontend-блок.
+
+Known limitations / TODO:
+
+- Mock/local state остаётся единственным источником данных для этого checkpoint.
+- Данные исчезают после reload.
+- Backend, Supabase, API, persistence, realtime, Telegram Auth и AI отсутствуют.
+- Group flow не закреплён.
+- Frontend view model не является готовой Supabase schema.
+
 ## 2026-07-10
 
 - Реализован Chat Room MVP на динамическом маршруте `/chats/[id]` с входом из Chats List, mock-историей сообщений, своими/чужими/системными сообщениями, local-only отправкой и fallback для неизвестного `chat id`.
-- Добавлен переход в публичный профиль собеседника, временный переход в `/trips`, скрытие Bottom Navigation внутри chat room и исправление длинных и многострочных сообщений.
+- Добавлен переход в публичный профиль собеседника, переход в конкретный связанный Trip, скрытие Bottom Navigation внутри chat room и исправление длинных и многострочных сообщений.
 - Зафиксирована предварительная продуктовая модель Chats / Trips: Chats для живого общения и будущей работы с AI, Trips для структурированного актуального состояния поездок, без второй chat room на каждую поездку.
 - Обновлены README, roadmap, dev-log и AI Travel Copilot doc, чтобы они честно описывали текущий frontend-flow и не выдавали backend, persistence, Supabase или AI за уже готовые части продукта.
 

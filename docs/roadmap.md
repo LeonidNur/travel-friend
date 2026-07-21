@@ -14,47 +14,51 @@
 - ✅ Chats List MVP
 - ✅ Chat Room MVP
 - ✅ Frontend Data Models
+- ✅ Trips frontend data model MVP
+- ✅ Trips List MVP
+- ✅ Trip Details MVP
+- ✅ Chat ↔ Trip navigation MVP
+- ✅ local session trip flow
+- ✅ frontend verification loop
+- ✅ Chats / Trips stabilisation
 - ✅ Codex skills workflow docs
 
 ## Текущий этап
 
-### Следующий продуктовый этап
+### Backend foundation / persistence
 
-#### Продукт
+#### Backend
 
-- согласование Trips MVP
-- уточнение Trip ↔ Chat модели
-- согласование статусов полей Trips и порядка категорий в карточках
-- уточнение перехода от interest/match к чату
-- групповой flow как отдельный открытый вопрос
+- backend contracts
+- Supabase schema
+- Telegram Auth через raw `initData`
+- persistence профиля, интересов, чатов и поездок
 
-#### Инфраструктура
+#### Realtime
 
-- подготовка Supabase/API и backend contracts после завершения frontend-flow
-- Telegram Auth на сервере через raw `initData`
-- базовая схема данных для профилей, интереса и чатов
+- подготовка realtime chat flow после базовой persistence
 
 #### AI
 
-- AI внутри чатов позже, после закрепления чатов, поездок и backend-контура
+- AI только после рабочего backend-контура
+
+#### Product
+
+- групповой flow остаётся отдельным открытым вопросом
 
 #### UX/UI
 
 - дизайн-система
 - wireframes
-- уточнение Trips как следующего отдельного сценария
-
-## Текущий документальный этап
-
-- Обновляется и уточняется инженерная документация по итогам Chat Room MVP и предварительной модели Chats / Trips.
-- Поддерживается единый процесс: код, диагностика, выводы и документы должны совпадать между собой.
+- UX/UI refinement существующих Profile / Discover / Chats / Trips сценариев совместно с дизайнером
 
 ## Дальше
 
-1. Согласовать Trips MVP.
-2. Уточнить Trip ↔ Chat модель.
-3. Подготовить Supabase/API и backend contracts.
-4. Вернуться к AI внутри чатов после стабилизации чатов, поездок и backend-контура.
+1. Подготовить backend contracts и Supabase schema.
+2. Реализовать Telegram Auth через raw `initData`.
+3. Подключить persistence для профиля, интересов, чатов и поездок.
+4. Вернуться к realtime chat flow после базовой persistence.
+5. Подключить AI только после рабочего backend-контура.
 
 ## Примечания
 
