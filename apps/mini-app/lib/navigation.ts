@@ -5,13 +5,7 @@ export interface NavigationItem {
   description: string;
 }
 
-export const navigationItems: NavigationItem[] = [
-  {
-    href: '/',
-    label: 'Home',
-    title: 'Главная',
-    description: 'Поиск попутчиков и поездок'
-  },
+export const bottomNavigationItems: NavigationItem[] = [
   {
     href: '/chats',
     label: 'Chats',
@@ -19,19 +13,62 @@ export const navigationItems: NavigationItem[] = [
     description: 'Группы поездок и переписка'
   },
   {
+    href: '/',
+    label: 'Discover',
+    title: 'Discover',
+    description: 'Поиск попутчиков и поездок'
+  },
+  {
     href: '/trips',
     label: 'Trips',
     title: 'Поездки',
     description: 'Ваши будущие и созданные поездки'
-  },
-  {
-    href: '/profile',
-    label: 'Profile',
-    title: 'Профиль',
-    description: 'Профиль и интересы путешествий'
   }
 ];
 
+export const profileNavigationItem: NavigationItem = {
+  href: '/profile',
+  label: 'Profile',
+  title: 'Профиль',
+  description: 'Профиль и интересы путешествий'
+};
+
+export const navigationItems: NavigationItem[] = [
+  ...bottomNavigationItems,
+  profileNavigationItem
+];
+
 export function getRouteMeta(pathname: string) {
-  return navigationItems.find((item) => item.href === pathname) ?? navigationItems[0];
+  if (pathname.startsWith('/buddies/')) {
+    return {
+      href: pathname,
+      label: 'Buddy',
+      title: 'Публичный профиль',
+      description: 'Расширенная анкета потенциального попутчика'
+    };
+  }
+
+  if (pathname.startsWith('/chats/')) {
+    return {
+      href: pathname,
+      label: 'Chat',
+      title: 'Чат поездки',
+      description: 'Локальная MVP-переписка по будущей поездке'
+    };
+  }
+
+  if (pathname.startsWith('/trips/')) {
+    return {
+      href: pathname,
+      label: 'Trip',
+      title: 'План поездки',
+      description: 'Актуальные договорённости и открытые вопросы'
+    };
+  }
+
+  return (
+    navigationItems.find((item) => item.href === pathname) ??
+    navigationItems.find((item) => item.href === '/') ??
+    navigationItems[0]
+  );
 }

@@ -14,6 +14,7 @@ interface TelegramAppShellProps {
 export function TelegramAppShell({ children }: TelegramAppShellProps) {
   const pathname = usePathname();
   const routeMeta = getRouteMeta(pathname);
+  const shouldHideBottomNavigation = pathname.startsWith('/chats/');
   useTelegram();
 
   return (
@@ -22,7 +23,7 @@ export function TelegramAppShell({ children }: TelegramAppShellProps) {
       <main className="app-content">
         <div className="app-content__frame">{children}</div>
       </main>
-      <BottomNavigation pathname={pathname} />
+      {shouldHideBottomNavigation ? null : <BottomNavigation pathname={pathname} />}
     </div>
   );
 }
