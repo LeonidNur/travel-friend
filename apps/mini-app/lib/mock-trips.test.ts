@@ -180,7 +180,26 @@ test('keeps Maria chat linked to its active trip', () => {
 });
 
 test('keeps Timur historical trip while leaving the matched chat without an active trip', () => {
-  assert.equal(getTripsByChatId('chat-sonya-yerevan').map((trip) => trip.id).join(','), 'trip-timur-yerevan');
+  const [timurTrip] = getTripsByChatId('chat-sonya-yerevan');
+
+  assert.ok(timurTrip);
+  assert.equal(timurTrip.id, 'trip-timur-yerevan');
+  assert.equal(timurTrip.status, 'ready');
+  assert.deepEqual(
+    Object.fromEntries(
+      ['dates', 'budget', 'transport', 'accommodation', 'activities'].map((category) => [
+        category,
+        timurTrip.categories[category as keyof typeof timurTrip.categories].status
+      ])
+    ),
+    {
+      dates: 'confirmed',
+      budget: 'confirmed',
+      transport: 'confirmed',
+      accommodation: 'confirmed',
+      activities: 'confirmed'
+    }
+  );
   assert.equal(getActiveTripByChatId('chat-sonya-yerevan'), undefined);
 });
 

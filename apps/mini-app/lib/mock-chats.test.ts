@@ -74,11 +74,21 @@ test('keeps Timur matched chat linked to its historical ready trip', () => {
 
   assert.ok(timurChat);
   assert.equal(timurChat.status, 'match');
+  assert.equal(timurChat.previewText, 'План готов: даты, жильё и спокойный маршрут по Еревану согласованы.');
   assert.deepEqual(
     timurTrips.map(({ id, status }) => ({ id, status })),
     [{ id: 'trip-timur-yerevan', status: 'ready' }]
   );
   assert.equal(getActiveTripByChatId(timurChat.id), undefined);
+  const timurFirstMessage = timurChat.messages.find((message) => message.id === 'message-sonya-1');
+
+  assert.ok(timurFirstMessage);
+  assert.equal(timurFirstMessage.kind, 'participant');
+  assert.equal(timurFirstMessage.authorId, 'timur-safonov');
+  assert.equal(
+    timurFirstMessage.text,
+    'Я бы начал с темпа поездки: хочется больше прогулок по городу или насыщенную программу?'
+  );
 });
 
 test('keeps Egor chat pending until a mutual interest', () => {

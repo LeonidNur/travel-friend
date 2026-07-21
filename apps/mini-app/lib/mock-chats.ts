@@ -99,7 +99,7 @@ export const mockChats: MockChat[] = [
     title: 'Тимур Сафонов',
     destination: 'Ереван',
     status: 'match',
-    previewText: 'Можно обсудить бюджет, темп поездки и выбрать между музеями и прогулками.',
+    previewText: 'План готов: даты, жильё и спокойный маршрут по Еревану согласованы.',
     updatedLabel: 'сегодня',
     participants: [
       CURRENT_USER_PARTICIPANT,
@@ -109,7 +109,7 @@ export const mockChats: MockChat[] = [
       createParticipantMessage({
         id: 'message-sonya-1',
         authorId: 'timur-safonov',
-        text: 'Я бы начала с темпа поездки: хочется больше прогулок по городу или насыщенную программу?',
+        text: 'Я бы начал с темпа поездки: хочется больше прогулок по городу или насыщенную программу?',
         sentAtLabel: 'сегодня'
       })
     ]

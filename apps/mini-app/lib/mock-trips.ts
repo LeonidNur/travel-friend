@@ -49,28 +49,28 @@ const mockTrips: Trip[] = [
         summary: 'Армения: Ереван.'
       },
       dates: {
-        status: 'empty',
-        summary: 'Даты ещё не обсуждались.'
+        status: 'confirmed',
+        summary: '12–16 сентября, 4 ночи.'
       },
       budget: {
-        status: 'needs_decision',
-        summary: 'Нужно обсудить бюджет поездки.'
+        status: 'confirmed',
+        summary: 'До 85 000 ₽ на двоих без авиабилетов.'
       },
       transport: {
-        status: 'empty',
-        summary: 'Транспорт пока не обсуждался.'
+        status: 'confirmed',
+        summary: 'Перелёт до Еревана и трансфер из аэропорта.'
       },
       accommodation: {
-        status: 'empty',
-        summary: 'Жильё пока не обсуждалось.'
+        status: 'confirmed',
+        summary: 'Апартаменты в центре Еревана на 4 ночи.'
       },
       activities: {
-        status: 'needs_decision',
-        summary: 'Нужно выбрать между прогулками и насыщенной программой.'
+        status: 'confirmed',
+        summary: 'Прогулки по центру и один день за городом.'
       },
       notes: {
-        status: 'needs_decision',
-        summary: 'Открытый вопрос: спокойный или насыщенный темп поездки.'
+        status: 'empty',
+        summary: 'Дополнительных заметок пока нет.'
       }
     }
   }
