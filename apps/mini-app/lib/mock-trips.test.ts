@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { test } from 'node:test';
 
-import type { Trip, TripStatus } from './types';
+import type { MockChat, Trip, TripStatus } from './types';
 import type * as MockChatsModule from './mock-chats';
 import type * as MockTripsModule from './mock-trips';
 
@@ -20,13 +20,27 @@ registerHooks({
   }
 });
 
+const mockTripsModule = (await import(new URL('./mock-trips.ts', import.meta.url).href)) as typeof MockTripsModule & {
+  getChatRoomTripActionState: (
+    chat: MockChat,
+    trips?: readonly Trip[],
+    activeTripId?: string
+  ) => {
+    tripHref?: string;
+    tripLabel?: string;
+    createButtonLabel?: string;
+  };
+};
+
 const {
   createDraftTrip,
   getActiveTripByChatId,
+  getChatRoomTripActionState,
   getTrips,
   getTripsByChatId,
   validateMockTrips
-}: typeof MockTripsModule = await import(new URL('./mock-trips.ts', import.meta.url).href);
+} = mockTripsModule;
+
 const { getChatById }: typeof MockChatsModule = await import(
   new URL('./mock-chats.ts', import.meta.url).href
 );
@@ -201,6 +215,66 @@ test('keeps Timur historical trip while leaving the matched chat without an acti
     }
   );
   assert.equal(getActiveTripByChatId('chat-sonya-yerevan'), undefined);
+});
+
+test('returns the historical ready trip and new-trip CTA for the matched chat without an active trip', () => {
+  const chat = getChatById('chat-sonya-yerevan');
+
+  assert.ok(chat);
+
+  assert.deepEqual(getChatRoomTripActionState(chat, getTrips()), {
+    tripHref: '/trips/trip-timur-yerevan',
+    tripLabel: 'Прошлый план поездки',
+    createButtonLabel: 'Начать новую поездку'
+  });
+});
+
+test('keeps historical ready trip state when historical trip id is passed as activeTripId', () => {
+  const chat = getChatById('chat-sonya-yerevan');
+
+  assert.ok(chat);
+
+  const draftTrip = createDraftTrip(chat, getTrips(), 'session-trip-chat-sonya-yerevan');
+
+  assert.deepEqual(getChatRoomTripActionState(chat, [...getTrips(), draftTrip], 'trip-timur-yerevan'), {
+    tripHref: '/trips/session-trip-chat-sonya-yerevan',
+    tripLabel: 'План поездки'
+  });
+});
+
+test('prefers an active draft trip over the historical ready trip in chat navigation', () => {
+  const chat = getChatById('chat-sonya-yerevan');
+
+  assert.ok(chat);
+
+  const draftTrip = createDraftTrip(chat, getTrips(), 'session-trip-chat-sonya-yerevan');
+
+  assert.deepEqual(getChatRoomTripActionState(chat, [...getTrips(), draftTrip]), {
+    tripHref: '/trips/session-trip-chat-sonya-yerevan',
+    tripLabel: 'План поездки'
+  });
+});
+
+test('ignores an activeTripId that belongs to another chat', () => {
+  const chat = getChatById('chat-sonya-yerevan');
+
+  assert.ok(chat);
+
+  assert.deepEqual(getChatRoomTripActionState(chat, getTrips(), 'trip-maria-georgia'), {
+    tripHref: '/trips/trip-timur-yerevan',
+    tripLabel: 'Прошлый план поездки',
+    createButtonLabel: 'Начать новую поездку'
+  });
+});
+
+test('keeps chat without historical trip on the default planning CTA', () => {
+  const chat = getChatById('chat-ilya-istanbul');
+
+  assert.ok(chat);
+
+  assert.deepEqual(getChatRoomTripActionState(chat, getTrips()), {
+    createButtonLabel: 'Начать планирование'
+  });
 });
 
 test('keeps Egor chat without an active trip', () => {
