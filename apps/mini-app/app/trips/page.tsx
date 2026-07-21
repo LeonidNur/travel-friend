@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTripSession } from '@/components/InterestDecisionProvider';
 import { getDisplayedChatParticipant } from '@/lib/current-user-chat-participant';
+import { formatChatParticipantLabel } from '@/lib/chat-participant-label';
 import { getChatById } from '@/lib/mock-chats';
 import type { CurrentUserProfile } from '@/lib/mock-current-user';
 import { getTripStatusLabel } from '@/lib/trip-status';
@@ -26,7 +27,9 @@ function getDirectionHeading(summary: string) {
 
 function getTripCardData(trip: Trip, currentUserProfile: CurrentUserProfile) {
   const participantNames = getChatById(trip.chatId)?.participants
-    .map((participant) => getDisplayedChatParticipant(participant, currentUserProfile).name)
+    .map((participant) =>
+      formatChatParticipantLabel(getDisplayedChatParticipant(participant, currentUserProfile))
+    )
     .join(', ');
 
   return {

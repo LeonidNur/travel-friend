@@ -6,6 +6,7 @@ import { use } from 'react';
 import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTripSession } from '@/components/InterestDecisionProvider';
 import { getDisplayedChatParticipant } from '@/lib/current-user-chat-participant';
+import { formatChatParticipantLabel } from '@/lib/chat-participant-label';
 import { getChatById } from '@/lib/mock-chats';
 import type { CurrentUserProfile } from '@/lib/mock-current-user';
 import { TRIP_CATEGORY_ORDER } from '@/lib/types';
@@ -35,7 +36,9 @@ const TRIP_CATEGORY_STATUS_LABELS: Record<TripCategoryStatus, string> = {
 
 function getParticipantsLabel(chatId: string, currentUserProfile: CurrentUserProfile) {
   const participantNames = getChatById(chatId)?.participants
-    .map((participant) => getDisplayedChatParticipant(participant, currentUserProfile).name)
+    .map((participant) =>
+      formatChatParticipantLabel(getDisplayedChatParticipant(participant, currentUserProfile))
+    )
     .join(', ');
 
   return participantNames || 'Участники не найдены';
