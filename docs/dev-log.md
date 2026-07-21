@@ -1,11 +1,48 @@
 # Дневник разработки
 
+## 2026-07-21 — Завершение super-review frontend-блока
+
+### Что сделали
+
+- Закрыли super-review по frontend-блоку Trips.
+- Финально согласовали Chat ↔ Trip navigation, где Chat Room ведёт в конкретный Trip, а Trip Details ведёт в конкретный Chat.
+- Зафиксировали session-aware participants и active / historical trip flow.
+- Довели финальные navigation fixes до стабильного состояния.
+- Добавили дополнительные unit-тесты под Trips frontend-flow.
+- Зафиксировали, что frontend checkpoint остаётся mock/local-state, а не backend-ready состоянием.
+
+### Что проверили
+
+- Прогнали `npm test`, `npm run check`, ESLint и dependency/security audit на актуальном frontend-потоке.
+- Проверили profile validation и сценарий local session trip creation из matched Chat.
+- Сверили, что новые unit-тесты покрывают Trips data model, Trip Details, navigation и session-aware participants.
+
+### Что закрыли
+
+- Закрыли замечания review по active / historical navigation, session-aware participants и согласованию Trip Details с Chat.
+- Зафиксировали завершение frontend-блока как стабилизированного mock/local-state checkpoint.
+- Сохранили следующий фокус на backend foundation / persistence.
+
+## 2026-07-20 — Trips frontend-функции и проверки
+
+### Что сделали
+
+- Довели Trips frontend data model, Trips List и read-only Trip Details до согласованного состояния.
+- Зафиксировали единый порядок категорий и текстовые состояния категорий в Trip Details.
+- Добавили двустороннюю навигацию Chat ↔ Trip и local session trip flow из matched Chat.
+
+### Что проверили
+
+- Прогнали profile validation, единый `npm test`, ESLint и `npm run check` на frontend-блоке.
+- Выполнили dependency/security audit и убрали неиспользуемый Telegram SDK.
+- Пересмотрели сценарии навигации между Chat Room и Trip Details после локальной стабилизации.
+
 ## 2026-07-10 — Chat Room MVP и предварительная модель Chats / Trips
 
 ### Что сделали
 
 - Зафиксировали в документации, что Chat Room MVP уже реализован на динамическом маршруте `/chats/[id]`.
-- Обновили описание входа в чат из Chats List, mock-истории сообщений, local-only отправки, fallback для неизвестного `chat id`, перехода в публичный профиль собеседника, временного перехода в `/trips` и скрытия Bottom Navigation внутри chat room.
+- Обновили описание входа в чат из Chats List, mock-истории сообщений, local-only отправки, fallback для неизвестного `chat id`, перехода в публичный профиль собеседника, перехода в конкретный связанный Trip и скрытия Bottom Navigation внутри chat room.
 - Уточнили предварительную продуктовую модель: `Chats` как живое общение и будущая работа с AI, `Trips` как структурированное актуальное состояние поездок, а связь `Trip ↔ Chat` пока остаётся продуктовой договорённостью, а не backend-реализацией.
 - Синхронизировали README, roadmap, CHANGELOG и AI Travel Copilot doc, чтобы они описывали текущий frontend-flow честно и без намёка на готовый backend, Supabase или persistence.
 
@@ -83,7 +120,7 @@
 - Экран карточки пользователя.
 - Чаты.
 - AI внутри чатов.
-- Trips MVP.
+- Trips / поездки.
 
 ## 2026-06-30 — День 2
 
