@@ -86,12 +86,12 @@ export const mockChats: MockChat[] = [
       createBuddyParticipant('egor-belyaev')
     ],
     messages: [
-      createParticipantMessage({
-        id: 'message-ilya-1',
-        authorId: 'egor-belyaev',
-        text: 'Если интерес взаимный подтвердится, можно сразу обсудить район для жилья и удобный перелёт.',
-        sentAtLabel: 'вчера'
-      })
+      {
+        id: 'message-system-interest-sent',
+        kind: 'system',
+        text: 'Интерес отправлен. Переписка станет доступна после взаимного интереса.',
+        sentAtLabel: 'сегодня'
+      }
     ]
   },
   {
