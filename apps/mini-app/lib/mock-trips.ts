@@ -80,6 +80,57 @@ function isActiveTripStatus(status: Trip['status']): boolean {
   return status === 'draft' || status === 'planning';
 }
 
+export type ChatRoomTripActionState = {
+  tripHref?: string;
+  tripLabel?: string;
+  createButtonLabel?: string;
+};
+
+export function getHistoricalReadyTripByChatId(
+  chatId: string,
+  trips: readonly Trip[] = mockTrips
+): Trip | undefined {
+  return getTripsByChatId(chatId, trips).find((trip) => trip.status === 'ready');
+}
+
+export function getChatRoomTripActionState(
+  chat: MockChat,
+  trips: readonly Trip[] = mockTrips,
+  activeTripId?: string
+): ChatRoomTripActionState {
+  const activeTripFromId = activeTripId ? getTripById(activeTripId, trips) : undefined;
+
+  if (activeTripFromId && activeTripFromId.chatId === chat.id && isActiveTripStatus(activeTripFromId.status)) {
+    return {
+      tripHref: `/trips/${activeTripFromId.id}`,
+      tripLabel: 'План поездки'
+    };
+  }
+
+  const activeTrip = getActiveTripByChatId(chat.id, trips);
+
+  if (activeTrip) {
+    return {
+      tripHref: `/trips/${activeTrip.id}`,
+      tripLabel: 'План поездки'
+    };
+  }
+
+  const historicalTrip = getHistoricalReadyTripByChatId(chat.id, trips);
+
+  if (historicalTrip) {
+    return {
+      tripHref: `/trips/${historicalTrip.id}`,
+      tripLabel: 'Прошлый план поездки',
+      createButtonLabel: 'Начать новую поездку'
+    };
+  }
+
+  return {
+    createButtonLabel: 'Начать планирование'
+  };
+}
+
 export function validateMockTrips(trips: readonly Trip[], chats: readonly MockChat[] = mockChats): void {
   const activeTripCountsByChatId = new Map<string, number>();
   const chatsById = new Map(chats.map((chat) => [chat.id, chat]));

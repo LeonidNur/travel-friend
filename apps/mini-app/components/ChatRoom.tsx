@@ -15,6 +15,7 @@ import {
 } from '@/lib/mock-chats';
 import { canSendMessagesForChatStatus, getChatMessageAccessNotice } from '@/lib/chat-lifecycle';
 import { getDisplayedChatParticipant } from '@/lib/current-user-chat-participant';
+import { getChatRoomTripActionState } from '@/lib/mock-trips';
 import { getAvatarInitials } from '@/lib/travel-preferences';
 import type { MockChat } from '@/lib/types';
 
@@ -29,14 +30,15 @@ function getMessageClassName(isCurrentUser: boolean) {
 
 export function ChatRoom({ chat, tripId }: ChatRoomProps) {
   const { profile } = useCurrentUserProfile();
-  const { getActiveTrip, startPlanning } = useTripSession();
+  const { getActiveTrip, startPlanning, trips } = useTripSession();
   const companion = getChatCompanion(chat);
   const companionProfileHref = isDirectChat(chat) && companion?.buddyProfileId ? `/buddies/${companion.buddyProfileId}` : null;
   const canSendMessages = canSendMessagesForChatStatus(chat.status);
   const [draftMessage, setDraftMessage] = useState('');
   const [localMessages, setLocalMessages] = useState<LocalChatMessage[]>([]);
   const activeTripId = getActiveTrip(chat.id)?.id ?? tripId;
-  const canStartPlanning = chat.status === 'match' && !activeTripId;
+  const tripActionState = getChatRoomTripActionState(chat, trips, activeTripId);
+  const canStartPlanning = chat.status === 'match' && Boolean(tripActionState.createButtonLabel);
 
   const messages = useMemo(() => [...chat.messages, ...localMessages], [chat.messages, localMessages]);
   const participants = useMemo(
@@ -105,15 +107,15 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
           Это демонстрационный диалог: показанная история нужна для проверки сценария и не отражает
           реальную переписку.
         </p>
-        {canSendMessages && activeTripId ? (
-          <Link className="navigation-link" href={`/trips/${activeTripId}`}>
-            План поездки
+        {canSendMessages && tripActionState.tripHref ? (
+          <Link className="navigation-link" href={tripActionState.tripHref}>
+            {tripActionState.tripLabel}
           </Link>
         ) : null}
-        {canStartPlanning ? (
+        {canStartPlanning && tripActionState.createButtonLabel ? (
           <>
             <button className="profile-button profile-button--primary" type="button" onClick={handleStartPlanning}>
-              Начать планирование
+              {tripActionState.createButtonLabel}
             </button>
             <p className="surface-card__note">Новая поездка будет доступна только до перезагрузки.</p>
           </>
