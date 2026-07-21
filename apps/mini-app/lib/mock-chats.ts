@@ -51,7 +51,7 @@ export const mockChats: MockChat[] = [
       createParticipantMessage({
         id: 'message-amina-1',
         authorId: 'maria-ivanova',
-        text: 'Привет. Я как раз смотрю даты на конец августа и район ближе к старому городу.',
+        text: 'Привет. Я как раз смотрю даты на конец августа, 7–8 дней и район ближе к старому городу.',
         sentAtLabel: '10:12'
       }),
       createParticipantMessage({

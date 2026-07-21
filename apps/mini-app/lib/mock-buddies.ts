@@ -61,7 +61,7 @@ export const mockBuddies: BuddyProfile[] = [
     budgetLevel: 2,
     interests: ['Природа', 'Спорт', 'Фотография', 'Еда'],
     travelStyles: ['Лесной / природный', 'Активный / спортивный', 'Медитативный / ретрит'],
-    dates: 'Середина сентября, 7-10 дней',
+    dates: 'Конец августа, 7–8 дней',
     comfortLevel: 3,
     likedYou: true,
     compatibilityReason: 'Может подойти, если вам важны природа, активный день и спокойный бытовой комфорт.',

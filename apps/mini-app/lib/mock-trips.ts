@@ -14,7 +14,7 @@ const mockTrips: Trip[] = [
       },
       dates: {
         status: 'needs_decision',
-        summary: 'Конец августа; нужно выбрать 7 или 8 дней.'
+        summary: 'Конец августа, 7–8 дней; даты ещё уточняем.'
       },
       budget: {
         status: 'needs_decision',
