@@ -81,12 +81,21 @@ test('keeps Timur matched chat linked to its historical ready trip', () => {
   assert.equal(getActiveTripByChatId(timurChat.id), undefined);
 });
 
-test('keeps the interest-sent chat without a trip', () => {
+test('keeps Egor chat pending until a mutual interest', () => {
   const chat = getChatById('chat-ilya-istanbul');
 
   assert.ok(chat);
   assert.equal(chat.status, 'interest_sent');
+  assert.equal(canSendMessagesForChatStatus(chat.status), false);
   assert.equal(getTripsByChatId(chat.id).length, 0);
+  assert.deepEqual(chat.messages, [
+    {
+      id: 'message-system-interest-sent',
+      kind: 'system',
+      text: 'Интерес отправлен. Переписка станет доступна после взаимного интереса.',
+      sentAtLabel: 'сегодня'
+    }
+  ]);
 });
 
 test('does not expose the removed group mock chat', () => {
