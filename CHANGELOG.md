@@ -1,5 +1,18 @@
 # Журнал изменений
 
+## 2026-08-06
+
+- Завершён этап проектирования логической доменной модели Travel Friend.
+- Утверждённая ER-модель перенесена в `docs/backend/er-diagram.md` как источник истины.
+- Добавлен новый пакет backend-документации: `domain-model`, `backend-architecture`, `ai-architecture`, `integrations`, `security`.
+- Обновлены `README.md`, `docs/roadmap.md`, `docs/ai-copilot.md` и `docs/safety-and-trust.md`, чтобы текущая архитектурная документация соответствовала утверждённой ER-модели.
+- `docs/database-schema.md` переведён в статус отложенного артефакта до отдельного schema-этапа.
+
+Known limitations / TODO:
+
+- Backend/API, Supabase schema, persistence, realtime, серверный Telegram Auth и AI всё ещё не реализованы.
+- Утверждена логическая модель, но physical schema и миграции ещё не проектировались.
+
 ## 2026-07-21
 
 - За 20-21 июля завершён frontend checkpoint по Trips и Chat ↔ Trip flow.

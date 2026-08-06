@@ -65,7 +65,7 @@ Telegram Mini App не отменяет будущую отдельную моб
 - единый frontend data model слой для профилей, travel preferences, чатов и решений интереса
 - обновлённая нижняя навигация с основной группой Chats / Discover / Trips и отдельным Profile
 
-Сейчас эти сценарии работают как mock/local-state checkpoint. Реальные backend/API, Supabase, persistence, realtime, серверный Telegram Auth и AI пока не реализованы; Chat Room MVP остаётся local-only, а сообщения исчезают после reload. При этом Chat Room уже корректно различает `active` и `historical` trip, а mock-сценарии Chats и Trips сведены к согласованному состоянию.
+Сейчас эти сценарии работают как mock/local-state checkpoint. Реальные backend/API, Supabase, persistence, realtime, серверный Telegram Auth и AI пока не реализованы; Chat Room MVP остаётся local-only, а сообщения исчезают после reload. При этом логическая доменная модель backend уже завершена, утверждённая ER-модель зафиксирована как источник истины, а frontend-flow `Profile → Discover → Chats → Trips` уже можно проектно стыковать с будущим backend-контуром без вывода schema из view models.
 
 ### Почему мы отказались от ngrok
 
@@ -116,7 +116,10 @@ Telegram Mini App не отменяет будущую отдельную моб
 - есть инженерный контур для диагностики проблем;
 - появились первые фокусные экраны и потоки: Profile, Discover, public buddy profile, interest/match и Chats list;
 - завершена стабилизация Chats / Trips frontend-flow: Chat Room, Trips mock-flow и навигация Chat ↔ Trips приведены к согласованному состоянию;
-- frontend checkpoint завершён на уровне mock/local-state, но backend/Supabase/persistence/realtime/серверный Telegram Auth/AI пока остаются впереди;
+- frontend checkpoint завершён на уровне mock/local-state;
+- логическая доменная модель backend завершена и согласована;
+- утверждённая ER-модель закреплена как источник истины для дальнейших backend-этапов;
+- backend/Supabase/persistence/realtime/серверный Telegram Auth/AI по-прежнему не реализованы и остаются следующими этапами;
 - это уже не черновой каркас, а рабочая основа для MVP с постоянным URL, понятным процессом разработки и синхронизированной документацией.
 
 ## Идея проекта
@@ -266,34 +269,31 @@ Travel Friend не является просто планировщиком пу
 
 ### Продуктовая модель Chats / Trips
 
-Предварительно договорились, что:
+После завершения логической доменной модели зафиксировано, что:
 
-- `Chats` — живое общение: история обсуждений, предложения, подтверждения и будущая работа с AI;
-- `Trips` — структурированное актуальное состояние поездок;
-- одна поездка не создаёт второй чат;
-- один чат может быть связан с несколькими поездками;
-- для первого MVP рассматривается одна активная поездка в планировании на чат;
-- значения попадают в Trips после подтверждения участников;
-- в карточках Trips категории идут в одном и том же порядке;
-- статусы полей: согласовано, ожидает подтверждения, не определено;
-- AI позже помогает предлагать компромиссы, но не принимает решения за пользователей;
-- групповой flow важен, но пока не определён и не реализован;
-- эти решения предварительные и могут измениться после обсуждения с командой и дизайнером.
+- `Chats` — живое общение, история обсуждений, system messages, AI-контекст и точка входа в поездки;
+- `Trips` — подтверждённое актуальное состояние поездки внутри конкретного чата;
+- `Match` создаёт один direct chat 1:1, а исходный direct chat сохраняется даже после появления group chat;
+- один chat может содержать несколько последовательных Trip;
+- одновременно в одном chat может существовать только одна незавершённая Trip;
+- Trip проходит lifecycle `forming → active → completed|cancelled`;
+- после перехода Trip в `active` новых участников в неё добавить нельзя;
+- подтверждённые блоки `destination`, `dates`, `budget`, `transport` хранятся прямо в `Trip`, а промежуточные варианты живут в `Proposal`;
+- AI может готовить summary, предложения и внешние варианты, но не принимает решения за пользователей и не меняет Trip напрямую.
 
 ### AI Travel Copilot
 
-AI Travel Copilot — будущий слой поверх Chats / Trips. Сейчас он не реализован в продукте; его задача — помогать позже, когда базовые чаты, поездки и backend-контур будут закреплены.
+AI Travel Copilot остаётся будущим backend-слоем поверх Chats / Trips и ещё не реализован в продукте. В утверждённой архитектуре он работает через `AIRequest`, `ChatSummary`, `Proposal` и внешние provider-интеграции, но не меняет подтверждённое состояние поездки напрямую.
 
 Планируемые функции первой версии:
 
-- суммировать желания участников;
-- выделять ограничения;
-- предлагать направления;
-- предлагать маршрут по дням;
-- оценивать примерный бюджет;
+- суммировать обсуждение и обновлять `ChatSummary`;
+- выделять ограничения и несогласованные блоки;
+- предлагать направления, даты, бюджет и транспорт через `Proposal`;
+- оценивать примерный бюджет и сравнивать варианты;
 - находить компромиссы;
 - предлагать активности;
-- делать план дешевле, спокойнее или насыщеннее.
+- запускать поиск вариантов через backend-интеграции с внешними API.
 
 ## Возможные команды ИИ
 
@@ -335,6 +335,13 @@ travel-friend/
   README.md
   CHANGELOG.md
   docs/
+    backend/
+      domain-model.md
+      er-diagram.md
+      backend-architecture.md
+      ai-architecture.md
+      integrations.md
+      security.md
     roadmap.md
     dev-log.md
     team-workflow.md
@@ -366,16 +373,27 @@ npm run build
 - `docs/dev-log.md` — дневник разработки;
 - `docs/team-workflow.md` — правила работы команды.
 
+## Architecture documentation
+
+Backend-документация после завершения логической доменной модели:
+
+- `docs/backend/domain-model.md` — краткая карта доменов, сущностей, lifecycle и инвариантов;
+- `docs/backend/er-diagram.md` — утверждённая ER-модель как источник истины;
+- `docs/backend/backend-architecture.md` — высокоуровневый backend-контур и зоны ответственности;
+- `docs/backend/ai-architecture.md` — модель AIRequest / ChatSummary / Proposal / usage / premium AI;
+- `docs/backend/integrations.md` — Telegram, AI Provider и внешние travel-интеграции;
+- `docs/backend/security.md` — trusted zones, moderation/safety и security-принципы.
+
 ## Ближайшие задачи
 
 Ближайший порядок разработки:
 
-1. Backend contracts и Supabase schema.
+1. Backend contracts на основе утверждённой логической модели.
 2. Telegram Auth через raw `initData`.
-3. Persistence профиля, интересов, чатов и поездок.
-4. Realtime chat flow после базовой persistence.
-5. AI только после рабочего backend-контура.
-6. Групповой flow как отдельный открытый вопрос.
+3. Physical data design и Supabase schema на основе утверждённой логической модели.
+4. Persistence профиля, интересов, чатов и поездок.
+5. Realtime chat flow после базовой persistence.
+6. AI только после рабочего backend-контура.
 
 ## Долгосрочное видение
 
