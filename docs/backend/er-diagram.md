@@ -163,6 +163,11 @@ TRIP_INVITATION ||--|| MESSAGE : displayed_as
 TRIP ||--o{ TRIP_PARTICIPANT : contains
 USER ||--o{ TRIP_PARTICIPANT : participates
 
+TRIP ||--o{ TRIP_STOP : has_ordered
+TRIP ||--o{ TRIP_TRANSPORT_SEGMENT : has_ordered
+TRIP_STOP ||--o{ TRIP_TRANSPORT_SEGMENT : starts
+TRIP_STOP ||--o{ TRIP_TRANSPORT_SEGMENT : ends
+
 TRIP ||--o{ TRIP_BLOCK_REVIEW : requires
 ```
 
@@ -210,7 +215,7 @@ budget всегда требует пересмотра
 
 ## 5. Подтверждённое состояние Trip
 
-Подтверждённые блоки хранятся непосредственно в `Trip`:
+Подтверждённые aggregate blocks относятся к `Trip`:
 
 `destination`
 `dates`
@@ -218,6 +223,10 @@ budget всегда требует пересмотра
 `transport`
 
 Участники хранятся через `TripParticipant`.
+
+`destination` — aggregate route block, а не одно scalar destination. Подтверждённый route состоит из ordered `TripStop`: когда destination block имеет статус `confirmed`, у Trip есть `1..N` stops. `destination_version` и `destination_status` относятся ко всему route/stops plan.
+
+`transport` — aggregate transport block. `TripTransportSegment` принадлежит одной Trip, связывает две `TripStop` той же Trip и образует ordered transport plan. Одна Trip может иметь несколько transport segments; `transport_version` и `transport_status` относятся ко всему transport plan, а не к отдельному segment.
 
 Правило:
 
@@ -310,6 +319,8 @@ Trip не меняется до accepted.
 
 Одновременно разрешены Proposal по разным блокам.
 На один блок допускается максимум один pending Proposal.
+
+Для MVP Proposal остаётся на уровне одного aggregate Trip block: destination Proposal заменяет route/stops plan целиком, transport Proposal — transport plan целиком. Stop-level и segment-level Proposal не вводятся. Обычный `accept`/`reject` Proposal содержит один заранее выбранный вариант, поэтому multi-choice/ranked voting отсутствует.
 
 ## 7. TripBlockReview
 
@@ -468,6 +479,8 @@ Proposal может сравнивать несколько источников
 ссылки для самостоятельной покупки
 
 `TripExternalSelection` закрепляет подтверждённый вариант в Trip.
+
+`ExternalOffer` не является confirmed Trip state. `TripExternalSelection` — domain-level pin выбранного external offer; confirmed transport segment хранит необходимый snapshot и при необходимости ссылается на selection. Изменение или исчезновение provider offer не меняет Trip автоматически.
 
 Статусы:
 

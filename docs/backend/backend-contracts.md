@@ -133,6 +133,8 @@ Frontend не создаёт Proposal напрямую. Proposal появляе�
 - для разных Trip blocks могут существовать pending proposals параллельно;
 - на один block допускается максимум один pending Proposal.
 
+В MVP `destination` — route aggregate: Proposal заменяет весь ordered stops plan. `transport` — transport aggregate: Proposal заменяет весь ordered transport plan. Stop-level и segment-level Proposal не вводятся.
+
 Обычный Proposal с `accept`/`reject` votes не содержит несколько альтернатив, между которыми пользователи выбирают. Proposal относится к одному Trip block и представляет один уже выбранный вариант. Flow выбора выглядит так:
 
 `external APIs → backend normalization → AI/ML ranking → option set из нескольких осмысленных вариантов с trade-offs → пользователи выбирают один вариант → выбранный вариант становится Proposal для конкретного Trip block → Proposal проходит существующий accept/reject flow → после единогласного accepted backend атомарно обновляет Trip`
