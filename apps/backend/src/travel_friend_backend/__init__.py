@@ -1,0 +1,1 @@
+"""Travel Friend backend foundation."""
