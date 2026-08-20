@@ -39,6 +39,8 @@
 Домен отвечает за поездку как подтверждённое состояние, живущее внутри чата:
 
 - `Trip` как агрегат поездки;
+- `TripStop` как упорядоченная подтверждённая точка маршрута Trip;
+- `TripTransportSegment` как упорядоченный подтверждённый сегмент между двумя TripStop той же Trip;
 - `TripInvitation` как приглашение участнику чата присоединиться к поездке;
 - `TripParticipant` как подтверждённый участник поездки;
 - `TripBlockReview` как механизм пересмотра уже подтверждённых блоков после изменения состава;
@@ -94,6 +96,8 @@
 - `Trip`
 - `TripInvitation`
 - `TripParticipant`
+- `TripStop`
+- `TripTransportSegment`
 - `Proposal`
 - `ProposalVote`
 - `TripBlockReview`
@@ -120,7 +124,7 @@
 
 ### Proposal
 
-`Proposal` создаётся либо по пользовательскому AI-вызову, либо как системный результат membership review. Для каждого активного `TripParticipant` заранее создаётся `ProposalVote`. Любой `reject` завершает proposal отказом, а `accepted` достигается только при единогласии. Только в этот момент подтверждённое состояние `Trip` меняется атомарно.
+`Proposal` создаётся либо по пользовательскому AI-вызову, либо как системный результат membership review. Для каждого активного `TripParticipant` заранее создаётся `ProposalVote`. Любой `reject` завершает proposal отказом, а `accepted` достигается только при единогласии. Только в этот момент подтверждённое состояние `Trip` меняется атомарно. В MVP destination Proposal заменяет весь упорядоченный route/stops plan, transport Proposal — весь transport plan; stop-level, segment-level и multi-choice/ranked voting не вводятся.
 
 ### TripBlockReview
 
@@ -147,10 +151,13 @@
 - `Trip` может перейти в `active` только при минимум двух согласившихся участниках.
 - После перехода `Trip` в `active` новых участников добавить нельзя.
 - `ChatParticipant` и `TripParticipant` — разные сущности и не взаимозаменяемы.
-- Подтверждённые блоки `destination`, `dates`, `budget`, `transport` хранятся прямо в `Trip`; промежуточные варианты там не живут.
+- `destination` — aggregate route block: его подтверждённое содержимое хранится в ordered `TripStop`; `destination_version` и `destination_status` остаются на `Trip`.
+- `transport` — aggregate transport block: его подтверждённое содержимое хранится в ordered `TripTransportSegment`, каждый из которых соединяет две `TripStop` той же `Trip`; `transport_version` и `transport_status` остаются на `Trip`.
+- Подтверждённые `dates` и `budget` и aggregate metadata блоков хранятся в `Trip`; промежуточные варианты там не живут.
 - На один блок поездки допускается максимум один pending `Proposal`.
 - Принятие `Proposal` и изменение `Trip` выполняются атомарно.
 - После изменения состава поездки бюджет всегда требует обязательного review.
 - `AIRequest` не может напрямую менять `Trip`, создавать участников, применять `Proposal`, иметь прямой HTTP-доступ или получать секреты приложения.
+- `ExternalOffer` не является подтверждённым состоянием Trip: `TripExternalSelection` закрепляет выбранный provider offer, а confirmed transport snapshot не меняется автоматически, если provider offer позднее изменился или исчез.
 - Для `usage_scope = user_quota` обязателен `charged_to_user_id`.
 - Premium-доступ описывается цепочкой `Feature → Entitlement → UsageCounter`, а не флагом `is_premium`.

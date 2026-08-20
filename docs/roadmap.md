@@ -25,18 +25,20 @@
 - ✅ logical domain model
 - ✅ approved ER model
 - ✅ backend architecture documentation package
+- ✅ Backend Contracts
+- ✅ Telegram Auth architecture
+- ✅ FastAPI backend foundation + Telegram initData verifier
+- ✅ Physical Data Design
 
 ## Текущий этап
 
-### Backend foundation на основе утверждённой логической модели
+### Supabase/PostgreSQL migrations по небольшим persistence slices
 
 #### Backend
 
-- backend architecture docs
-- backend contracts
-- Telegram Auth через raw `initData`
-- physical data design и Supabase schema
-- persistence профиля, интересов, чатов и поездок
+- начать с Core Identity;
+- после Core Identity завершить `/auth/telegram`;
+- затем продолжить persistence профиля, интересов, чатов и поездок.
 
 #### Realtime
 
@@ -54,12 +56,11 @@
 
 ## Дальше
 
-1. Подготовить backend contracts на основе утверждённой логической модели.
-2. Реализовать Telegram Auth через raw `initData`.
-3. Спроектировать physical data design и Supabase schema как следующий отдельный этап.
-4. Подключить persistence для профиля, интересов, чатов и поездок.
-5. Вернуться к realtime chat flow после базовой persistence.
-6. Подключить AI только после рабочего backend-контура.
+1. Реализовать Supabase/PostgreSQL migrations небольшими persistence slices, начиная с Core Identity.
+2. Завершить `/auth/telegram` после Core Identity.
+3. Подключить persistence для профиля, интересов, чатов и поездок.
+4. Вернуться к realtime chat flow после базовой persistence.
+5. Подключить AI только после рабочего backend-контура.
 
 ## Примечания
 
