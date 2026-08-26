@@ -13,6 +13,7 @@ from travel_friend_backend.auth.telegram import (
 )
 from travel_friend_backend.config import (
     BackendSettings,
+    DatabaseUrlNotConfiguredError,
     TelegramBotTokenNotConfiguredError,
     get_backend_settings,
 )
@@ -144,6 +145,22 @@ def test_rejects_stale_auth_date(verifier: TelegramInitDataVerifier) -> None:
         verifier.verify(raw_init_data)
 
 
+def test_default_policy_rejects_init_data_older_than_ten_minutes() -> None:
+    verifier = TelegramInitDataVerifier(
+        bot_token=TEST_BOT_TOKEN,
+        clock=lambda: NOW,
+    )
+    raw_init_data = sign_init_data(
+        {
+            "auth_date": str(NOW - 601),
+            "user": json.dumps(TEST_USER, separators=(",", ":")),
+        }
+    )
+
+    with pytest.raises(ExpiredTelegramInitDataError):
+        verifier.verify(raw_init_data)
+
+
 @pytest.mark.parametrize("auth_date", [None, "not-an-integer"])
 def test_rejects_invalid_auth_date_after_valid_signature(
     verifier: TelegramInitDataVerifier, auth_date: str | None
@@ -216,6 +233,26 @@ def test_rejects_missing_bot_token_configuration() -> None:
         get_backend_settings({})
 
 
+def test_loads_database_url_from_server_environment() -> None:
+    database_url = "postgresql://backend:secret@db.example.test:5432/travel_friend"
+
+    settings = get_backend_settings(
+        {"TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN, "DATABASE_URL": database_url}
+    )
+
+    assert settings.database_url == database_url
+
+
+@pytest.mark.parametrize("database_url", [None, "", "   "])
+def test_rejects_missing_or_blank_database_url(database_url: str | None) -> None:
+    environment = {"TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN}
+    if database_url is not None:
+        environment["DATABASE_URL"] = database_url
+
+    with pytest.raises(DatabaseUrlNotConfiguredError):
+        get_backend_settings(environment)
+
+
 @pytest.mark.parametrize(
     ("bot_token", "max_age_seconds"),
     [("", 300), (TEST_BOT_TOKEN, 0), (TEST_BOT_TOKEN, -1)],
@@ -232,10 +269,16 @@ def test_rejects_invalid_verifier_constructor_arguments(
 
 def test_health_endpoint_returns_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TEST_BOT_TOKEN)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://unused-for-health-test")
 
     from travel_friend_backend.main import create_app
 
-    app = create_app(BackendSettings(telegram_bot_token=TEST_BOT_TOKEN))
+    app = create_app(
+        BackendSettings(
+            telegram_bot_token=TEST_BOT_TOKEN,
+            database_url="postgresql://unused-for-health-test",
+        )
+    )
     health_route = next(route for route in app.routes if route.path == "/health")
 
     assert health_route.endpoint() == {"status": "ok"}

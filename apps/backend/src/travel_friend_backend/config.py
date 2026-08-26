@@ -11,9 +11,14 @@ class TelegramBotTokenNotConfiguredError(RuntimeError):
     """Raised when the backend cannot verify Telegram initData safely."""
 
 
+class DatabaseUrlNotConfiguredError(RuntimeError):
+    """Raised when the backend cannot access its server-side database."""
+
+
 @dataclass(frozen=True, slots=True)
 class BackendSettings:
     telegram_bot_token: str
+    database_url: str | None = None
 
 
 def get_backend_settings(
@@ -25,5 +30,10 @@ def get_backend_settings(
         raise TelegramBotTokenNotConfiguredError(
             "TELEGRAM_BOT_TOKEN must be configured in the server environment"
         )
+    database_url = source.get("DATABASE_URL")
+    if database_url is None or not database_url.strip():
+        raise DatabaseUrlNotConfiguredError(
+            "DATABASE_URL must be configured in the server environment"
+        )
 
-    return BackendSettings(telegram_bot_token=bot_token)
+    return BackendSettings(telegram_bot_token=bot_token, database_url=database_url)
