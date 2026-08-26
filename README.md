@@ -65,7 +65,7 @@ Telegram Mini App не отменяет будущую отдельную моб
 - единый frontend data model слой для профилей, travel preferences, чатов и решений интереса
 - обновлённая нижняя навигация с основной группой Chats / Discover / Trips и отдельным Profile
 
-Сейчас эти сценарии работают как mock/local-state checkpoint. Реальные backend/API, Supabase, persistence, realtime, серверный Telegram Auth и AI пока не реализованы; Chat Room MVP остаётся local-only, а сообщения исчезают после reload. При этом логическая доменная модель backend уже завершена, утверждённая ER-модель зафиксирована как источник истины, а frontend-flow `Profile → Discover → Chats → Trips` уже можно проектно стыковать с будущим backend-контуром без вывода schema из view models.
+Сейчас frontend-сценарии работают как mock/local-state checkpoint: Chat Room остаётся local-only, а сообщения исчезают после reload. В Backend Foundation завершён отдельный Core Identity + Telegram Auth slice: настроены local Supabase CLI/PostgreSQL workflow, persistence базовой идентичности и серверная Telegram-аутентификация с сессиями. Profile + TravelIntent API, persistence интересов, чатов и поездок, realtime и AI ещё не реализованы. Логическая доменная модель backend завершена, а утверждённая ER-модель остаётся источником истины; frontend view models не считаются готовой Supabase-схемой.
 
 ### Почему мы отказались от ngrok
 
@@ -119,7 +119,12 @@ Telegram Mini App не отменяет будущую отдельную моб
 - frontend checkpoint завершён на уровне mock/local-state;
 - логическая доменная модель backend завершена и согласована;
 - утверждённая ER-модель закреплена как источник истины для дальнейших backend-этапов;
-- backend/Supabase/persistence/realtime/серверный Telegram Auth/AI по-прежнему не реализованы и остаются следующими этапами;
+- настроен local Supabase CLI workflow и local PostgreSQL/Supabase environment;
+- завершён Core Identity persistence: `users`, `telegram_identities`, `profiles`, `profile_photos`, `user_settings`, `user_activity_states` и `travel_intents` с нужными constraints и indexes;
+- завершён server-side Telegram Auth: проверка raw `initData`, `POST /auth/telegram`, `POST /auth/logout`, Bearer authentication и server-side multiple sessions с opaque token, SHA-256 hash в БД и TTL 30 дней;
+- первый login создаёт базовые User/TelegramIdentity/UserSettings/UserActivityState, повторный использует того же User; revoked, expired и deleted-user sessions отклоняются;
+- `DATABASE_URL` читается и валидируется только в server environment;
+- Profile + TravelIntent API, persistence интересов, чатов и поездок, realtime и AI остаются следующими этапами;
 - это уже не черновой каркас, а рабочая основа для MVP с постоянным URL, понятным процессом разработки и синхронизированной документацией.
 
 ## Идея проекта
@@ -388,12 +393,11 @@ Backend-документация после завершения логичес�
 
 Ближайший порядок разработки:
 
-1. Backend contracts на основе утверждённой логической модели.
-2. Telegram Auth через raw `initData`.
-3. Physical data design и Supabase schema на основе утверждённой логической модели.
-4. Persistence профиля, интересов, чатов и поездок.
-5. Realtime chat flow после базовой persistence.
-6. AI только после рабочего backend-контура.
+1. Profile + TravelIntent API: authenticated read/write профиля, read/write/archive active TravelIntent и onboarding state transitions только для текущего authenticated User.
+2. Frontend onboarding и первый полный flow: Telegram Auth → User → onboarding → Profile → TravelIntent → onboarding completed → основной интерфейс, включая повторный запуск с восстановлением того же пользователя и данных.
+3. Последующие persistence slices для интересов, чатов и поездок.
+4. Realtime chat flow после базовой persistence.
+5. AI только после рабочего backend-контура.
 
 ## Долгосрочное видение
 

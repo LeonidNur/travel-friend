@@ -1,5 +1,31 @@
 # Дневник разработки
 
+## 2026-08-26 — Core Identity + Telegram Auth backend checkpoint
+
+### Что сделали
+
+- Настроили local Supabase CLI workflow и local PostgreSQL/Supabase environment.
+- Реализовали Core Identity persistence: `users`, `telegram_identities`, `profiles`, `profile_photos`, `user_settings`, `user_activity_states` и `travel_intents` с необходимыми constraints и indexes.
+- Реализовали server-side Telegram Auth: проверку raw `initData`, `POST /auth/telegram`, `POST /auth/logout` и Bearer authentication.
+- Добавили server-side `user_sessions` с multiple sessions, opaque session token, хранением только SHA-256 hash в БД и TTL 30 дней.
+- Зафиксировали сценарии first login (создание User, TelegramIdentity, UserSettings и UserActivityState) и repeat login (использование существующего User), а также отклонение revoked, expired и deleted-user sessions.
+- Ограничили `DATABASE_URL` server environment и добавили его валидацию при запуске backend.
+- Закрыли Core Identity + Telegram Auth как отдельный backend slice без реализации следующих Profile + TravelIntent API или frontend onboarding.
+
+### Что проверили
+
+- Финальная backend-проверка: 40 passed, 0 failed, 0 skipped, coverage 96.82%.
+- `compileall` завершился успешно.
+- `git diff --check` завершился успешно.
+
+### Что осталось
+
+- Следующий этап — Profile + TravelIntent API: authenticated read/write профиля, read/write/archive active TravelIntent и onboarding state transitions только для текущего authenticated User.
+- Затем нужен frontend onboarding и первый полный flow: Telegram Auth → User → onboarding → Profile → TravelIntent → onboarding completed → основной интерфейс, с восстановлением того же пользователя и данных при повторном запуске.
+- Concurrent first-login одной Telegram identity может потребовать отдельной обработки unique-conflict/race.
+- Warning FastAPI TestClient/httpx2 не блокирует MVP и остаётся dependency TODO.
+- Frontend onboarding, persistence интересов, чатов и поездок, realtime и AI ещё не реализованы.
+
 ## 2026-08-06 — Логическая доменная модель и backend-документация
 
 ### Что сделали

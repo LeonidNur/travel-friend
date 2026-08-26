@@ -29,26 +29,34 @@
 - ✅ Telegram Auth architecture
 - ✅ FastAPI backend foundation + Telegram initData verifier
 - ✅ Physical Data Design
+- ✅ local Supabase CLI workflow и local PostgreSQL/Supabase environment
+- ✅ Core Identity persistence (`users`, `telegram_identities`, `profiles`, `profile_photos`, `user_settings`, `user_activity_states`, `travel_intents`)
+- ✅ Telegram Auth backend: raw `initData` verification, `/auth/telegram`, `/auth/logout`, Bearer authentication и server-side sessions
 
 ## Текущий этап
 
-### Supabase/PostgreSQL migrations по небольшим persistence slices
+### Profile + TravelIntent API
 
 #### Backend
 
-- начать с Core Identity;
-- после Core Identity завершить `/auth/telegram`;
-- затем продолжить persistence профиля, интересов, чатов и поездок.
+- authenticated Profile read/write;
+- authenticated active TravelIntent read/write/archive;
+- все операции только для текущего authenticated User;
+- onboarding state transitions;
+- backend contract для будущего frontend onboarding.
 
-#### Realtime
+#### Следом: frontend onboarding
 
-- подготовка realtime chat flow после базовой persistence
+- первый полный flow: Telegram Auth → User → onboarding → Profile → TravelIntent → onboarding completed → основной интерфейс;
+- повторный запуск с восстановлением того же пользователя и данных.
 
-#### AI
+#### Последующие этапы
 
-- AI только после рабочего backend-контура
+- persistence slices для интересов, чатов и поездок;
+- realtime chat flow после базовой persistence;
+- AI только после рабочего backend-контура.
 
-#### UX/UI
+#### UX/UI refinement
 
 - дизайн-система
 - wireframes
@@ -56,9 +64,9 @@
 
 ## Дальше
 
-1. Реализовать Supabase/PostgreSQL migrations небольшими persistence slices, начиная с Core Identity.
-2. Завершить `/auth/telegram` после Core Identity.
-3. Подключить persistence для профиля, интересов, чатов и поездок.
+1. Реализовать Profile + TravelIntent API для текущего authenticated User.
+2. Реализовать frontend onboarding и сквозное восстановление существующего пользователя и данных.
+3. Продолжить persistence slices для интересов, чатов и поездок.
 4. Вернуться к realtime chat flow после базовой persistence.
 5. Подключить AI только после рабочего backend-контура.
 
