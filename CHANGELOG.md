@@ -1,5 +1,23 @@
 # Журнал изменений
 
+## 2026-08-26
+
+- Завершён backend checkpoint Core Identity + Telegram Auth.
+- Настроены local Supabase CLI workflow и local PostgreSQL/Supabase environment.
+- Добавлена Core Identity persistence для `users`, `telegram_identities`, `profiles`, `profile_photos`, `user_settings`, `user_activity_states` и `travel_intents`, включая необходимые constraints и indexes.
+- Реализована server-side Telegram-аутентификация: проверка raw `initData`, `POST /auth/telegram`, `POST /auth/logout` и Bearer authentication.
+- Добавлены server-side multiple sessions: opaque session token, хранение только SHA-256 hash в БД, TTL 30 дней и отклонение revoked, expired или deleted-user sessions.
+- Первый login создаёт User, TelegramIdentity, UserSettings и UserActivityState; повторный login использует существующего User.
+- `DATABASE_URL` читается и валидируется только в server environment.
+- Финальная backend-проверка: 40 passed, 0 failed, 0 skipped, coverage 96.82%; `compileall` и `git diff --check` успешны.
+
+Known limitations / TODO:
+
+- Profile + TravelIntent API и frontend onboarding ещё не реализованы.
+- Persistence интересов, чатов и поездок, realtime и AI остаются последующими этапами.
+- Concurrent first-login одной Telegram identity может потребовать отдельной обработки unique-conflict/race.
+- Warning FastAPI TestClient/httpx2 не блокирует MVP и остаётся dependency TODO.
+
 ## 2026-08-06
 
 - Завершён этап проектирования логической доменной модели Travel Friend.
