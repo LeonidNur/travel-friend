@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useRef, useState } from 'react';
 
 import { ChipSelector, LevelSelector } from '@/components/ProfileSelectors';
+import { OnboardingTravelIntentScreen } from '@/components/OnboardingTravelIntentScreen';
 import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import { createBackendApiClient, type ProfileResponse } from '@/lib/backend-api-client';
@@ -25,6 +26,7 @@ const backendApiClient = createBackendApiClient();
 export function OnboardingProfileScreen() {
   const { onboardingStatus, session, markOnboardingInProgress } = useTelegramAuthSession();
   const { serverProfile, setServerProfile } = useCurrentUserProfile();
+  const [step, setStep] = useState<'profile' | 'travel_intent'>('profile');
 
   if (serverProfile.status === 'loading') {
     return <OnboardingMessage title="Загружаем профиль" message="Подготавливаем первый шаг настройки." />;
@@ -34,6 +36,10 @@ export function OnboardingProfileScreen() {
     return <OnboardingMessage title="Не удалось загрузить профиль" message="Попробуйте открыть приложение ещё раз." />;
   }
 
+  if (step === 'travel_intent') {
+    return <OnboardingTravelIntentScreen onBack={() => setStep('profile')} />;
+  }
+
   return (
     <OnboardingProfileForm
       profile={serverProfile.profile}
@@ -41,6 +47,7 @@ export function OnboardingProfileScreen() {
       token={session?.accessToken ?? null}
       onProfileSaved={setServerProfile}
       onOnboardingStarted={markOnboardingInProgress}
+      onContinue={() => setStep('travel_intent')}
     />
   );
 }
@@ -50,13 +57,15 @@ function OnboardingProfileForm({
   onboardingStatus,
   token,
   onProfileSaved,
-  onOnboardingStarted
+  onOnboardingStarted,
+  onContinue
 }: Readonly<{
   profile: ProfileResponse | null;
   onboardingStatus: 'not_started' | 'in_progress' | null;
   token: string | null;
   onProfileSaved: (profile: ProfileResponse) => void;
   onOnboardingStarted: () => void;
+  onContinue: () => void;
 }>) {
   const [draft, setDraft] = useState<OnboardingProfileDraft>(() => createOnboardingProfileDraft(profile));
   const [validationErrors, setValidationErrors] = useState<OnboardingProfileValidationErrors>({});
@@ -208,13 +217,13 @@ function OnboardingProfileForm({
           </div>
 
           {apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}
-          {isSaved ? <p className="onboarding-profile__saved" role="status">Профиль сохранён. Следующий шаг будет добавлен далее.</p> : null}
+          {isSaved ? <p className="onboarding-profile__saved" role="status">Профиль сохранён.</p> : null}
 
           <div className="profile-actions">
             <button type="submit" className="profile-button profile-button--primary" disabled={isSaving}>
               {isSaving ? 'Сохраняем…' : 'Сохранить профиль'}
             </button>
-            {isSaved ? <button type="button" className="profile-button profile-button--secondary" disabled>Далее</button> : null}
+            {profile !== null || isSaved ? <button type="button" className="profile-button profile-button--secondary" onClick={onContinue}>Далее</button> : null}
           </div>
         </form>
       </section>
