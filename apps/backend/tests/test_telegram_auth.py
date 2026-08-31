@@ -9,6 +9,7 @@ import os
 import time
 from collections.abc import Iterator
 from urllib.parse import urlencode
+from uuid import UUID
 
 import psycopg
 import pytest
@@ -178,3 +179,158 @@ def test_bootstrap_reflects_profile_and_active_travel_intent(client: TestClient,
     second = login(client).json()
     assert second["profile_exists"] is True
     assert second["travel_intent_exists"] is True
+
+
+def auth_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_get_current_user_profile_returns_existing_profile(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client)
+    user_id = login_response.json()["user"]["id"]
+    with psycopg.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO public.profiles "
+                "(user_id, display_name, city, travel_style, interests) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (user_id, "Ada", "London", ["city-break"], ["math"]),
+            )
+
+    response = client.get(
+        "/me/profile", headers=auth_headers(login_response.json()["access_token"])
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": response.json()["id"],
+        "user_id": user_id,
+        "display_name": "Ada",
+        "birth_date": None,
+        "gender": None,
+        "city": "London",
+        "bio": None,
+        "travel_style": ["city-break"],
+        "interests": ["math"],
+        "budget_level": None,
+        "comfort_level": None,
+        "created_at": response.json()["created_at"],
+        "updated_at": response.json()["updated_at"],
+    }
+
+
+def test_get_current_user_profile_returns_null_when_absent(client: TestClient) -> None:
+    token = login(client).json()["access_token"]
+
+    response = client.get("/me/profile", headers=auth_headers(token))
+
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+def test_current_user_profile_requires_authentication(client: TestClient) -> None:
+    assert client.get("/me/profile").status_code == 401
+    assert client.patch("/me/profile", json={"display_name": "Ada"}).status_code == 401
+
+
+def test_patch_current_user_profile_creates_profile(client: TestClient, database_url: str) -> None:
+    login_response = login(client)
+    user_id = login_response.json()["user"]["id"]
+    payload = {
+        "display_name": "Ada",
+        "birth_date": "1815-12-10",
+        "gender": "female",
+        "city": "London",
+        "bio": "Mathematician",
+        "travel_style": ["culture", "slow"],
+        "interests": ["history", "science"],
+        "budget_level": "medium",
+        "comfort_level": "high",
+    }
+
+    response = client.patch(
+        "/me/profile",
+        headers=auth_headers(login_response.json()["access_token"]),
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user_id"] == user_id
+    assert {key: response.json()[key] for key in payload} == payload
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT user_id, display_name, updated_at FROM public.profiles")
+            assert cursor.fetchone()["user_id"] == UUID(user_id)
+
+
+def test_patch_current_user_profile_updates_only_supplied_fields(client: TestClient) -> None:
+    token = login(client).json()["access_token"]
+    created = client.patch(
+        "/me/profile",
+        headers=auth_headers(token),
+        json={"display_name": "Ada", "city": "London", "bio": "Original"},
+    ).json()
+
+    response = client.patch(
+        "/me/profile",
+        headers=auth_headers(token),
+        json={"city": "Paris", "bio": None},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["display_name"] == "Ada"
+    assert response.json()["city"] == "Paris"
+    assert response.json()["bio"] is None
+    assert response.json()["updated_at"] >= created["updated_at"]
+
+    empty_response = client.patch("/me/profile", headers=auth_headers(token), json={})
+
+    assert empty_response.status_code == 200
+    assert empty_response.json() == response.json()
+
+
+def test_current_user_profile_cannot_read_or_change_another_users_profile(
+    client: TestClient, database_url: str
+) -> None:
+    first_login = login(client, telegram_user(id=1))
+    second_login = login(client, telegram_user(id=2))
+    first_token = first_login.json()["access_token"]
+    second_token = second_login.json()["access_token"]
+    client.patch(
+        "/me/profile", headers=auth_headers(first_token), json={"display_name": "First"}
+    )
+
+    second_profile_response = client.get("/me/profile", headers=auth_headers(second_token))
+
+    assert second_profile_response.status_code == 200
+    assert second_profile_response.json() is None
+    second_response = client.patch(
+        "/me/profile", headers=auth_headers(second_token), json={"display_name": "Second"}
+    )
+
+    assert second_response.status_code == 200
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT display_name FROM public.profiles ORDER BY display_name")
+            assert cursor.fetchall() == [{"display_name": "First"}, {"display_name": "Second"}]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"display_name": "Ada", "user_id": "00000000-0000-0000-0000-000000000000"},
+        {"display_name": "Ada", "unknown": "field"},
+        {"display_name": "Ada", "travel_style": "not-an-array"},
+        {"city": "London"},
+    ],
+)
+def test_patch_current_user_profile_rejects_unknown_or_invalid_payloads(
+    client: TestClient, payload: dict[str, object]
+) -> None:
+    token = login(client).json()["access_token"]
+
+    response = client.patch("/me/profile", headers=auth_headers(token), json=payload)
+
+    assert response.status_code == 422
