@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
-import { createBackendApiClient } from '@/lib/backend-api-client';
+import { createBackendApiClient, type ProfileResponse } from '@/lib/backend-api-client';
 import {
   hydrateServerProfile,
   type ServerProfileState
@@ -20,6 +20,7 @@ type CurrentUserProfileContextValue = {
   profile: CurrentUserProfile;
   saveProfile: (profile: UserProfile) => void;
   serverProfile: ServerProfileState;
+  setServerProfile: (profile: ProfileResponse) => void;
 };
 
 const CurrentUserProfileContext = createContext<CurrentUserProfileContextValue | undefined>(undefined);
@@ -38,7 +39,7 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
   const profile = useMemo(() => getCurrentUserProfile(profileSession), [profileSession]);
 
   useEffect(() => {
-    if (authStatus !== 'authenticated' || authSession === null) {
+    if ((authStatus !== 'authenticated' && authStatus !== 'onboarding_required') || authSession === null) {
       return;
     }
 
@@ -63,16 +64,24 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     setProfileSession((currentSession) => saveCurrentUserProfile(currentSession, nextProfile));
   }, []);
 
+  const setServerProfile = useCallback((profile: ProfileResponse) => {
+    if (authSession === null) {
+      return;
+    }
+
+    setHydrationState({ accessToken: authSession.accessToken, state: { status: 'loaded', profile } });
+  }, [authSession]);
+
   const value = useMemo(() => {
     const serverProfile =
-      authStatus === 'authenticated' &&
+      (authStatus === 'authenticated' || authStatus === 'onboarding_required') &&
       authSession !== null &&
       hydrationState?.accessToken === authSession.accessToken
         ? hydrationState.state
         : { status: 'loading' as const };
 
-    return { profile, saveProfile, serverProfile };
-  }, [authSession, authStatus, hydrationState, profile, saveProfile]);
+    return { profile, saveProfile, serverProfile, setServerProfile };
+  }, [authSession, authStatus, hydrationState, profile, saveProfile, setServerProfile]);
 
   return (
     <CurrentUserProfileContext.Provider value={value}>

@@ -81,6 +81,27 @@ select:focus-visible {
   letter-spacing: -0.04em;
 }
 
+.onboarding-profile {
+  align-items: start;
+}
+
+.onboarding-profile__form {
+  margin-top: 20px;
+}
+
+.onboarding-profile__textarea {
+  min-height: 96px;
+  padding-block: 12px;
+  resize: vertical;
+}
+
+.onboarding-profile__saved {
+  margin: 0;
+  color: #dcffe8;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .app-header {
   display: flex;
   flex-direction: column;

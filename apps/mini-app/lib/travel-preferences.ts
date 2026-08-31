@@ -1,5 +1,9 @@
 import type { BudgetLevel, ComfortLevel } from '@/lib/types';
 
+export const PROFILE_LEVEL_VALUES = ['1', '2', '3', '4'] as const;
+
+export type CanonicalProfileLevel = (typeof PROFILE_LEVEL_VALUES)[number];
+
 export const INTEREST_OPTIONS = [
   'Кино',
   'Книги',
@@ -59,6 +63,26 @@ export const COMFORT_OPTIONS = [
 
 export type InterestOption = (typeof INTEREST_OPTIONS)[number];
 export type TravelStyleOption = (typeof TRAVEL_STYLE_OPTIONS)[number];
+
+const PROFILE_LEVEL_BY_VALUE: Readonly<Record<CanonicalProfileLevel, BudgetLevel>> = {
+  '1': 1,
+  '2': 2,
+  '3': 3,
+  '4': 4
+};
+
+export function toCanonicalProfileLevel(
+  level: BudgetLevel | ComfortLevel | null
+): CanonicalProfileLevel | null {
+  return level === null ? null : String(level) as CanonicalProfileLevel;
+}
+
+export function fromCanonicalProfileLevel(value: string | null): BudgetLevel | null {
+  return value !== null && value in PROFILE_LEVEL_BY_VALUE
+    ? PROFILE_LEVEL_BY_VALUE[value as CanonicalProfileLevel]
+    : null;
+}
+
 export function getAvatarInitials(name: string) {
   const parts = name
     .trim()

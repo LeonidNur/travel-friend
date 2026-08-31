@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { createBackendApiClient } from '@/lib/backend-api-client';
@@ -15,6 +15,8 @@ import { getTelegramInitData, useTelegram } from '@/lib/telegram';
 type TelegramAuthContextValue = Readonly<{
   status: TelegramAuthBootstrapState['status'];
   session: RuntimeTelegramSession | null;
+  onboardingStatus: 'not_started' | 'in_progress' | null;
+  markOnboardingInProgress: () => void;
 }>;
 
 const TelegramAuthContext = createContext<TelegramAuthContextValue | undefined>(undefined);
@@ -26,6 +28,14 @@ export function TelegramAuthBootstrapProvider({ children }: { children: React.Re
   const telegram = useTelegram();
   const [bootstrapState, setBootstrapState] = useState(createInitialTelegramAuthBootstrapState);
   const isDevelopmentDebugRoute = process.env.NODE_ENV === 'development' && pathname === '/debug-telegram';
+
+  const markOnboardingInProgress = useCallback(() => {
+    setBootstrapState((currentState) =>
+      currentState.status === 'onboarding_required'
+        ? { ...currentState, onboardingStatus: 'in_progress' }
+        : currentState
+    );
+  }, []);
 
   useEffect(() => {
     if (isDevelopmentDebugRoute || !telegram.isReady) {
@@ -53,9 +63,11 @@ export function TelegramAuthBootstrapProvider({ children }: { children: React.Re
       bootstrapState.status === 'authenticated' || bootstrapState.status === 'onboarding_required'
         ? bootstrapState.session
         : null;
+    const onboardingStatus =
+      bootstrapState.status === 'onboarding_required' ? bootstrapState.onboardingStatus : null;
 
-    return { status: bootstrapState.status, session };
-  }, [bootstrapState]);
+    return { status: bootstrapState.status, session, onboardingStatus, markOnboardingInProgress };
+  }, [bootstrapState, markOnboardingInProgress]);
 
   return (
     <TelegramAuthContext.Provider value={value}>
@@ -71,21 +83,12 @@ function TelegramAuthGate({
   children: React.ReactNode;
   state: TelegramAuthBootstrapState;
 }) {
-  if (state.status === 'authenticated') {
+  if (state.status === 'authenticated' || state.status === 'onboarding_required') {
     return children;
   }
 
   if (state.status === 'loading') {
     return <TelegramAuthGateMessage title="Подключаем Telegram" message="Проверяем сессию приложения." />;
-  }
-
-  if (state.status === 'onboarding_required') {
-    return (
-      <TelegramAuthGateMessage
-        title="Нужно завершить настройку профиля"
-        message="Онбординг будет доступен в следующем этапе. Основной экран пока закрыт."
-      />
-    );
   }
 
   return <TelegramAuthGateMessage title="Не удалось войти" message={state.message} />;
