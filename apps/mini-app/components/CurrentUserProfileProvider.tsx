@@ -55,7 +55,11 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
   const profile = useMemo(() => getCurrentUserProfile(profileSession), [profileSession]);
 
   useEffect(() => {
-    if ((authStatus !== 'authenticated' && authStatus !== 'onboarding_required') || authSession === null) {
+    if (
+      (authStatus !== 'authenticated' && authStatus !== 'onboarding_required') ||
+      authSession === null ||
+      hydrationState?.accessToken === authSession.accessToken
+    ) {
       return;
     }
 
@@ -74,7 +78,7 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     return () => {
       isCurrent = false;
     };
-  }, [authSession, authStatus]);
+  }, [authSession, authStatus, hydrationState]);
 
   useEffect(() => {
     if (authStatus !== 'onboarding_required' || authSession === null) {

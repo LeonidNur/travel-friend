@@ -11,11 +11,12 @@ import {
   type OnboardingTravelIntentDraft,
   type OnboardingTravelIntentValidationErrors
 } from '@/lib/onboarding-travel-intent';
+import { completeOnboarding } from '@/lib/onboarding-completion';
 
 const backendApiClient = createBackendApiClient();
 
 export function OnboardingTravelIntentScreen({ onBack }: Readonly<{ onBack: () => void }>) {
-  const { session } = useTelegramAuthSession();
+  const { session, markOnboardingCompleted } = useTelegramAuthSession();
   const { serverTravelIntent, setServerTravelIntent } = useCurrentUserProfile();
 
   if (serverTravelIntent.status === 'loading') {
@@ -32,6 +33,7 @@ export function OnboardingTravelIntentScreen({ onBack }: Readonly<{ onBack: () =
       token={session?.accessToken ?? null}
       onBack={onBack}
       onTravelIntentSaved={setServerTravelIntent}
+      onOnboardingCompleted={markOnboardingCompleted}
     />
   );
 }
@@ -40,24 +42,29 @@ function OnboardingTravelIntentForm({
   travelIntent,
   token,
   onBack,
-  onTravelIntentSaved
+  onTravelIntentSaved,
+  onOnboardingCompleted
 }: Readonly<{
   travelIntent: TravelIntentResponse | null;
   token: string | null;
   onBack: () => void;
   onTravelIntentSaved: (travelIntent: TravelIntentResponse) => void;
+  onOnboardingCompleted: () => void;
 }>) {
   const [draft, setDraft] = useState<OnboardingTravelIntentDraft>(() => createOnboardingTravelIntentDraft(travelIntent));
   const [validationErrors, setValidationErrors] = useState<OnboardingTravelIntentValidationErrors>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [completionError, setCompletionError] = useState<string | null>(null);
   const destinationInputRef = useRef<HTMLInputElement>(null);
 
   const handleTextChange =
     (field: 'destination' | 'dateFrom' | 'dateTo') => (event: ChangeEvent<HTMLInputElement>) => {
       setDraft({ ...draft, [field]: event.target.value });
       setIsSaved(false);
+      setCompletionError(null);
       setValidationErrors((errors) => ({ ...errors, [field]: undefined }));
     };
 
@@ -95,6 +102,26 @@ function OnboardingTravelIntentForm({
     setDraft(createOnboardingTravelIntentDraft(result.travelIntent));
     setValidationErrors({});
     setIsSaved(true);
+  };
+
+  const handleCompletion = async () => {
+    if (token === null) {
+      setCompletionError('Сессия недоступна. Откройте приложение ещё раз.');
+      return;
+    }
+
+    setIsCompleting(true);
+    setCompletionError(null);
+    const result = await completeOnboarding({
+      token,
+      patchOnboarding: backendApiClient.patchOnboarding,
+      applyCompletedState: onOnboardingCompleted
+    });
+
+    if (result.status === 'api_error') {
+      setIsCompleting(false);
+      setCompletionError(result.message);
+    }
   };
 
   return (
@@ -151,6 +178,7 @@ function OnboardingTravelIntentForm({
 
           {apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}
           {isSaved ? <p className="onboarding-profile__saved" role="status">План поездки сохранён.</p> : null}
+          {completionError ? <p className="profile-field-error" role="alert">{completionError}</p> : null}
 
           <div className="profile-actions">
             <button type="submit" className="profile-button profile-button--primary" disabled={isSaving}>
@@ -159,7 +187,11 @@ function OnboardingTravelIntentForm({
             <button type="button" className="profile-button profile-button--secondary" onClick={onBack} disabled={isSaving}>
               Назад к профилю
             </button>
-            {isSaved ? <button type="button" className="profile-button profile-button--secondary" disabled>Завершение онбординга будет добавлено далее</button> : null}
+            {isSaved ? (
+              <button type="button" className="profile-button profile-button--secondary" onClick={handleCompletion} disabled={isCompleting}>
+                {isCompleting ? 'Завершаем…' : 'Завершить настройку'}
+              </button>
+            ) : null}
           </div>
         </form>
       </section>

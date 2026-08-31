@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import type * as TelegramAuthBootstrapModule from './telegram-auth-bootstrap';
 
-const { createInitialTelegramAuthBootstrapState, runTelegramAuthBootstrap }: typeof TelegramAuthBootstrapModule =
+const { completeTelegramOnboardingState, createInitialTelegramAuthBootstrapState, runTelegramAuthBootstrap }: typeof TelegramAuthBootstrapModule =
   await import(new URL('./telegram-auth-bootstrap.ts', import.meta.url).href);
 
 const completedAuthResponse = {
@@ -33,6 +33,23 @@ test('starts in loading and authenticates a completed onboarding session', async
 
   assert.equal(state.status, 'authenticated');
   assert.equal(state.session.accessToken, 'runtime-session-token');
+});
+
+test('transitions runtime onboarding state to authenticated only from onboarding_required', () => {
+  const onboardingState = {
+    status: 'onboarding_required' as const,
+    onboardingStatus: 'in_progress' as const,
+    session: { accessToken: 'runtime-session-token' }
+  };
+
+  assert.deepEqual(completeTelegramOnboardingState(onboardingState), {
+    status: 'authenticated',
+    session: { accessToken: 'runtime-session-token' }
+  });
+  assert.deepEqual(completeTelegramOnboardingState({ status: 'auth_error', message: 'Ошибка' }), {
+    status: 'auth_error',
+    message: 'Ошибка'
+  });
 });
 
 test('requires onboarding when the backend returns not_started', async () => {

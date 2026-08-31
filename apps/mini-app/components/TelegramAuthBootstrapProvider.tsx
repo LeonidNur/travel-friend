@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { createBackendApiClient } from '@/lib/backend-api-client';
 import {
   createInitialTelegramAuthBootstrapState,
+  completeTelegramOnboardingState,
   runTelegramAuthBootstrap,
   type RuntimeTelegramSession,
   type TelegramAuthBootstrapState
@@ -17,6 +18,7 @@ type TelegramAuthContextValue = Readonly<{
   session: RuntimeTelegramSession | null;
   onboardingStatus: 'not_started' | 'in_progress' | null;
   markOnboardingInProgress: () => void;
+  markOnboardingCompleted: () => void;
 }>;
 
 const TelegramAuthContext = createContext<TelegramAuthContextValue | undefined>(undefined);
@@ -35,6 +37,10 @@ export function TelegramAuthBootstrapProvider({ children }: { children: React.Re
         ? { ...currentState, onboardingStatus: 'in_progress' }
         : currentState
     );
+  }, []);
+
+  const markOnboardingCompleted = useCallback(() => {
+    setBootstrapState((currentState) => completeTelegramOnboardingState(currentState));
   }, []);
 
   useEffect(() => {
@@ -66,8 +72,14 @@ export function TelegramAuthBootstrapProvider({ children }: { children: React.Re
     const onboardingStatus =
       bootstrapState.status === 'onboarding_required' ? bootstrapState.onboardingStatus : null;
 
-    return { status: bootstrapState.status, session, onboardingStatus, markOnboardingInProgress };
-  }, [bootstrapState, markOnboardingInProgress]);
+    return {
+      status: bootstrapState.status,
+      session,
+      onboardingStatus,
+      markOnboardingInProgress,
+      markOnboardingCompleted
+    };
+  }, [bootstrapState, markOnboardingCompleted, markOnboardingInProgress]);
 
   return (
     <TelegramAuthContext.Provider value={value}>

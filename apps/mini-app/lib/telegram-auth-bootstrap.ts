@@ -27,6 +27,14 @@ export function createInitialTelegramAuthBootstrapState(): TelegramAuthBootstrap
   return { status: 'loading' };
 }
 
+export function completeTelegramOnboardingState(
+  state: TelegramAuthBootstrapState
+): TelegramAuthBootstrapState {
+  return state.status === 'onboarding_required'
+    ? { status: 'authenticated', session: state.session }
+    : state;
+}
+
 function createRuntimeTelegramSession(accessToken: string): RuntimeTelegramSession | null {
   return accessToken.trim().length > 0 ? { accessToken } : null;
 }
