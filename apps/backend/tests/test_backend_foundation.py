@@ -13,6 +13,7 @@ from travel_friend_backend import db
 from travel_friend_backend.auth import service
 from travel_friend_backend.config import BackendSettings
 from travel_friend_backend.routers import me
+from travel_friend_backend.schemas.onboarding import OnboardingPatchRequest
 from travel_friend_backend.schemas.profile import ProfilePatchRequest
 from travel_friend_backend.schemas.travel_intent import TravelIntentPutRequest
 
@@ -253,6 +254,38 @@ def test_delete_current_user_travel_intent_archives_only_the_current_users_activ
     assert "archived_at=now()" in query
     assert "WHERE user_id=%s AND status='active'" in query
     assert parameters == (principal.user_id,)
+
+
+def test_onboarding_patch_uses_only_the_authenticated_users_existing_state() -> None:
+    principal = service.AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
+    connection = RecordingProfileConnection([{"onboarding_status": "in_progress"}])
+
+    result = me.patch_current_user_onboarding(  # type: ignore[arg-type]
+        OnboardingPatchRequest(status="in_progress"), principal, connection
+    )
+
+    assert result == {"status": "in_progress"}
+    query, parameters = connection.calls[0]
+    assert "UPDATE public.user_activity_states" in query
+    assert "WHERE user_id=%s" in query
+    assert "IS DISTINCT FROM" in query
+    assert parameters == ("in_progress", "in_progress", principal.user_id, "in_progress")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"status": "not_started"},
+        {"status": "in_progress", "user_id": str(uuid4())},
+        {"status": "in_progress", "updated_at": "2026-01-01T00:00:00Z"},
+        {"status": "in_progress", "unknown": "field"},
+    ],
+)
+def test_onboarding_patch_rejects_server_owned_and_invalid_statuses(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        OnboardingPatchRequest.model_validate(payload)
 
 
 @pytest.mark.parametrize(

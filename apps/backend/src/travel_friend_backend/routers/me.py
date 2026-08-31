@@ -7,6 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.db import get_database_connection
+from travel_friend_backend.schemas.onboarding import (
+    OnboardingPatchRequest,
+    OnboardingResponse,
+)
 from travel_friend_backend.schemas.profile import ProfilePatchRequest, ProfileResponse
 from travel_friend_backend.schemas.travel_intent import (
     TravelIntentPutRequest,
@@ -122,3 +126,26 @@ def delete_current_user_travel_intent(
         "WHERE user_id=%s AND status='active'",
         (principal.user_id,),
     )
+
+
+@router.patch("/onboarding", response_model=OnboardingResponse)
+def patch_current_user_onboarding(
+    payload: OnboardingPatchRequest,
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+) -> dict[str, str]:
+    onboarding = connection.execute(
+        "UPDATE public.user_activity_states "
+        "SET onboarding_status=%s, "
+        "updated_at=CASE WHEN onboarding_status IS DISTINCT FROM %s "
+        "THEN now() ELSE updated_at END "
+        "WHERE user_id=%s "
+        "AND NOT (onboarding_status='completed' AND %s='in_progress') "
+        "RETURNING onboarding_status",
+        (payload.status, payload.status, principal.user_id, payload.status),
+    ).fetchone()
+
+    if onboarding is None:
+        raise HTTPException(409, "Cannot transition onboarding from completed to in_progress")
+
+    return {"status": onboarding["onboarding_status"]}

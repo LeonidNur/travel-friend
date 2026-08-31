@@ -241,6 +241,132 @@ def test_current_user_travel_intent_requires_authentication(client: TestClient) 
     assert client.delete("/me/travel-intent").status_code == 401
 
 
+@pytest.mark.parametrize("requested_status", ["in_progress", "completed"])
+def test_onboarding_can_transition_from_not_started(
+    client: TestClient, requested_status: str
+) -> None:
+    token = login(client).json()["access_token"]
+
+    response = client.patch(
+        "/me/onboarding",
+        headers=auth_headers(token),
+        json={"status": requested_status},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": requested_status}
+
+
+def test_onboarding_can_transition_from_in_progress_to_completed(client: TestClient) -> None:
+    token = login(client).json()["access_token"]
+    assert client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "in_progress"}
+    ).status_code == 200
+
+    response = client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "completed"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "completed"}
+
+
+def test_onboarding_same_status_is_idempotent_without_touching_updated_at(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client)
+    user_id = login_response.json()["user"]["id"]
+    token = login_response.json()["access_token"]
+    first = client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "in_progress"}
+    )
+    assert first.status_code == 200
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT updated_at FROM public.user_activity_states WHERE user_id=%s", (user_id,)
+            )
+            updated_at = cursor.fetchone()["updated_at"]
+
+    repeated = client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "in_progress"}
+    )
+
+    assert repeated.status_code == 200
+    assert repeated.json() == {"status": "in_progress"}
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT updated_at FROM public.user_activity_states WHERE user_id=%s", (user_id,)
+            )
+            assert cursor.fetchone()["updated_at"] == updated_at
+
+
+def test_onboarding_cannot_regress_from_completed(client: TestClient) -> None:
+    token = login(client).json()["access_token"]
+    assert client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "completed"}
+    ).status_code == 200
+
+    response = client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "in_progress"}
+    )
+
+    assert response.status_code == 409
+
+
+def test_onboarding_requires_authentication(client: TestClient) -> None:
+    assert client.patch("/me/onboarding", json={"status": "in_progress"}).status_code == 401
+
+
+def test_onboarding_only_changes_the_authenticated_users_state(
+    client: TestClient, database_url: str
+) -> None:
+    first = login(client, telegram_user(id=1))
+    second = login(client, telegram_user(id=2))
+
+    response = client.patch(
+        "/me/onboarding",
+        headers=auth_headers(first.json()["access_token"]),
+        json={"status": "completed"},
+    )
+
+    assert response.status_code == 200
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT onboarding_status FROM public.user_activity_states WHERE user_id=%s",
+                (second.json()["user"]["id"],),
+            )
+            assert cursor.fetchone()["onboarding_status"] == "not_started"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"status": "not_started"},
+        {"status": "in_progress", "user_id": "00000000-0000-0000-0000-000000000000"},
+        {"status": "in_progress", "updated_at": "2026-01-01T00:00:00Z"},
+        {"status": "in_progress", "unknown": "field"},
+    ],
+)
+def test_onboarding_rejects_invalid_or_server_owned_fields(
+    client: TestClient, payload: dict[str, object]
+) -> None:
+    token = login(client).json()["access_token"]
+
+    assert client.patch("/me/onboarding", headers=auth_headers(token), json=payload).status_code == 422
+
+
+def test_login_bootstrap_reflects_onboarding_transition(client: TestClient) -> None:
+    token = login(client).json()["access_token"]
+    assert client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "completed"}
+    ).status_code == 200
+
+    assert login(client).json()["onboarding"] == {"status": "completed"}
+
+
 def test_get_current_user_travel_intent_returns_active_intent_only(
     client: TestClient, database_url: str
 ) -> None:
