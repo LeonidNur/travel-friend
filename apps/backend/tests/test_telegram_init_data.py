@@ -279,6 +279,8 @@ def test_health_endpoint_returns_success(monkeypatch: pytest.MonkeyPatch) -> Non
             database_url="postgresql://unused-for-health-test",
         )
     )
-    health_route = next(route for route in app.routes if route.path == "/health")
+    health_route = next(
+        route for route in app.routes if getattr(route, "path", None) == "/health"
+    )
 
     assert health_route.endpoint() == {"status": "ok"}
