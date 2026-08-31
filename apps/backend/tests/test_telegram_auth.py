@@ -235,6 +235,142 @@ def test_current_user_profile_requires_authentication(client: TestClient) -> Non
     assert client.patch("/me/profile", json={"display_name": "Ada"}).status_code == 401
 
 
+def test_current_user_travel_intent_requires_authentication(client: TestClient) -> None:
+    assert client.get("/me/travel-intent").status_code == 401
+    assert client.put("/me/travel-intent", json={"destination": "Lisbon"}).status_code == 401
+    assert client.delete("/me/travel-intent").status_code == 401
+
+
+def test_get_current_user_travel_intent_returns_active_intent_only(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client)
+    user_id = login_response.json()["user"]["id"]
+    with psycopg.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO public.travel_intents "
+                "(user_id, destination_label, date_from, date_to, status) "
+                "VALUES (%s, %s, %s, %s, 'active')",
+                (user_id, "Lisbon", "2026-10-01", "2026-10-14"),
+            )
+
+    response = client.get("/me/travel-intent", headers=auth_headers(login_response.json()["access_token"]))
+
+    assert response.status_code == 200
+    assert response.json()["user_id"] == user_id
+    assert response.json()["destination"] == "Lisbon"
+    assert response.json()["date_from"] == "2026-10-01"
+    assert response.json()["date_to"] == "2026-10-14"
+    assert response.json()["status"] == "active"
+
+
+def test_get_current_user_travel_intent_returns_null_when_absent_or_only_archived(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client)
+    token = login_response.json()["access_token"]
+    assert client.get("/me/travel-intent", headers=auth_headers(token)).json() is None
+
+    with psycopg.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO public.travel_intents "
+                "(user_id, destination_label, status, archived_at) VALUES (%s, 'Rome', 'archived', now())",
+                (login_response.json()["user"]["id"],),
+            )
+
+    response = client.get("/me/travel-intent", headers=auth_headers(token))
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+def test_put_current_user_travel_intent_creates_then_updates_one_active_intent(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client)
+    token = login_response.json()["access_token"]
+    first = client.put(
+        "/me/travel-intent",
+        headers=auth_headers(token),
+        json={"destination": "Lisbon", "date_from": "2026-10-01", "date_to": "2026-10-14"},
+    )
+    second = client.put(
+        "/me/travel-intent",
+        headers=auth_headers(token),
+        json={"destination": "Rome", "date_from": "2026-11-01", "date_to": None},
+    )
+
+    assert first.status_code == second.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["destination"] == "Rome"
+    assert second.json()["date_from"] == "2026-11-01"
+    assert second.json()["date_to"] is None
+    assert second.json()["updated_at"] >= first.json()["updated_at"]
+    with psycopg.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT count(*) FROM public.travel_intents WHERE status='active'")
+            assert cursor.fetchone()[0] == 1
+
+
+def test_current_user_travel_intent_cannot_access_another_users_intent(
+    client: TestClient, database_url: str
+) -> None:
+    first = login(client, telegram_user(id=1))
+    second = login(client, telegram_user(id=2))
+    client.put("/me/travel-intent", headers=auth_headers(first.json()["access_token"]), json={"destination": "Paris"})
+
+    assert client.get("/me/travel-intent", headers=auth_headers(second.json()["access_token"])).json() is None
+    second_update = client.put(
+        "/me/travel-intent", headers=auth_headers(second.json()["access_token"]), json={"destination": "Berlin"}
+    )
+    assert second_update.status_code == 200
+    with psycopg.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT destination_label FROM public.travel_intents ORDER BY destination_label")
+            assert cursor.fetchall() == [("Berlin",), ("Paris",)]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"destination": "Lisbon", "date_from": "2026-10-14", "date_to": "2026-10-01"},
+        {"destination": "Lisbon", "user_id": "00000000-0000-0000-0000-000000000000"},
+        {"destination": "Lisbon", "status": "active"},
+        {"destination": "Lisbon", "archived_at": None},
+        {"destination": "Lisbon", "id": "00000000-0000-0000-0000-000000000000"},
+        {"destination": "Lisbon", "unknown": "field"},
+    ],
+)
+def test_put_current_user_travel_intent_rejects_invalid_or_server_owned_fields(
+    client: TestClient, payload: dict[str, object]
+) -> None:
+    token = login(client).json()["access_token"]
+    assert client.put("/me/travel-intent", headers=auth_headers(token), json=payload).status_code == 422
+
+
+def test_delete_current_user_travel_intent_archives_and_is_idempotent(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client)
+    token = login_response.json()["access_token"]
+    client.put("/me/travel-intent", headers=auth_headers(token), json={"destination": "Lisbon"})
+
+    deleted = client.delete("/me/travel-intent", headers=auth_headers(token))
+    repeated = client.delete("/me/travel-intent", headers=auth_headers(token))
+
+    assert deleted.status_code == repeated.status_code == 204
+    assert deleted.content == repeated.content == b""
+    assert client.get("/me/travel-intent", headers=auth_headers(token)).json() is None
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT status, archived_at, updated_at FROM public.travel_intents")
+            archived = cursor.fetchone()
+            assert archived["status"] == "archived"
+            assert archived["archived_at"] is not None
+            assert archived["updated_at"] >= archived["archived_at"]
+
+
 def test_patch_current_user_profile_creates_profile(client: TestClient, database_url: str) -> None:
     login_response = login(client)
     user_id = login_response.json()["user"]["id"]

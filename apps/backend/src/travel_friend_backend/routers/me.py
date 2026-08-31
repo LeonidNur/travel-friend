@@ -3,11 +3,15 @@
 from typing import Annotated
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.db import get_database_connection
 from travel_friend_backend.schemas.profile import ProfilePatchRequest, ProfileResponse
+from travel_friend_backend.schemas.travel_intent import (
+    TravelIntentPutRequest,
+    TravelIntentResponse,
+)
 
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -15,6 +19,10 @@ router = APIRouter(prefix="/me", tags=["me"])
 PROFILE_COLUMNS = (
     "id, user_id, display_name, birth_date, gender, city, bio, travel_style, "
     "interests, budget_level, comfort_level, created_at, updated_at"
+)
+TRAVEL_INTENT_COLUMNS = (
+    "id, user_id, destination_label AS destination, date_from, date_to, status, "
+    "created_at, updated_at, archived_at"
 )
 
 
@@ -66,3 +74,51 @@ def patch_current_user_profile(
         profile = existing_profile
 
     return profile
+
+
+@router.get("/travel-intent", response_model=TravelIntentResponse | None)
+def get_current_user_travel_intent(
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+) -> dict[str, object] | None:
+    return connection.execute(
+        f"SELECT {TRAVEL_INTENT_COLUMNS} FROM public.travel_intents "
+        "WHERE user_id=%s AND status='active'",
+        (principal.user_id,),
+    ).fetchone()
+
+
+@router.put("/travel-intent", response_model=TravelIntentResponse)
+def put_current_user_travel_intent(
+    payload: TravelIntentPutRequest,
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+) -> dict[str, object]:
+    return connection.execute(
+        f"INSERT INTO public.travel_intents "
+        "(user_id, destination_label, date_from, date_to, status, updated_at) "
+        "VALUES (%s, %s, %s, %s, 'active', now()) "
+        "ON CONFLICT (user_id) WHERE status='active' DO UPDATE "
+        "SET destination_label=EXCLUDED.destination_label, "
+        "date_from=EXCLUDED.date_from, date_to=EXCLUDED.date_to, "
+        "updated_at=CASE WHEN "
+        "(travel_intents.destination_label, travel_intents.date_from, travel_intents.date_to) "
+        "IS DISTINCT FROM "
+        "(EXCLUDED.destination_label, EXCLUDED.date_from, EXCLUDED.date_to) "
+        "THEN now() ELSE travel_intents.updated_at END "
+        f"RETURNING {TRAVEL_INTENT_COLUMNS}",
+        (principal.user_id, payload.destination, payload.date_from, payload.date_to),
+    ).fetchone()
+
+
+@router.delete("/travel-intent", status_code=204, response_class=Response)
+def delete_current_user_travel_intent(
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+) -> None:
+    connection.execute(
+        "UPDATE public.travel_intents "
+        "SET status='archived', archived_at=now(), updated_at=now() "
+        "WHERE user_id=%s AND status='active'",
+        (principal.user_id,),
+    )

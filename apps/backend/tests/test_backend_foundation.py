@@ -14,6 +14,7 @@ from travel_friend_backend.auth import service
 from travel_friend_backend.config import BackendSettings
 from travel_friend_backend.routers import me
 from travel_friend_backend.schemas.profile import ProfilePatchRequest
+from travel_friend_backend.schemas.travel_intent import TravelIntentPutRequest
 
 
 class FakeConnection:
@@ -211,3 +212,62 @@ def test_profile_patch_creates_then_updates_only_whitelisted_columns() -> None:
 def test_profile_patch_rejects_null_display_name() -> None:
     with pytest.raises(ValidationError, match="display_name must not be null"):
         ProfilePatchRequest(display_name=None)
+
+
+def test_current_user_travel_intent_queries_only_the_authenticated_active_intent() -> None:
+    principal = service.AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
+    intent = {"user_id": principal.user_id, "destination": "Lisbon", "status": "active"}
+    connection = RecordingProfileConnection([intent])
+
+    assert me.get_current_user_travel_intent(principal, connection) is intent  # type: ignore[arg-type]
+    query, parameters = connection.calls[0]
+    assert "WHERE user_id=%s AND status='active'" in query
+    assert parameters == (principal.user_id,)
+
+
+def test_put_current_user_travel_intent_upserts_a_single_active_row() -> None:
+    principal = service.AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
+    intent = {"user_id": principal.user_id, "destination": "Lisbon", "status": "active"}
+    connection = RecordingProfileConnection([intent])
+    payload = TravelIntentPutRequest(
+        destination="Lisbon", date_from="2026-10-01", date_to="2026-10-14"
+    )
+
+    assert me.put_current_user_travel_intent(payload, principal, connection) is intent  # type: ignore[arg-type]
+    query, parameters = connection.calls[0]
+    assert "INSERT INTO public.travel_intents" in query
+    assert "ON CONFLICT (user_id) WHERE status='active' DO UPDATE" in query
+    assert "updated_at=CASE" in query
+    assert "IS DISTINCT FROM" in query
+    assert parameters == (principal.user_id, "Lisbon", payload.date_from, payload.date_to)
+
+
+def test_delete_current_user_travel_intent_archives_only_the_current_users_active_row() -> None:
+    principal = service.AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
+    connection = RecordingProfileConnection([None])
+
+    assert me.delete_current_user_travel_intent(principal, connection) is None  # type: ignore[arg-type]
+    query, parameters = connection.calls[0]
+    assert "UPDATE public.travel_intents" in query
+    assert "status='archived'" in query
+    assert "archived_at=now()" in query
+    assert "WHERE user_id=%s AND status='active'" in query
+    assert parameters == (principal.user_id,)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"destination": "Lisbon", "date_from": "2026-10-14", "date_to": "2026-10-01"},
+        {"destination": "Lisbon", "date_from": "2026-10-01", "date_to": "2026-10-14", "user_id": str(uuid4())},
+        {"destination": "Lisbon", "date_from": "2026-10-01", "date_to": "2026-10-14", "status": "active"},
+        {"destination": "Lisbon", "date_from": "2026-10-01", "date_to": "2026-10-14", "archived_at": None},
+        {"destination": "Lisbon", "date_from": "2026-10-01", "date_to": "2026-10-14", "id": str(uuid4())},
+        {"destination": "Lisbon", "date_from": "2026-10-01", "date_to": "2026-10-14", "unknown": "field"},
+    ],
+)
+def test_travel_intent_request_rejects_invalid_ranges_and_server_owned_fields(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        TravelIntentPutRequest.model_validate(payload)
