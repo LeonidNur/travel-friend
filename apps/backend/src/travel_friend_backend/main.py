@@ -1,12 +1,19 @@
 """FastAPI application entry point."""
 
-from fastapi import Depends, FastAPI, HTTPException, Header
-import psycopg
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from travel_friend_backend.auth.telegram import TelegramInitDataVerifier
 from travel_friend_backend.config import BackendSettings, get_backend_settings
-from travel_friend_backend.auth.service import auth_dependency, login
+from travel_friend_backend.auth.service import (
+    AuthenticatedPrincipal,
+    auth_dependency,
+    login,
+)
+from travel_friend_backend.db import get_database_connection
+from travel_friend_backend.routers.me import router as me_router
 
 class TelegramAuthRequest(BaseModel):
     init_data: str | None = None
@@ -15,10 +22,12 @@ class TelegramAuthRequest(BaseModel):
 def create_app(settings: BackendSettings | None = None) -> FastAPI:
     backend_settings = settings or get_backend_settings()
     app = FastAPI(title="Travel Friend Backend")
+    app.state.backend_settings = backend_settings
     app.state.telegram_init_data_verifier = TelegramInitDataVerifier(
         bot_token=backend_settings.telegram_bot_token,
         max_age_seconds=600,
     )
+    app.include_router(me_router)
 
     @app.get("/health")
     def get_health() -> dict[str, str]:
@@ -42,17 +51,20 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
             raise
 
     @app.get("/auth/test-current")
-    def test_current(authorization: str | None = Header(default=None)):
-        user = auth_dependency(backend_settings.database_url, authorization)
-        return {"user_id": user[0]["id"]}
+    def test_current(
+        principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    ):
+        return {"user_id": principal.user_id}
 
     @app.post("/auth/logout", status_code=204)
-    def logout(authorization: str | None = Header(default=None)):
-        user = auth_dependency(backend_settings.database_url, authorization)
-        if not backend_settings.database_url:
-            raise HTTPException(503, "Database is not configured")
-        with psycopg.connect(backend_settings.database_url) as conn:
-            conn.execute("UPDATE user_sessions SET revoked_at=now() WHERE id=%s", (user[1],))
+    def logout(
+        principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+        connection: Annotated[object, Depends(get_database_connection)],
+    ) -> None:
+        connection.execute(
+            "UPDATE user_sessions SET revoked_at=now() WHERE id=%s",
+            (principal.session_id,),
+        )
 
     return app
 
