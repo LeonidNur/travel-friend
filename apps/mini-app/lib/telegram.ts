@@ -22,6 +22,16 @@ type TelegramWindow = Window &
     };
   };
 
+export function getTelegramInitData(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const initData = (window as TelegramWindow).Telegram?.WebApp?.initData;
+
+  return typeof initData === 'string' && initData.trim().length > 0 ? initData : null;
+}
+
 export interface TelegramState {
   isReady: boolean;
   isTelegram: boolean;

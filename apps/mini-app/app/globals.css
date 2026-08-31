@@ -62,6 +62,25 @@ select:focus-visible {
   padding: 12px 12px calc(136px + env(safe-area-inset-bottom));
 }
 
+.auth-gate {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+.auth-gate__card {
+  width: min(100%, 420px);
+}
+
+.auth-gate__title {
+  position: relative;
+  margin: 12px 0 10px;
+  font-size: 1.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
 .app-header {
   display: flex;
   flex-direction: column;
