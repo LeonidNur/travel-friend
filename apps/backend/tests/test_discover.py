@@ -327,3 +327,84 @@ def test_existing_decision_remains_idempotent_after_target_loses_eligibility(cli
 def test_discover_endpoints_require_authentication(client: TestClient) -> None:
     assert client.get("/discover/candidates").status_code == 401
     assert client.put("/discover/decisions/00000000-0000-0000-0000-000000000000", json={"decision": "interested"}).status_code == 401
+
+
+def create_reciprocal_match(client: TestClient) -> tuple[dict[str, object], dict[str, object], dict[str, object]]:
+    first = create_discover_eligible_user(client, 1)
+    second = create_discover_eligible_user(client, 2)
+    assert decide(client, first["access_token"], second["user"]["id"], "interested").status_code == 200
+    response = decide(client, second["access_token"], first["user"]["id"], "interested")
+    assert response.status_code == 200
+    return first, second, response.json()
+
+
+def test_reciprocal_interest_atomically_creates_match_direct_chat_and_two_participants(
+    client: TestClient, database_url: str
+) -> None:
+    first, second, result = create_reciprocal_match(client)
+
+    with psycopg.connect(database_url) as connection:
+        match = connection.execute(
+            "SELECT id, chat_id FROM public.matches WHERE id=%s", (result["match_id"],)
+        ).fetchone()
+        assert match is not None
+        match_id, chat_id = match
+        assert match_id == UUID(result["match_id"])
+        assert chat_id is not None
+        assert connection.execute(
+            "SELECT type FROM public.chats WHERE id=%s", (chat_id,)
+        ).fetchone() == ("direct",)
+        participants = connection.execute(
+            "SELECT user_id FROM public.chat_participants WHERE chat_id=%s ORDER BY user_id",
+            (chat_id,),
+        ).fetchall()
+
+    assert participants == sorted(
+        [(UUID(first["user"]["id"]),), (UUID(second["user"]["id"]),)]
+    )
+
+
+def test_repeated_interested_does_not_create_a_second_chat(client: TestClient, database_url: str) -> None:
+    first, second, _ = create_reciprocal_match(client)
+    repeated = decide(client, second["access_token"], first["user"]["id"], "interested")
+
+    assert repeated.status_code == 200
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute("SELECT count(*) FROM public.matches").fetchone() == (1,)
+        assert connection.execute("SELECT count(*) FROM public.chats").fetchone() == (1,)
+
+
+def test_existing_match_without_chat_is_repaired_once_by_idempotent_interested(
+    client: TestClient, database_url: str
+) -> None:
+    first = create_discover_eligible_user(client, 1)
+    second = create_discover_eligible_user(client, 2)
+    assert decide(client, first["access_token"], second["user"]["id"], "interested").status_code == 200
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "INSERT INTO public.matches (user_a_id, user_b_id) VALUES (%s, %s)",
+            tuple(sorted((UUID(first["user"]["id"]), UUID(second["user"]["id"])))),
+        )
+
+    assert decide(client, second["access_token"], first["user"]["id"], "interested").status_code == 200
+    assert decide(client, second["access_token"], first["user"]["id"], "interested").status_code == 200
+    with psycopg.connect(database_url) as connection:
+        chat_id = connection.execute("SELECT chat_id FROM public.matches").fetchone()[0]
+        assert chat_id is not None
+        assert connection.execute("SELECT count(*) FROM public.chats").fetchone() == (1,)
+        assert connection.execute(
+            "SELECT count(*) FROM public.chat_participants WHERE chat_id=%s", (chat_id,)
+        ).fetchone() == (2,)
+
+
+def test_different_matches_do_not_share_a_chat(client: TestClient, database_url: str) -> None:
+    first, second, _ = create_reciprocal_match(client)
+    third = create_discover_eligible_user(client, 3)
+    fourth = create_discover_eligible_user(client, 4)
+    assert decide(client, third["access_token"], fourth["user"]["id"], "interested").status_code == 200
+    assert decide(client, fourth["access_token"], third["user"]["id"], "interested").status_code == 200
+
+    with psycopg.connect(database_url) as connection:
+        chat_ids = connection.execute("SELECT chat_id FROM public.matches ORDER BY chat_id").fetchall()
+    assert len(chat_ids) == 2
+    assert chat_ids[0][0] != chat_ids[1][0]

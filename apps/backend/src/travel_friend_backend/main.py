@@ -13,6 +13,7 @@ from travel_friend_backend.auth.service import (
     login,
 )
 from travel_friend_backend.db import get_database_connection
+from travel_friend_backend.routers.chats import router as chats_router
 from travel_friend_backend.routers.discover import router as discover_router
 from travel_friend_backend.routers.me import router as me_router
 
@@ -28,6 +29,7 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
         bot_token=backend_settings.telegram_bot_token,
         max_age_seconds=600,
     )
+    app.include_router(chats_router)
     app.include_router(discover_router)
     app.include_router(me_router)
 

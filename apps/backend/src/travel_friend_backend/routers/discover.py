@@ -20,6 +20,36 @@ from travel_friend_backend.schemas.discover import (
 router = APIRouter(prefix="/discover", tags=["discover"])
 
 
+def ensure_direct_chat_for_match(
+    connection: psycopg.Connection,
+    match_id: UUID,
+    user_a_id: UUID,
+    user_b_id: UUID,
+) -> UUID:
+    """Create and link the sole direct chat for a reciprocal match when needed."""
+    match = connection.execute(
+        "SELECT chat_id FROM public.matches WHERE id=%s FOR UPDATE", (match_id,)
+    ).fetchone()
+    if match is None:
+        raise RuntimeError("Match disappeared while creating its direct chat")
+    if match["chat_id"] is not None:
+        return match["chat_id"]
+
+    chat = connection.execute(
+        "INSERT INTO public.chats (type) VALUES ('direct') RETURNING id"
+    ).fetchone()
+    chat_id = chat["id"]
+    connection.execute(
+        "INSERT INTO public.chat_participants (chat_id, user_id) VALUES (%s, %s), (%s, %s)",
+        (chat_id, user_a_id, chat_id, user_b_id),
+    )
+    connection.execute(
+        "UPDATE public.matches SET chat_id=%s WHERE id=%s AND chat_id IS NULL",
+        (chat_id, match_id),
+    )
+    return chat_id
+
+
 @router.get("/candidates", response_model=list[DiscoverCandidateResponse])
 def get_discover_candidates(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
@@ -106,7 +136,7 @@ def save_discover_decision(
 
     match_created = False
     match = connection.execute(
-        "SELECT id FROM public.matches WHERE user_a_id=%s AND user_b_id=%s",
+        "SELECT id, chat_id FROM public.matches WHERE user_a_id=%s AND user_b_id=%s",
         (user_a_id, user_b_id),
     ).fetchone()
     if payload.decision == "interested" and match is None:
@@ -118,15 +148,19 @@ def save_discover_decision(
         if reciprocal_interest is not None:
             match = connection.execute(
                 "INSERT INTO public.matches (user_a_id, user_b_id) VALUES (%s, %s) "
-                "ON CONFLICT (user_a_id, user_b_id) DO NOTHING RETURNING id",
+                "ON CONFLICT (user_a_id, user_b_id) DO NOTHING RETURNING id, chat_id",
                 (user_a_id, user_b_id),
             ).fetchone()
             match_created = match is not None
             if match is None:
                 match = connection.execute(
-                    "SELECT id FROM public.matches WHERE user_a_id=%s AND user_b_id=%s",
+                    "SELECT id, chat_id FROM public.matches "
+                    "WHERE user_a_id=%s AND user_b_id=%s",
                     (user_a_id, user_b_id),
                 ).fetchone()
+
+    if payload.decision == "interested" and match is not None and match["chat_id"] is None:
+        ensure_direct_chat_for_match(connection, match["id"], user_a_id, user_b_id)
 
     return {
         "decision": payload.decision,
