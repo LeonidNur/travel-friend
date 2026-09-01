@@ -110,6 +110,57 @@ test('maps GET /chats through the authenticated backend client', async () => {
   ]);
 });
 
+test('loads Discover candidates with the runtime Bearer token', async () => {
+  const candidates = [{
+    user_id: 'candidate-uuid',
+    display_name: 'Алина',
+    age: 29,
+    city: 'Москва',
+    bio: null,
+    travel_style: ['Городской'],
+    interests: ['Архитектура'],
+    budget_level: '3',
+    comfort_level: '4',
+    travel_intent: { destination: 'Тбилиси', date_from: null, date_to: null }
+  }];
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(candidates)));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(await client.getDiscoverCandidates('session-token'), candidates);
+  assert.deepEqual(calls[0], {
+    input: '/api/backend/discover/candidates',
+    init: {
+      headers: { Accept: 'application/json', Authorization: 'Bearer session-token' },
+      method: 'GET'
+    }
+  });
+});
+
+test('sends both interested and rejected Discover decisions to the selected candidate', async () => {
+  for (const decision of ['interested', 'rejected'] as const) {
+    const { calls, fetchStub } = createFetchStub(
+      new Response(JSON.stringify({ decision, match_created: decision === 'interested', match_id: null }))
+    );
+    const client = createBackendApiClient(fetchStub);
+
+    const response = await client.putDiscoverDecision('session-token', 'candidate-uuid', { decision });
+
+    assert.equal(response.decision, decision);
+    assert.deepEqual(calls[0], {
+      input: '/api/backend/discover/decisions/candidate-uuid',
+      init: {
+        body: JSON.stringify({ decision }),
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer session-token',
+          'Content-Type': 'application/json'
+        },
+        method: 'PUT'
+      }
+    });
+  }
+});
+
 test('sends only content_text when creating a chat message', async () => {
   const { calls, fetchStub } = createFetchStub(
     new Response(JSON.stringify({ message_id: 'message-uuid', sequence_number: 3 }))

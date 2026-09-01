@@ -1,99 +1,112 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 
 import { BuddyCard } from '@/components/BuddyCard';
-import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
-import { DiscoverSelectedList } from '@/components/DiscoverSelectedList';
-import { useInterestDecisions } from '@/components/InterestDecisionProvider';
-import { InterestOutcomeBanner } from '@/components/InterestOutcomeBanner';
+import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import {
-  getPositiveInterestDecision,
-  getRemainingDiscoverCandidates,
-  getSelectedDiscoverBuddies,
-  getViewedDiscoverCount,
-  type PositiveInterestDecision
-} from '@/lib/interest-decisions';
-import { getBuddyMatchSignals, getDiscoverCandidates } from '@/lib/mock-buddies';
-import type { BuddyProfile } from '@/lib/types';
+  createBackendApiClient,
+  type DiscoverDecision
+} from '@/lib/backend-api-client';
+import {
+  createInitialDiscoverState,
+  discoverReducer,
+  getCurrentDiscoverCandidate,
+  toDiscoverCardCandidate
+} from '@/lib/discover-runtime';
 
-type DiscoverOutcome = {
-  buddy: BuddyProfile;
-  decision: PositiveInterestDecision;
-} | null;
-
-const discoverCandidates = getDiscoverCandidates();
+const backendApiClient = createBackendApiClient();
 
 export default function HomePage() {
-  const { profile } = useCurrentUserProfile();
-  const { decisions, setDecision } = useInterestDecisions();
-  const [outcome, setOutcome] = useState<DiscoverOutcome>(null);
+  const { session } = useTelegramAuthSession();
+  const [state, dispatch] = useReducer(discoverReducer, undefined, createInitialDiscoverState);
+  const isSubmittingRef = useRef(false);
 
-  const remainingCandidates = getRemainingDiscoverCandidates(discoverCandidates, decisions);
-  const activeBuddy = remainingCandidates[0] ?? null;
-  const viewedCount = getViewedDiscoverCount(discoverCandidates, decisions);
-  const remainingCount = remainingCandidates.length;
-  const selectedBuddies = getSelectedDiscoverBuddies(discoverCandidates, decisions);
+  const loadCandidates = useCallback(async () => {
+    if (!session) {
+      return;
+    }
 
-  const handleRejected = (buddy: BuddyProfile) => {
-    setDecision(buddy.id, 'rejected');
-    setOutcome(null);
-  };
+    dispatch({ type: 'load_started' });
 
-  const handleInterested = (buddy: BuddyProfile) => {
-    const decision = getPositiveInterestDecision(buddy);
+    try {
+      const candidates = await backendApiClient.getDiscoverCandidates(session.accessToken);
+      dispatch({ type: 'load_succeeded', candidates });
+    } catch {
+      dispatch({ type: 'load_failed' });
+    }
+  }, [session]);
 
-    setDecision(buddy.id, decision);
-    setOutcome({ buddy, decision });
-  };
+  useEffect(() => {
+    void loadCandidates();
+  }, [loadCandidates]);
+
+  const activeCandidate = getCurrentDiscoverCandidate(state);
+
+  const submitDecision = useCallback(async (decision: DiscoverDecision) => {
+    if (!session || !activeCandidate || isSubmittingRef.current) {
+      return;
+    }
+
+    isSubmittingRef.current = true;
+    dispatch({ type: 'decision_started' });
+
+    try {
+      await backendApiClient.putDiscoverDecision(session.accessToken, activeCandidate.user_id, { decision });
+      dispatch({ type: 'decision_succeeded' });
+    } catch {
+      dispatch({ type: 'decision_failed' });
+    } finally {
+      isSubmittingRef.current = false;
+    }
+  }, [activeCandidate, session]);
 
   return (
     <section className="page">
       <article className="hero-card">
-        <p className="section-kicker">Демо-режим</p>
-        <h2 className="hero-card__title">Смотрите по одной анкете и быстро решайте, хотите ли открыть профиль</h2>
-        <p className="hero-card__copy">
-          На карточке видно только базовые характеристики. После нажатия на кнопку решения
-          откроется следующая демонстрационная анкета. Выбор сохраняется только в текущем сеансе
-          и не отправляется другому пользователю.
-        </p>
-        <div className="discover-hero__stats" aria-label="Статистика discovery">
-          <div className="discover-stat">
-            <span className="discover-stat__value">{remainingCount}</span>
-            <span className="discover-stat__label">Осталось анкет</span>
-          </div>
-          <div className="discover-stat">
-            <span className="discover-stat__value">{viewedCount}</span>
-            <span className="discover-stat__label">Просмотрено</span>
-          </div>
-          <div className="discover-stat">
-            <span className="discover-stat__value">{selectedBuddies.length}</span>
-            <span className="discover-stat__label">Локально отмечено “Подходит”</span>
-          </div>
-        </div>
+        <h1 className="hero-card__title">Найдите попутчика</h1>
       </article>
 
-      {outcome ? (
-        <InterestOutcomeBanner
-          buddyName={outcome.buddy.name}
-          variant={outcome.decision}
-        />
+      {state.loading ? (
+        <section className="discover-list" aria-live="polite">
+          <p className="surface-card surface-card--compact">Загружаем анкеты…</p>
+        </section>
       ) : null}
 
-      {activeBuddy ? (
+      {state.loadError ? (
+        <section className="discover-list" aria-live="polite">
+          <article className="surface-card surface-card--compact empty-state-card">
+            <h2 className="empty-state-card__title">Не удалось загрузить анкеты</h2>
+            <button type="button" className="profile-button profile-button--secondary" onClick={() => void loadCandidates()}>
+              Повторить
+            </button>
+          </article>
+        </section>
+      ) : null}
+
+      {!state.loading && !state.loadError && activeCandidate ? (
         <section className="discover-list" aria-label="Активная карточка попутчика">
           <BuddyCard
-            buddy={activeBuddy}
-            matchSignals={getBuddyMatchSignals(activeBuddy, profile)}
-            onDismiss={() => handleRejected(activeBuddy)}
-            onInterested={() => handleInterested(activeBuddy)}
+            buddy={toDiscoverCardCandidate(activeCandidate)}
+            disabled={state.submitting}
+            onDismiss={() => void submitDecision('rejected')}
+            onInterested={() => void submitDecision('interested')}
           />
+          {state.decisionError ? (
+            <p className="surface-card surface-card--compact" role="alert">
+              Не удалось сохранить решение. Попробуйте ещё раз.
+            </p>
+          ) : null}
         </section>
-      ) : (
-        <section className="discover-list" aria-label="Состояние конца колоды">
-          <DiscoverSelectedList selections={selectedBuddies} />
+      ) : null}
+
+      {!state.loading && !state.loadError && !activeCandidate ? (
+        <section className="discover-list" aria-label="Новых кандидатов нет">
+          <article className="surface-card surface-card--compact empty-state-card">
+            <h2 className="empty-state-card__title">Сейчас новых кандидатов нет</h2>
+          </article>
         </section>
-      )}
+      ) : null}
     </section>
   );
 }

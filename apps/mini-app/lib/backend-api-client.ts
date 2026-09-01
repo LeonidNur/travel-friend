@@ -96,6 +96,37 @@ export type ChatMessageCreateRequest = Readonly<{
   content_text: string;
 }>;
 
+export type DiscoverTravelIntentResponse = Readonly<{
+  destination: string;
+  date_from: string | null;
+  date_to: string | null;
+}>;
+
+export type DiscoverCandidateResponse = Readonly<{
+  user_id: string;
+  display_name: string;
+  age: number | null;
+  city: string | null;
+  bio: string | null;
+  travel_style: string[];
+  interests: string[];
+  budget_level: string | null;
+  comfort_level: string | null;
+  travel_intent: DiscoverTravelIntentResponse;
+}>;
+
+export type DiscoverDecision = 'interested' | 'rejected';
+
+export type DiscoverDecisionRequest = Readonly<{
+  decision: DiscoverDecision;
+}>;
+
+export type DiscoverDecisionResponse = Readonly<{
+  decision: DiscoverDecision;
+  match_created: boolean;
+  match_id: string | null;
+}>;
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
@@ -129,6 +160,12 @@ export type BackendApiClient = Readonly<{
     chatId: string,
     payload: ChatMessageCreateRequest
   ) => Promise<ChatMessageResponse>;
+  getDiscoverCandidates: (token: string) => Promise<DiscoverCandidateResponse[]>;
+  putDiscoverDecision: (
+    token: string,
+    targetUserId: string,
+    payload: DiscoverDecisionRequest
+  ) => Promise<DiscoverDecisionResponse>;
 }>;
 
 function getErrorMessage(status: number, body: unknown): string {
@@ -209,6 +246,14 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
     getChatMessages: (token, chatId) =>
       request<ChatMessageResponse[]>(`/chats/${chatId}/messages`, { method: 'GET', token }),
     createChatMessage: (token, chatId, payload) =>
-      request<ChatMessageResponse>(`/chats/${chatId}/messages`, { method: 'POST', token, body: payload })
+      request<ChatMessageResponse>(`/chats/${chatId}/messages`, { method: 'POST', token, body: payload }),
+    getDiscoverCandidates: (token) =>
+      request<DiscoverCandidateResponse[]>('/discover/candidates', { method: 'GET', token }),
+    putDiscoverDecision: (token, targetUserId, payload) =>
+      request<DiscoverDecisionResponse>(`/discover/decisions/${targetUserId}`, {
+        method: 'PUT',
+        token,
+        body: payload
+      })
   };
 }

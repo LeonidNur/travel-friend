@@ -1,98 +1,90 @@
-import Link from 'next/link';
-
-import {
-  getBudgetScale,
-  getComfortLabel,
-  type BuddyMatchSignals
-} from '@/lib/mock-buddies';
-import type { BuddyProfile } from '@/lib/types';
+import { getDiscoverLevelLabels, type DiscoverCardCandidate } from '@/lib/discover-runtime';
 
 interface BuddyCardProps {
-  buddy: BuddyProfile;
-  matchSignals: BuddyMatchSignals;
+  buddy: DiscoverCardCandidate;
   onDismiss: () => void;
   onInterested: () => void;
+  disabled: boolean;
 }
 
-function getChipClassName(isMatch: boolean) {
-  return isMatch ? 'chip chip--accent' : 'chip';
+function formatDateRange(dateFrom: string | null, dateTo: string | null): string | null {
+  if (dateFrom && dateTo) {
+    return `${dateFrom} — ${dateTo}`;
+  }
+
+  return dateFrom ?? dateTo;
 }
 
-export function BuddyCard({ buddy, matchSignals, onDismiss, onInterested }: BuddyCardProps) {
+export function BuddyCard({ buddy, onDismiss, onInterested, disabled }: BuddyCardProps) {
   const visibleInterests = buddy.interests.slice(0, 4);
-  const visibleTravelStyles = buddy.travelStyles.slice(0, 3);
+  const visibleTravelStyles = buddy.travelStyle.slice(0, 3);
+  const dates = formatDateRange(buddy.travelIntent.dateFrom, buddy.travelIntent.dateTo);
+  const levels = getDiscoverLevelLabels(buddy.budgetLevel, buddy.comfortLevel);
 
   return (
     <article className="surface-card surface-card--compact buddy-card">
       <div className="buddy-card__header">
         <div>
           <h2 className="buddy-card__title">
-            {buddy.name}, {buddy.age}
+            {buddy.displayName}{buddy.age === null ? '' : `, ${buddy.age}`}
           </h2>
-          <p className="buddy-card__city">{buddy.city}</p>
+          {buddy.city ? <p className="buddy-card__city">{buddy.city}</p> : null}
         </div>
-        <div className="buddy-card__meta">
-          <span
-            className={`${getChipClassName(matchSignals.isBudgetMatch)} buddy-card__budget`}
-            aria-label={`Бюджет ${getBudgetScale(buddy.budgetLevel)}`}
-          >
-            {getBudgetScale(buddy.budgetLevel)}
-          </span>
-          <span className={getChipClassName(matchSignals.isComfortMatch)}>{getComfortLabel(buddy.comfortLevel)}</span>
-        </div>
+        {levels.budget || levels.comfort ? (
+          <div className="buddy-card__meta">
+            {levels.budget ? <span className="chip buddy-card__budget">{levels.budget}</span> : null}
+            {levels.comfort ? <span className="chip">{levels.comfort}</span> : null}
+          </div>
+        ) : null}
       </div>
 
-      <p className="buddy-card__tagline">{buddy.tagline}</p>
+      {buddy.bio ? <p className="buddy-card__tagline">{buddy.bio}</p> : null}
 
       <div className="buddy-card__section">
-        <span className="buddy-card__label">Направления</span>
+        <span className="buddy-card__label">Направление</span>
         <div className="chip-row">
-          {buddy.destinations.map((destination) => (
-            <span
-              className={getChipClassName(matchSignals.matchedDestinations.includes(destination))}
-              key={destination}
-            >
-              {destination}
-            </span>
-          ))}
+          <span className="chip">{buddy.travelIntent.destination}</span>
         </div>
       </div>
 
-      <div className="buddy-card__section">
+      {dates ? (
+        <div className="buddy-card__section">
+          <span className="buddy-card__label">Даты</span>
+          <p className="buddy-card__tagline">{dates}</p>
+        </div>
+      ) : null}
+
+      {visibleInterests.length > 0 ? <div className="buddy-card__section">
         <span className="buddy-card__label">Интересы</span>
         <div className="chip-row">
           {visibleInterests.map((interest) => (
-            <span className={getChipClassName(matchSignals.matchedInterests.includes(interest))} key={interest}>
+            <span className="chip" key={interest}>
               {interest}
             </span>
           ))}
         </div>
-      </div>
+      </div> : null}
 
-      <div className="buddy-card__section">
+      {visibleTravelStyles.length > 0 ? <div className="buddy-card__section">
         <span className="buddy-card__label">Стиль отдыха</span>
         <div className="chip-row">
           {visibleTravelStyles.map((style) => (
-            <span className={getChipClassName(matchSignals.matchedTravelStyles.includes(style))} key={style}>
+            <span className="chip" key={style}>
               {style}
             </span>
           ))}
         </div>
-      </div>
+      </div> : null}
 
       <div className="buddy-card__footer">
         <div className="buddy-card__actions">
-          <button type="button" className="profile-button profile-button--secondary" onClick={onDismiss}>
+          <button type="button" className="profile-button profile-button--secondary" onClick={onDismiss} disabled={disabled}>
             Не подходит
           </button>
-          <button type="button" className="profile-button profile-button--primary" onClick={onInterested}>
+          <button type="button" className="profile-button profile-button--primary" onClick={onInterested} disabled={disabled}>
             Подходит
           </button>
         </div>
-
-        <Link className="profile-action buddy-card__profile-link" href={`/buddies/${buddy.id}`}>
-          Открыть профиль
-        </Link>
       </div>
     </article>
   );
