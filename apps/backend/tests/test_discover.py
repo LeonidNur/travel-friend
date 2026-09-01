@@ -58,7 +58,7 @@ def database_url() -> str:
 def clean_database(database_url: str) -> Iterator[None]:
     with psycopg.connect(database_url) as connection:
         connection.execute(
-            "TRUNCATE public.trip_participants, public.trips, public.chat_summaries, "
+            "TRUNCATE public.trip_stops, public.trip_participants, public.trips, public.chat_summaries, "
             "public.messages, public.chat_participants, "
             "public.matches, public.chats, public.discover_interest_decisions, "
             "public.user_sessions, public.travel_intents, "

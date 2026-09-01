@@ -39,7 +39,7 @@ def database_url() -> str:
 @pytest.fixture
 def clean_database(database_url: str) -> Iterator[None]:
     truncate_sql = (
-        "TRUNCATE public.trip_participants, public.trips, public.chat_summaries, "
+        "TRUNCATE public.trip_stops, public.trip_participants, public.trips, public.chat_summaries, "
         "public.messages, public.chat_participants, public.matches, public.chats, "
         "public.discover_interest_decisions, public.user_sessions, public.travel_intents, "
         "public.profile_photos, public.profiles, public.user_activity_states, "
