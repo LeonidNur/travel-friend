@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class DirectChatCompanionResponse(BaseModel):
@@ -24,4 +24,32 @@ class DirectChatListItemResponse(BaseModel):
     chat_id: UUID
     type: Literal["direct"]
     companion: DirectChatCompanionResponse
+    created_at: datetime
+
+
+class ChatMessageCreateRequest(BaseModel):
+    """The only client-provided field when sending a Chat message."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content_text: str
+
+    @field_validator("content_text")
+    @classmethod
+    def content_text_must_not_be_blank(cls, value: str) -> str:
+        trimmed_value = value.strip()
+        if not trimmed_value:
+            raise ValueError("content_text must not be blank")
+        return trimmed_value
+
+
+class ChatMessageResponse(BaseModel):
+    """MVP Chat message fields exposed to an authorized participant."""
+
+    message_id: UUID
+    chat_id: UUID
+    sequence_number: int
+    type: Literal["user", "system"]
+    sender_user_id: UUID | None
+    content_text: str | None
     created_at: datetime

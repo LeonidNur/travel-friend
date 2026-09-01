@@ -20,3 +20,8 @@ def test_chats_route_requires_authentication() -> None:
     )
     with TestClient(app) as client:
         assert client.get("/chats").status_code == 401
+        assert client.get("/chats/00000000-0000-0000-0000-000000000000/messages").status_code == 401
+        assert client.post(
+            "/chats/00000000-0000-0000-0000-000000000000/messages",
+            json={"content_text": "Hello"},
+        ).status_code == 401
