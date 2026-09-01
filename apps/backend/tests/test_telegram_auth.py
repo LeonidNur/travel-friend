@@ -8,7 +8,7 @@ import json
 import os
 import time
 from collections.abc import Iterator
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from uuid import UUID
 
 import psycopg
@@ -29,6 +29,15 @@ from travel_friend_backend.main import create_app
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
 
+def require_safe_test_database_url(database_url: str) -> str:
+    parsed = urlparse(database_url)
+    if parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
+        pytest.skip("TEST_DATABASE_URL must point to a disposable local PostgreSQL database")
+    if parsed.path.rstrip("/") in {"", "/postgres"}:
+        pytest.skip("TEST_DATABASE_URL must name a dedicated test database")
+    return database_url
+
+
 def sign_init_data(user: dict[str, object], *, auth_date: int | None = None) -> str:
     fields = {
         "auth_date": str(auth_date if auth_date is not None else int(time.time())),
@@ -43,7 +52,7 @@ def sign_init_data(user: dict[str, object], *, auth_date: int | None = None) -> 
 def database_url() -> str:
     if not TEST_DATABASE_URL:
         pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
-    return TEST_DATABASE_URL
+    return require_safe_test_database_url(TEST_DATABASE_URL)
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +60,8 @@ def clean_database(database_url: str) -> Iterator[None]:
     with psycopg.connect(database_url) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                "TRUNCATE public.user_sessions, public.travel_intents, "
+                "TRUNCATE public.matches, public.discover_interest_decisions, "
+                "public.user_sessions, public.travel_intents, "
                 "public.profile_photos, public.profiles, "
                 "public.user_activity_states, public.user_settings, "
                 "public.telegram_identities, public.users RESTART IDENTITY"
