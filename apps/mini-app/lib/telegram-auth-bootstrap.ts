@@ -2,6 +2,7 @@ import type { OnboardingStatus, TelegramAuthResponse } from '@/lib/backend-api-c
 
 export type RuntimeTelegramSession = Readonly<{
   accessToken: string;
+  userId: string;
 }>;
 
 export type TelegramAuthBootstrapState =
@@ -35,8 +36,8 @@ export function completeTelegramOnboardingState(
     : state;
 }
 
-function createRuntimeTelegramSession(accessToken: string): RuntimeTelegramSession | null {
-  return accessToken.trim().length > 0 ? { accessToken } : null;
+function createRuntimeTelegramSession(accessToken: string, userId: string): RuntimeTelegramSession | null {
+  return accessToken.trim().length > 0 && userId.trim().length > 0 ? { accessToken, userId } : null;
 }
 
 export async function runTelegramAuthBootstrap(
@@ -50,7 +51,7 @@ export async function runTelegramAuthBootstrap(
 
   try {
     const response = await input.authenticateWithTelegram(initData);
-    const session = createRuntimeTelegramSession(response.access_token);
+    const session = createRuntimeTelegramSession(response.access_token, response.user.id);
 
     if (!session) {
       return { status: 'auth_error', message: AUTHENTICATION_FAILED_MESSAGE };

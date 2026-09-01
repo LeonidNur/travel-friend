@@ -1,76 +1,131 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
-import { useTripSession } from '@/components/InterestDecisionProvider';
+import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import {
-  CURRENT_USER_CHAT_PARTICIPANT_ID,
-  getChatCompanion,
-  getChatParticipantById,
-  getChatTitle,
-  isDirectChat,
-  type LocalChatMessage
-} from '@/lib/mock-chats';
-import { canSendMessagesForChatStatus, getChatMessageAccessNotice } from '@/lib/chat-lifecycle';
-import { getDisplayedChatParticipant } from '@/lib/current-user-chat-participant';
-import { getChatRoomTripActionState } from '@/lib/mock-trips';
+  ApiError,
+  createBackendApiClient,
+  type ChatMessageResponse,
+  type DirectChatResponse
+} from '@/lib/backend-api-client';
+import { findChatById, mapChatMessages, submitChatMessage } from '@/lib/chat-runtime';
 import { getAvatarInitials } from '@/lib/travel-preferences';
-import type { MockChat } from '@/lib/types';
+
+type ChatRoomState = 'error' | 'loaded' | 'loading' | 'not_found';
 
 interface ChatRoomProps {
-  chat: MockChat;
-  tripId?: string;
+  chatId: string;
 }
+
+const backendApiClient = createBackendApiClient();
 
 function getMessageClassName(isCurrentUser: boolean) {
   return `chat-room__message${isCurrentUser ? ' chat-room__message--outgoing' : ' chat-room__message--incoming'}`;
 }
 
-export function ChatRoom({ chat, tripId }: ChatRoomProps) {
-  const { profile } = useCurrentUserProfile();
-  const { getActiveTrip, startPlanning, trips } = useTripSession();
-  const companion = getChatCompanion(chat);
-  const companionProfileHref = isDirectChat(chat) && companion?.buddyProfileId ? `/buddies/${companion.buddyProfileId}` : null;
-  const canSendMessages = canSendMessagesForChatStatus(chat.status);
+export function ChatRoom({ chatId }: ChatRoomProps) {
+  const { session } = useTelegramAuthSession();
+  const [chat, setChat] = useState<DirectChatResponse | null>(null);
+  const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
+  const [roomState, setRoomState] = useState<ChatRoomState>('loading');
   const [draftMessage, setDraftMessage] = useState('');
-  const [localMessages, setLocalMessages] = useState<LocalChatMessage[]>([]);
-  const activeTripId = getActiveTrip(chat.id)?.id ?? tripId;
-  const tripActionState = getChatRoomTripActionState(chat, trips, activeTripId);
-  const canStartPlanning = chat.status === 'match' && Boolean(tripActionState.createButtonLabel);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const sendingRef = useRef(false);
 
-  const messages = useMemo(() => [...chat.messages, ...localMessages], [chat.messages, localMessages]);
-  const participants = useMemo(
-    () => chat.participants.map((participant) => getDisplayedChatParticipant(participant, profile)),
-    [chat.participants, profile]
-  );
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const trimmedMessage = draftMessage.trim();
-
-    if (!canSendMessages || !trimmedMessage) {
+  useEffect(() => {
+    if (session === null) {
       return;
     }
 
-    setLocalMessages((current) => [
-      ...current,
-      {
-        id: `local-message-${current.length + 1}`,
-        kind: 'participant',
-        authorId: CURRENT_USER_CHAT_PARTICIPANT_ID,
-        text: trimmedMessage,
-        sentAtLabel: 'только что'
+    let isCurrent = true;
+
+    void (async () => {
+      try {
+        const chats = await backendApiClient.getChats(session.accessToken);
+        const nextChat = findChatById(chats, chatId);
+
+        if (!nextChat) {
+          if (isCurrent) {
+            setRoomState('not_found');
+          }
+          return;
+        }
+
+        const history = await backendApiClient.getChatMessages(session.accessToken, chatId);
+
+        if (isCurrent) {
+          setChat(nextChat);
+          setMessages(history);
+          setRoomState('loaded');
+        }
+      } catch (error) {
+        if (!isCurrent) {
+          return;
+        }
+
+        setRoomState(error instanceof ApiError && error.status === 404 ? 'not_found' : 'error');
       }
-    ]);
-    setDraftMessage('');
+    })();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [chatId, session]);
+
+  const renderedMessages = useMemo(
+    () => (session === null ? [] : mapChatMessages(messages, session.userId)),
+    [messages, session]
+  );
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (session === null || chat === null || sendingRef.current || !draftMessage.trim()) {
+      return;
+    }
+
+    sendingRef.current = true;
+    setIsSending(true);
+    setSendError(null);
+
+    const result = await submitChatMessage({
+      draft: draftMessage,
+      isSending: false,
+      messages,
+      sendMessage: (contentText) =>
+        backendApiClient.createChatMessage(session.accessToken, chat.chat_id, { content_text: contentText })
+    });
+
+    setMessages([...result.messages]);
+    setDraftMessage(result.draft);
+    setSendError(result.error);
+    sendingRef.current = false;
+    setIsSending(false);
   };
 
-  const handleStartPlanning = () => {
-    startPlanning(chat);
-  };
+  if (roomState === 'loading') {
+    return (
+      <section className="page" aria-live="polite">
+        <article className="surface-card surface-card--compact empty-state-card">
+          <p className="section-kicker">Загружаем чат</p>
+          <p className="surface-card__copy">Получаем историю сообщений.</p>
+        </article>
+      </section>
+    );
+  }
+
+  if (roomState === 'not_found') {
+    return <ChatRoomUnavailable title="Чат не найден" message="Этот чат недоступен или ссылка устарела." />;
+  }
+
+  if (roomState === 'error' || chat === null) {
+    return <ChatRoomUnavailable title="Не удалось загрузить чат" message="Попробуйте открыть чат ещё раз." />;
+  }
+
+  const companion = chat.companion;
 
   return (
     <section className="page">
@@ -79,97 +134,59 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
           <Link className="profile-button profile-button--secondary profile-back-button" href="/chats">
             Назад к чатам
           </Link>
-          <span className="profile-status">Демо-режим</span>
+          <span className="profile-status">Чат</span>
         </div>
         <p className="section-kicker">Диалог</p>
-        {companionProfileHref ? (
-          <Link className="profile-hero chat-room__profile-link" href={companionProfileHref}>
-            <div className="profile-hero__avatar" aria-hidden="true">
-              {getAvatarInitials(companion?.name ?? chat.title)}
-            </div>
-            <div className="profile-hero__content">
-              <h2 className="hero-card__title profile-hero__title">{getChatTitle(chat)}</h2>
-              <p className="profile-hero__city">Направление: {chat.destination}</p>
-            </div>
-          </Link>
-        ) : (
-          <div className="profile-hero">
-            <div className="profile-hero__avatar" aria-hidden="true">
-              {getAvatarInitials(companion?.name ?? chat.title)}
-            </div>
-            <div className="profile-hero__content">
-              <h2 className="hero-card__title profile-hero__title">{getChatTitle(chat)}</h2>
-              <p className="profile-hero__city">Направление: {chat.destination}</p>
-            </div>
+        {/* TODO: enable this link after public profiles support backend UUID user ids. */}
+        <div className="profile-hero">
+          <div className="profile-hero__avatar" aria-hidden="true">
+            {getAvatarInitials(companion.display_name)}
           </div>
-        )}
-        <p className="surface-card__copy">
-          Это демонстрационный диалог: показанная история нужна для проверки сценария и не отражает
-          реальную переписку.
-        </p>
-        {canSendMessages && tripActionState.tripHref ? (
-          <Link className="navigation-link" href={tripActionState.tripHref}>
-            {tripActionState.tripLabel}
-          </Link>
-        ) : null}
-        {canStartPlanning && tripActionState.createButtonLabel ? (
-          <>
-            <button className="profile-button profile-button--primary" type="button" onClick={handleStartPlanning}>
-              {tripActionState.createButtonLabel}
-            </button>
-            <p className="surface-card__note">Новая поездка будет доступна только до перезагрузки.</p>
-          </>
-        ) : null}
+          <div className="profile-hero__content">
+            <h2 className="hero-card__title profile-hero__title">{companion.display_name}</h2>
+            <p className="profile-hero__city">{companion.city ?? 'Город не указан'}</p>
+          </div>
+        </div>
       </article>
 
       <article className="surface-card surface-card--compact">
         <div className="chat-room__participants-header">
-          <p className="surface-card__title">Участники</p>
-          <span className="chat-room__participants-count">{participants.length} участника</span>
+          <p className="surface-card__title">Собеседник</p>
+          <span className="chat-room__participants-count">Прямой чат</span>
         </div>
-        <div className="chat-room__participants" aria-label="Участники чата">
-          {participants.map((participant) => (
-            <div className="chat-room__participant" key={participant.id}>
-              <div className="chat-room__participant-avatar" aria-hidden="true">
-                {getAvatarInitials(participant.name)}
-              </div>
-              <div className="chat-room__participant-copy">
-                <p className="chat-room__participant-name">
-                  {participant.name}, {participant.age}
-                  {participant.isCurrentUser ? ' · Вы' : ''}
-                </p>
-                <p className="chat-room__participant-meta">{participant.city}</p>
-              </div>
+        <div className="chat-room__participants" aria-label="Собеседник в чате">
+          <div className="chat-room__participant">
+            <div className="chat-room__participant-avatar" aria-hidden="true">
+              {getAvatarInitials(companion.display_name)}
             </div>
-          ))}
+            <div className="chat-room__participant-copy">
+              <p className="chat-room__participant-name">
+                {companion.display_name}
+                {companion.age === null ? '' : `, ${companion.age}`}
+              </p>
+              <p className="chat-room__participant-meta">{companion.city ?? 'Город не указан'}</p>
+            </div>
+          </div>
         </div>
       </article>
 
       <section className="surface-card chat-room" aria-label="История сообщений">
         <div className="chat-room__timeline">
-          {messages.map((message) => {
+          {renderedMessages.map((message) => {
             if (message.kind === 'system') {
               return (
-                <div className="chat-room__system-block" key={message.id}>
+                <div className="chat-room__system-block" key={message.messageId}>
                   <div className="chat-room__system-message">
                     <p className="chat-room__system-text">{message.text}</p>
                     <span className="chat-room__message-time">{message.sentAtLabel}</span>
                   </div>
-                  {message.actionHref && message.actionLabel ? (
-                    <Link className="profile-button profile-button--secondary chat-room__system-action" href={message.actionHref}>
-                      {message.actionLabel}
-                    </Link>
-                  ) : null}
                 </div>
               );
             }
 
-            const author = getChatParticipantById(chat, message.authorId);
-            const isCurrentUser = Boolean(author?.isCurrentUser);
-
             return (
-              <div className={getMessageClassName(isCurrentUser)} key={message.id}>
-                <p className="chat-room__message-author">{isCurrentUser ? 'Вы' : (author?.name ?? 'Участник')}</p>
+              <div className={getMessageClassName(message.isOwn)} key={message.messageId}>
+                <p className="chat-room__message-author">{message.isOwn ? 'Вы' : companion.display_name}</p>
                 <p className="chat-room__message-text">{message.text}</p>
                 <span className="chat-room__message-time">{message.sentAtLabel}</span>
               </div>
@@ -177,35 +194,44 @@ export function ChatRoom({ chat, tripId }: ChatRoomProps) {
           })}
         </div>
 
-        {canSendMessages ? (
-          <form className="chat-room__composer" onSubmit={handleSubmit}>
-            <label className="sr-only" htmlFor="chat-room-message">
-              Сообщение
-            </label>
-            <textarea
-              id="chat-room-message"
-              className="profile-input chat-room__input"
-              value={draftMessage}
-              onChange={(event) => setDraftMessage(event.target.value)}
-              placeholder="Напишите сообщение для старта обсуждения"
-              rows={3}
-            />
-            <div className="chat-room__composer-footer">
-              <p className="chat-room__composer-note">
-                Новое сообщение видно только на текущем экране: оно не отправляется другому участнику и исчезнет
-                после ухода со страницы или перезагрузки.
-              </p>
-              <button className="profile-button profile-button--primary" type="submit">
-                Добавить сообщение
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="chat-room__composer" role="status">
-            <p className="chat-room__composer-note">{getChatMessageAccessNotice(chat.status)}</p>
+        <form className="chat-room__composer" onSubmit={handleSubmit}>
+          <label className="sr-only" htmlFor="chat-room-message">
+            Сообщение
+          </label>
+          <textarea
+            id="chat-room-message"
+            className="profile-input chat-room__input"
+            value={draftMessage}
+            onChange={(event) => setDraftMessage(event.target.value)}
+            placeholder="Напишите сообщение для старта обсуждения"
+            rows={3}
+            disabled={isSending}
+          />
+          <div className="chat-room__composer-footer">
+            <p className="chat-room__composer-note" role={sendError ? 'alert' : undefined}>
+              {sendError ?? 'Сообщение будет добавлено в чат после подтверждения сервером.'}
+            </p>
+            <button className="profile-button profile-button--primary" type="submit" disabled={isSending}>
+              {isSending ? 'Отправляем…' : 'Отправить сообщение'}
+            </button>
           </div>
-        )}
+        </form>
       </section>
+    </section>
+  );
+}
+
+function ChatRoomUnavailable({ title, message }: Readonly<{ title: string; message: string }>) {
+  return (
+    <section className="page">
+      <article className="surface-card surface-card--compact empty-state-card">
+        <p className="section-kicker">{title}</p>
+        <h2 className="empty-state-card__title">{title}</h2>
+        <p className="surface-card__copy">{message}</p>
+        <Link className="profile-button profile-button--secondary" href="/chats">
+          Вернуться к списку чатов
+        </Link>
+      </article>
     </section>
   );
 }

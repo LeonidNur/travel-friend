@@ -70,6 +70,32 @@ export type OnboardingResponse = Readonly<{
   status: Exclude<OnboardingStatus, 'not_started'>;
 }>;
 
+export type DirectChatResponse = Readonly<{
+  chat_id: string;
+  type: 'direct';
+  companion: Readonly<{
+    user_id: string;
+    display_name: string;
+    age: number | null;
+    city: string | null;
+  }>;
+  created_at: string;
+}>;
+
+export type ChatMessageResponse = Readonly<{
+  message_id: string;
+  chat_id: string;
+  sequence_number: number;
+  type: 'system' | 'user';
+  sender_user_id: string | null;
+  content_text: string | null;
+  created_at: string;
+}>;
+
+export type ChatMessageCreateRequest = Readonly<{
+  content_text: string;
+}>;
+
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
@@ -96,6 +122,13 @@ export type BackendApiClient = Readonly<{
   putTravelIntent: (token: string, payload: TravelIntentPutRequest) => Promise<TravelIntentResponse>;
   deleteTravelIntent: (token: string) => Promise<void>;
   patchOnboarding: (token: string, payload: OnboardingPatchRequest) => Promise<OnboardingResponse>;
+  getChats: (token: string) => Promise<DirectChatResponse[]>;
+  getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
+  createChatMessage: (
+    token: string,
+    chatId: string,
+    payload: ChatMessageCreateRequest
+  ) => Promise<ChatMessageResponse>;
 }>;
 
 function getErrorMessage(status: number, body: unknown): string {
@@ -171,6 +204,11 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
       await request<void>('/me/travel-intent', { method: 'DELETE', token });
     },
     patchOnboarding: (token, payload) =>
-      request<OnboardingResponse>('/me/onboarding', { method: 'PATCH', token, body: payload })
+      request<OnboardingResponse>('/me/onboarding', { method: 'PATCH', token, body: payload }),
+    getChats: (token) => request<DirectChatResponse[]>('/chats', { method: 'GET', token }),
+    getChatMessages: (token, chatId) =>
+      request<ChatMessageResponse[]>(`/chats/${chatId}/messages`, { method: 'GET', token }),
+    createChatMessage: (token, chatId, payload) =>
+      request<ChatMessageResponse>(`/chats/${chatId}/messages`, { method: 'POST', token, body: payload })
   };
 }

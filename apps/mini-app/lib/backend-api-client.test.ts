@@ -76,6 +76,80 @@ test('adds a Bearer token to authenticated JSON requests', async () => {
   });
 });
 
+test('maps GET /chats through the authenticated backend client', async () => {
+  const chats = [
+    {
+      chat_id: 'chat-uuid',
+      type: 'direct',
+      companion: {
+        user_id: 'companion-uuid',
+        display_name: 'Мария',
+        age: 31,
+        city: 'Тбилиси'
+      },
+      created_at: '2026-09-01T10:00:00Z'
+    }
+  ];
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(chats)));
+  const client = createBackendApiClient(fetchStub);
+
+  const response = await client.getChats('session-token');
+
+  assert.deepEqual(response, chats);
+  assert.deepEqual(calls, [
+    {
+      input: '/api/backend/chats',
+      init: {
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer session-token'
+        },
+        method: 'GET'
+      }
+    }
+  ]);
+});
+
+test('sends only content_text when creating a chat message', async () => {
+  const { calls, fetchStub } = createFetchStub(
+    new Response(JSON.stringify({ message_id: 'message-uuid', sequence_number: 3 }))
+  );
+  const client = createBackendApiClient(fetchStub);
+
+  await client.createChatMessage('session-token', 'chat-uuid', { content_text: 'Привет' });
+
+  assert.deepEqual(calls[0], {
+    input: '/api/backend/chats/chat-uuid/messages',
+    init: {
+      body: JSON.stringify({ content_text: 'Привет' }),
+      headers: {
+        Accept: 'application/json',
+        Authorization: 'Bearer session-token',
+        'Content-Type': 'application/json'
+      },
+      method: 'POST'
+    }
+  });
+});
+
+test('loads a chat message history through the authenticated backend client', async () => {
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify([])));
+  const client = createBackendApiClient(fetchStub);
+
+  await client.getChatMessages('session-token', 'chat-uuid');
+
+  assert.deepEqual(calls[0], {
+    input: '/api/backend/chats/chat-uuid/messages',
+    init: {
+      headers: {
+        Accept: 'application/json',
+        Authorization: 'Bearer session-token'
+      },
+      method: 'GET'
+    }
+  });
+});
+
 test('returns parsed JSON from an authenticated request', async () => {
   const { fetchStub } = createFetchStub(
     new Response(JSON.stringify({ status: 'completed' }))

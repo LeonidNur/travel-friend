@@ -39,12 +39,12 @@ test('transitions runtime onboarding state to authenticated only from onboarding
   const onboardingState = {
     status: 'onboarding_required' as const,
     onboardingStatus: 'in_progress' as const,
-    session: { accessToken: 'runtime-session-token' }
+    session: { accessToken: 'runtime-session-token', userId: 'user-id' }
   };
 
   assert.deepEqual(completeTelegramOnboardingState(onboardingState), {
     status: 'authenticated',
-    session: { accessToken: 'runtime-session-token' }
+    session: { accessToken: 'runtime-session-token', userId: 'user-id' }
   });
   assert.deepEqual(completeTelegramOnboardingState({ status: 'auth_error', message: 'Ошибка' }), {
     status: 'auth_error',
