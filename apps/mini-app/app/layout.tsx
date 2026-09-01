@@ -3,6 +3,7 @@ import Script from 'next/script';
 
 import { CurrentUserProfileProvider } from '@/components/CurrentUserProfileProvider';
 import { InterestDecisionProvider } from '@/components/InterestDecisionProvider';
+import { TelegramAuthBootstrapProvider } from '@/components/TelegramAuthBootstrapProvider';
 import { TelegramAppShell } from '@/components/TelegramAppShell';
 
 import './globals.css';
@@ -24,11 +25,13 @@ export default function RootLayout({
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="afterInteractive"
         />
-        <CurrentUserProfileProvider>
-          <InterestDecisionProvider>
-            <TelegramAppShell>{children}</TelegramAppShell>
-          </InterestDecisionProvider>
-        </CurrentUserProfileProvider>
+        <TelegramAuthBootstrapProvider>
+          <CurrentUserProfileProvider>
+            <InterestDecisionProvider>
+              <TelegramAppShell>{children}</TelegramAppShell>
+            </InterestDecisionProvider>
+          </CurrentUserProfileProvider>
+        </TelegramAuthBootstrapProvider>
       </body>
     </html>
   );

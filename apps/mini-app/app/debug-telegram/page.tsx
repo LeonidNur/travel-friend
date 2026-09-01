@@ -3,16 +3,8 @@
 import Script from 'next/script';
 import { useCallback, useEffect, useState } from 'react';
 
-type TelegramUser = {
-  id?: number;
-  username?: string;
-};
-
 type TelegramWebApp = {
   initData?: string;
-  initDataUnsafe?: {
-    user?: TelegramUser;
-  };
   platform?: string;
   version?: string;
   colorScheme?: string;
@@ -34,8 +26,6 @@ type TelegramDiagnostics = {
   viewportHeight: string;
   viewportStableHeight: string;
   isExpanded: string;
-  userId: string;
-  username: string;
 };
 
 type TelegramWindow = Window &
@@ -50,8 +40,6 @@ function getDiagnostics(): TelegramDiagnostics {
   const telegramWindow = isBrowser ? (window as TelegramWindow) : undefined;
   const webApp = telegramWindow?.Telegram?.WebApp;
   const initData = webApp?.initData ?? '';
-  const user = webApp?.initDataUnsafe?.user;
-
   return {
     windowType: typeof window,
     telegramExists: Boolean(telegramWindow?.Telegram),
@@ -63,9 +51,7 @@ function getDiagnostics(): TelegramDiagnostics {
     viewportHeight: typeof webApp?.viewportHeight === 'number' ? `${webApp.viewportHeight}` : '—',
     viewportStableHeight:
       typeof webApp?.viewportStableHeight === 'number' ? `${webApp.viewportStableHeight}` : '—',
-    isExpanded: typeof webApp?.isExpanded === 'boolean' ? (webApp.isExpanded ? 'yes' : 'no') : '—',
-    userId: typeof user?.id === 'number' ? `${user.id}` : '—',
-    username: user?.username ?? '—'
+    isExpanded: typeof webApp?.isExpanded === 'boolean' ? (webApp.isExpanded ? 'yes' : 'no') : '—'
   };
 }
 
@@ -166,14 +152,6 @@ export default function DebugTelegramPage() {
           <div className="item">
             <dt>isExpanded</dt>
             <dd>{diagnostics?.isExpanded ?? '—'}</dd>
-          </div>
-          <div className="item">
-            <dt>user id</dt>
-            <dd>{diagnostics?.userId ?? '—'}</dd>
-          </div>
-          <div className="item">
-            <dt>username</dt>
-            <dd>{diagnostics?.username ?? '—'}</dd>
           </div>
         </dl>
       </section>
