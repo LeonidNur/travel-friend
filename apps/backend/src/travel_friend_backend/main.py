@@ -16,6 +16,7 @@ from travel_friend_backend.db import get_database_connection
 from travel_friend_backend.routers.chats import router as chats_router
 from travel_friend_backend.routers.discover import router as discover_router
 from travel_friend_backend.routers.me import router as me_router
+from travel_friend_backend.routers.trips import router as trips_router
 
 class TelegramAuthRequest(BaseModel):
     init_data: str | None = None
@@ -32,6 +33,7 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     app.include_router(chats_router)
     app.include_router(discover_router)
     app.include_router(me_router)
+    app.include_router(trips_router)
 
     @app.get("/health")
     def get_health() -> dict[str, str]:
