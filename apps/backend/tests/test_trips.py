@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from uuid import UUID
 
 import psycopg
@@ -34,6 +35,22 @@ def direct_chat_id(database_url: str, match_id: str) -> UUID:
 
 def create_trip(client: TestClient, token: str, chat_id: UUID):
     return client.post(f"/chats/{chat_id}/trips", headers=auth_headers(token))
+
+
+def get_trip(client: TestClient, token: str, trip_id: str):
+    return client.get(f"/trips/{trip_id}", headers=auth_headers(token))
+
+
+def current_age(birth_date: date) -> int:
+    today = date.today()
+    return today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+
+
+def create_direct_trip(client: TestClient, database_url: str):
+    first, second, match = create_reciprocal_match(client)
+    chat_id = direct_chat_id(database_url, match["match_id"])
+    trip = create_trip(client, first["access_token"], chat_id).json()
+    return first, second, chat_id, trip
 
 
 def test_trip_list_returns_only_participant_trips_newest_first_with_persisted_route_summary(
@@ -121,6 +138,164 @@ def test_trip_list_returns_an_empty_list_when_current_user_has_no_trip_participa
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_trip_detail_returns_persisted_snapshot_ordered_stops_and_trip_participants(
+    client: TestClient, database_url: str
+) -> None:
+    first, second, chat_id, trip = create_direct_trip(client, database_url)
+    trip_id = UUID(trip["trip_id"])
+    assert client.patch(
+        "/me/profile",
+        headers=auth_headers(first["access_token"]),
+        json={"birth_date": "1990-01-01", "city": "Moscow"},
+    ).status_code == 200
+    assert client.patch(
+        "/me/profile",
+        headers=auth_headers(second["access_token"]),
+        json={"birth_date": "1995-12-31", "city": "Kazan"},
+    ).status_code == 200
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.trips SET status='active', membership_version=2, state_version=3, "
+            "destination_version=1, dates_version=1, budget_version=1, transport_version=1, "
+            "destination_status='confirmed', dates_status='confirmed', budget_status='confirmed', "
+            "transport_status='review_required', date_from='2026-10-01', date_to='2026-10-10', "
+            "budget_min=1200.00, budget_max=1500.00, budget_currency='RUB', budget_scope='per_person', "
+            "started_at='2026-09-01T10:00:00Z', updated_at='2026-09-01T11:00:00Z' WHERE id=%s",
+            (trip_id,),
+        )
+        connection.execute(
+            "INSERT INTO public.trip_stops "
+            "(trip_id, position, place_label, country_code, place_ref, stay_from, stay_to, notes) VALUES "
+            "(%s, 2, 'Kyoto', 'JP', 'place-kyoto', '2026-10-04', '2026-10-06', 'Stay near Gion'), "
+            "(%s, 1, 'Tokyo', 'JP', 'place-tokyo', '2026-10-01', '2026-10-04', 'Arrive early')",
+            (trip_id, trip_id),
+        )
+
+    response = get_trip(client, first["access_token"], trip["trip_id"])
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["trip"] == {
+        "trip_id": trip["trip_id"],
+        "chat_id": str(chat_id),
+        "created_by_user_id": first["user"]["id"],
+        "status": "active",
+        "membership_version": 2,
+        "state_version": 3,
+        "destination_version": 1,
+        "dates_version": 1,
+        "budget_version": 1,
+        "transport_version": 1,
+        "destination_status": "confirmed",
+        "dates_status": "confirmed",
+        "budget_status": "confirmed",
+        "transport_status": "review_required",
+        "date_from": "2026-10-01",
+        "date_to": "2026-10-10",
+        "budget_min": "1200.00",
+        "budget_max": "1500.00",
+        "budget_currency": "RUB",
+        "budget_scope": "per_person",
+        "started_at": "2026-09-01T10:00:00Z",
+        "completed_at": None,
+        "cancelled_at": None,
+        "created_at": body["trip"]["created_at"],
+        "updated_at": "2026-09-01T11:00:00Z",
+    }
+    assert [stop["position"] for stop in body["route_stops"]] == [1, 2]
+    assert body["route_stops"] == [
+        {
+            "id": body["route_stops"][0]["id"],
+            "position": 1,
+            "place_label": "Tokyo",
+            "country_code": "JP",
+            "place_ref": "place-tokyo",
+            "stay_from": "2026-10-01",
+            "stay_to": "2026-10-04",
+            "notes": "Arrive early",
+            "created_at": body["route_stops"][0]["created_at"],
+            "updated_at": body["route_stops"][0]["updated_at"],
+        },
+        {
+            "id": body["route_stops"][1]["id"],
+            "position": 2,
+            "place_label": "Kyoto",
+            "country_code": "JP",
+            "place_ref": "place-kyoto",
+            "stay_from": "2026-10-04",
+            "stay_to": "2026-10-06",
+            "notes": "Stay near Gion",
+            "created_at": body["route_stops"][1]["created_at"],
+            "updated_at": body["route_stops"][1]["updated_at"],
+        },
+    ]
+    assert body["participants"] == sorted([
+        {
+            "user_id": first["user"]["id"],
+            "display_name": "Candidate 1",
+            "age": current_age(date(1990, 1, 1)),
+            "city": "Moscow",
+        },
+        {
+            "user_id": second["user"]["id"],
+            "display_name": "Candidate 2",
+            "age": current_age(date(1995, 12, 31)),
+            "city": "Kazan",
+        },
+    ], key=lambda participant: participant["user_id"])
+
+
+def test_trip_detail_returns_uniform_404_for_foreign_and_missing_trip(
+    client: TestClient, database_url: str
+) -> None:
+    first, _, _, trip = create_direct_trip(client, database_url)
+    outsider = create_discover_eligible_user(client, 3)
+
+    foreign = get_trip(client, outsider["access_token"], trip["trip_id"])
+    missing = get_trip(client, first["access_token"], "00000000-0000-0000-0000-000000000000")
+
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json() == missing.json() == {"detail": "Trip not found"}
+
+
+def test_trip_detail_excludes_former_participants_from_access_and_participant_projection(
+    client: TestClient, database_url: str
+) -> None:
+    first, second, _, trip = create_direct_trip(client, database_url)
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.trip_participants SET left_at=now() WHERE trip_id=%s AND user_id=%s",
+            (UUID(trip["trip_id"]), UUID(second["user"]["id"])),
+        )
+
+    former_participant = get_trip(client, second["access_token"], trip["trip_id"])
+    current_participant = get_trip(client, first["access_token"], trip["trip_id"])
+
+    assert former_participant.status_code == 404
+    assert former_participant.json() == {"detail": "Trip not found"}
+    assert current_participant.status_code == 200
+    assert current_participant.json()["participants"] == [
+        {"user_id": first["user"]["id"], "display_name": "Candidate 1", "age": None, "city": "Moscow"}
+    ]
+
+
+def test_trip_detail_reads_historical_trip_for_participant(
+    client: TestClient, database_url: str
+) -> None:
+    first, _, _, trip = create_direct_trip(client, database_url)
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.trips SET status='completed', completed_at='2026-08-31T12:00:00Z' WHERE id=%s",
+            (UUID(trip["trip_id"]),),
+        )
+
+    response = get_trip(client, first["access_token"], trip["trip_id"])
+
+    assert response.status_code == 200
+    assert response.json()["trip"]["status"] == "completed"
+    assert response.json()["trip"]["completed_at"] == "2026-08-31T12:00:00Z"
 
 
 def test_participant_creates_forming_trip_with_both_direct_chat_participants(

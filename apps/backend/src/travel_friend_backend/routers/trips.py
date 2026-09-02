@@ -11,7 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.db import get_database_connection
 from travel_friend_backend.routers.chats import find_authorized_chat
-from travel_friend_backend.schemas.trips import TripCreateResponse, TripListItemResponse
+from travel_friend_backend.schemas.trips import (
+    TripCreateResponse,
+    TripDetailResponse,
+    TripListItemResponse,
+)
 
 
 router = APIRouter(prefix="/chats", tags=["trips"])
@@ -39,6 +43,51 @@ def get_trips(
         (principal.user_id,),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+@trip_list_router.get("/{trip_id}", response_model=TripDetailResponse)
+def get_trip(
+    trip_id: UUID,
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+) -> dict[str, object]:
+    """Read a persisted Trip only when the caller is a current participant."""
+    trip = connection.execute(
+        "SELECT t.id AS trip_id, t.chat_id, t.created_by_user_id, t.status, "
+        "t.membership_version, t.state_version, t.destination_version, t.dates_version, "
+        "t.budget_version, t.transport_version, t.destination_status, t.dates_status, "
+        "t.budget_status, t.transport_status, t.date_from, t.date_to, t.budget_min, "
+        "t.budget_max, t.budget_currency, t.budget_scope, t.started_at, t.completed_at, "
+        "t.cancelled_at, t.created_at, t.updated_at "
+        "FROM public.trips t "
+        "JOIN public.trip_participants requester "
+        "ON requester.trip_id=t.id AND requester.user_id=%s AND requester.left_at IS NULL "
+        "WHERE t.id=%s",
+        (principal.user_id, trip_id),
+    ).fetchone()
+    if trip is None:
+        raise HTTPException(404, "Trip not found")
+
+    route_stops = connection.execute(
+        "SELECT id, position, place_label, country_code, place_ref, stay_from, stay_to, notes, "
+        "created_at, updated_at FROM public.trip_stops WHERE trip_id=%s "
+        "ORDER BY position ASC",
+        (trip_id,),
+    ).fetchall()
+    participants = connection.execute(
+        "SELECT tp.user_id, p.display_name, "
+        "EXTRACT(YEAR FROM age(CURRENT_DATE, p.birth_date))::integer AS age, p.city "
+        "FROM public.trip_participants tp "
+        "LEFT JOIN public.profiles p ON p.user_id=tp.user_id "
+        "WHERE tp.trip_id=%s AND tp.left_at IS NULL "
+        "ORDER BY tp.joined_at ASC, tp.user_id ASC",
+        (trip_id,),
+    ).fetchall()
+    return {
+        "trip": dict(trip),
+        "route_stops": [dict(stop) for stop in route_stops],
+        "participants": [dict(participant) for participant in participants],
+    }
 
 
 def create_trip_for_direct_chat(
