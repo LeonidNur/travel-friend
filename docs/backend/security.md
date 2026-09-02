@@ -2,7 +2,7 @@
 
 ## Назначение документа
 
-Этот документ описывает security-контур Travel Friend на уровне архитектуры. Он не задаёт таблицы БД, RLS, API или persistence-реализацию.
+Этот документ описывает security-контур Travel Friend на уровне архитектуры. Реализована server-side проверка raw Telegram `initData` и Bearer sessions; RLS, block/report/audit, provider redirect и остальные capabilities ниже пока не реализованы. Он не задаёт таблицы БД, RLS, API или persistence-реализацию.
 
 Важно: ниже `UserBlock`, `UserReport` и `Audit` описаны как обязательные backend-capabilities security-домена. Этот документ не фиксирует их physical schema и не расширяет утверждённую ER-модель в схему хранения.
 

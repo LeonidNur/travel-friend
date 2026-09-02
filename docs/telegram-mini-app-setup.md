@@ -13,27 +13,33 @@
 - поведение ближе к реальному внешнему окружению;
 - не нужно каждый раз пересобирать и перенастраивать временный туннель.
 
-## Где хранить bot token
+## Переменные окружения
 
-`TELEGRAM_BOT_TOKEN` храните только в `apps/mini-app/.env.local`.
+`TELEGRAM_BOT_TOKEN` нужен только FastAPI backend для server-side проверки raw `initData`. Не передавайте его в Next.js/Mini App и не используйте client-prefixed environment variables.
 
-## Где хранить URL
+Для Mini App локально используйте `apps/mini-app/.env.local`:
 
-`TELEGRAM_WEB_APP_URL` храните в `apps/mini-app/.env.local`.
-Туда же указывайте публичный `Vercel` URL.
+```env
+TELEGRAM_WEB_APP_URL=https://your-vercel-url.example
+BACKEND_API_ORIGIN=http://127.0.0.1:8000
+```
 
-## Что нельзя коммитить
+`BACKEND_API_ORIGIN` используется Next.js rewrite для `/api/backend/*`. Он должен указывать на доступный backend environment; production значение и deployment/runbook backend пока не зафиксированы.
 
-Файл `apps/mini-app/.env.local` не должен попадать в Git. Он уже добавлен в `apps/mini-app/.gitignore`.
-
-## Пример `.env.local`
+Храните `TELEGRAM_BOT_TOKEN` и `DATABASE_URL` только в environment backend-процесса, например:
 
 ```env
 TELEGRAM_BOT_TOKEN=
-TELEGRAM_WEB_APP_URL=
+DATABASE_URL=
 ```
 
-Значения оставляйте пустыми в шаблоне и подставляйте реальные данные только локально у себя.
+## Что нельзя коммитить
+
+Локальные env-файлы Mini App и backend не должны попадать в Git.
+
+## Пример `.env.local`
+
+Значения оставляйте пустыми в шаблонах и подставляйте реальные данные только в соответствующем окружении.
 
 ## Следующий шаг
 
@@ -47,12 +53,6 @@ WebApp-кнопку настраиваем автоматически через
 npm run telegram:set-menu
 ```
 
-## Хранение секретов
+## Статус deployment
 
-Секреты, токены и URL для Telegram Mini App храним в `apps/mini-app/.env.local`.
-
-Это позволяет:
-
-- не коммитить чувствительные значения;
-- держать локальную и публичную конфигурацию отдельно;
-- быстро менять окружение без правок в коде.
+Vercel — текущий публичный контур frontend Mini App и URL для Telegram Menu Button. FastAPI backend, PostgreSQL/Supabase и безопасное production значение `BACKEND_API_ORIGIN` требуют отдельного deployment work item; не следует считать Vercel deployment Mini App готовым production deployment всей системы.

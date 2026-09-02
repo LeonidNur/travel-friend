@@ -1,5 +1,7 @@
 # Интеграции
 
+> Статус: Telegram Auth реализован. AI/travel/affiliate provider integrations — future design и отложены до подключения второго разработчика.
+
 ## Принцип интеграций
 
 Все внешние интеграции Travel Friend проходят через backend. Telegram Mini App не должен иметь прямой доступ к секретам provider-ов и не должен ходить в travel/AI API напрямую.

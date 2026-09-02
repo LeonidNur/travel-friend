@@ -5,55 +5,45 @@
 ### Telegram Mini App
 
 - открытие приложения внутри Telegram;
-- получение данных пользователя через Telegram;
-- базовый экран входа / приветствия.
+- server-side проверка raw `initData` и backend session;
+- onboarding profile и TravelIntent.
 
 ### Профиль
 
 - имя;
 - возраст;
 - город;
-- фото;
+- фото — physical storage поддержан схемой, UI/API ещё не реализованы;
 - описание;
 - интересы;
-- языки;
 - стиль отдыха.
 
 ### Travel-анкета
 
-- направления;
-- бюджет;
+- одно активное направление;
 - даты;
-- длительность поездки;
-- тип отдыха;
 - уровень комфорта;
-- ограничения.
 
 ### Поиск попутчиков
 
 - карточки пользователей;
-- фильтры;
-- простая оценка совместимости;
-- интерес / лайк;
+- финальное решение `interested` / `rejected`;
 - взаимный мэтч.
 
 ### Чат
 
 - чат после мэтча;
-- групповой чат;
 - текстовые сообщения;
-- вызов AI Travel Copilot.
+- серверная история сообщений без realtime/read receipts.
+- базовый Group Chat (пока не реализован): создатель выбирает existing matched/direct-chat companions, в группе минимум три участника вместе с создателем, сообщения persisted, а состав после создания фиксирован;
+- из direct и group Chat создаётся Trip, при этом все текущие `ChatParticipant` становятся `TripParticipant`.
 
-### AI Travel Copilot
+### Trips
 
-- summary;
-- plan;
-- budget;
-- cheaper;
-- activities;
-- compare;
-- conflicts;
-- final.
+- server API создания только из существующего direct Chat (без Mini App UI-вызова);
+- оба ChatParticipant сразу становятся TripParticipant;
+- список и read-only detail Trip;
+- read `trip_stops`.
 
 ## После MVP
 
@@ -63,3 +53,8 @@
 - подписки;
 - интеграции с travel-сервисами;
 - отдельное мобильное приложение.
+- AI Travel Copilot / Proposal и внешние travel provider-интеграции (отложены до подключения второго разработчика);
+- invitations, add/remove members, leave, roles/admin/permissions, invite links и сложный membership lifecycle Group Chat;
+- TripInvitation и расширенный lifecycle поездки;
+- realtime messaging, pagination и read receipts;
+- Profile photo UI/API и Discover filters/ranking.

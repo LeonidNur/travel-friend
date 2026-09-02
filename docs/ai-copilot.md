@@ -2,6 +2,8 @@
 
 Короткий обзор AI-слоя Travel Friend. Актуальная архитектурная версия находится в [docs/backend/ai-architecture.md](./backend/ai-architecture.md).
 
+> Статус: deferred. Интеграция AI/Proposal отложена до подключения второго разработчика и не входит в current direct-chat MVP.
+
 ## Роль ИИ
 
 AI Travel Copilot — будущий backend-слой поверх `Chat` и `Trip`. Он помогает участникам договориться, но не принимает решения вместо них и не меняет подтверждённое состояние поездки напрямую.

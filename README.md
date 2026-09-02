@@ -34,7 +34,7 @@ Telegram Mini App не отменяет будущую отдельную моб
 
 Текущий проект уже работает как настоящий Telegram Mini App через Vercel, а не как локальный прототип.
 
-Уже сделано:
+Уже сделано в `develop`:
 
 - каркас Next.js Mini App в `apps/mini-app`
 - нижняя мобильная навигация
@@ -45,27 +45,22 @@ Telegram Mini App не отменяет будущую отдельную моб
 - публичный запуск через Vercel как основной способ проверки Mini App в Telegram
 - автоматическая настройка Telegram Menu Button через инженерный сценарий
 - отдельная Debug Telegram Page для диагностики окружения и WebApp-поведения
-- MVP-экран профиля пользователя на мок-данных
-- локальный edit mode профиля с Save/Cancel, slider для возраста, chips для интересов и travel preferences
-- Discover MVP на главной странице с одной карточкой попутчика за раз
+- server-side Telegram Auth: raw `initData` проверяется FastAPI, а backend выдаёт opaque Bearer session; UI проходит onboarding или открывает основной интерфейс по его результату
+- Profile и active TravelIntent: read/write API текущего пользователя и frontend hydration/edit flow
+- Discover: backend candidates, финальные `interested` / `rejected` решения и reciprocal `Match → direct Chat`
+- direct Chats: persisted список, server-side message history и отправка текстовых сообщений
+- Trips: persistence, server API создания из direct Chat, `trip_stops`, backend Trips List и read-only Trip Detail
 - публичные профили попутчиков на маршруте `/buddies/[id]`
-- mock interest/match flow с локальными решениями и переходом в `/chats` как placeholder
-- Chats List MVP с mock-чатами и статусами `match`, `interest_sent` и `draft`
-- Chat Room MVP на динамическом маршруте `/chats/[id]` с переходом из Chats List, mock-историей сообщений, своими/чужими/системными сообщениями, local-only отправкой, fallback для неизвестного `chat id`, переходом в публичный профиль собеседника и переходом в конкретный связанный Trip
-- Chat Room mock-flow стабилизирован: экран корректно работает с `active` и `historical` trip, а сценарии Chats / Trips приведены к согласованному состоянию
-- Trips frontend data model
-- Trips List MVP
-- read-only Trip Details
+- сохраняются historical mock/screens как UI fallback и дизайн-ориентир там, где backend contract ещё не реализован
 - единый порядок категорий и текстовые состояния категорий
 - двусторонняя навигация Chat ↔ Trip: Chat Room ведёт в конкретный связанный Trip, а Trip Details ведёт в конкретный Chat
-- local session trip creation из matched Chat
-- session-aware отображение участников
+- direct-chat Trip создаётся только из существующего Chat; оба его ChatParticipant сразу становятся TripParticipant
 - в Chat Room скрыта Bottom Navigation, а длинные и многострочные сообщения уже исправлены
 - проверка Chat Room выполнена локально, через Vercel Preview и внутри Telegram Mini App
 - единый frontend data model слой для профилей, travel preferences, чатов и решений интереса
 - обновлённая нижняя навигация с основной группой Chats / Discover / Trips и отдельным Profile
 
-Сейчас frontend-сценарии работают как mock/local-state checkpoint: Chat Room остаётся local-only, а сообщения исчезают после reload. В Backend Foundation завершён отдельный Core Identity + Telegram Auth slice: настроены local Supabase CLI/PostgreSQL workflow, persistence базовой идентичности и серверная Telegram-аутентификация с сессиями. Profile + TravelIntent API, persistence интересов, чатов и поездок, realtime и AI ещё не реализованы. Логическая доменная модель backend завершена, а утверждённая ER-модель остаётся источником истины; frontend view models не считаются готовой Supabase-схемой.
+Рабочий MVP flow уже backend-backed до direct Chat/messages; Trips List и Detail читают persistence. Server API создания Trip из direct Chat реализован, но Mini App пока не вызывает его: UI создания Trip остаётся отдельным незакрытым work item. Базовый Group Chat входит в MVP, но пока не реализован. Realtime, read receipts, Trip write/lifecycle, TripInvitation, сложный membership lifecycle, AI/Proposal и provider integrations также отсутствуют. Логическая ER-модель остаётся design-источником для deferred архитектуры и не должна приниматься за перечень уже поставленных таблиц/API.
 
 ### Почему мы отказались от ngrok
 
@@ -101,7 +96,7 @@ Telegram Mini App не отменяет будущую отдельную моб
 - воспроизводить интеграционные ошибки без догадок;
 - сравнивать поведение локального браузера, Telegram WebView и Vercel.
 
-Важно: AI-помощник не выделен в отдельную вкладку. Он должен быть встроен в сценарии чатов и поездок, когда эти потоки будут реализованы.
+Важно: AI-помощник не выделен в отдельную вкладку. Его интеграция в Chats/Trips отложена до подключения второго разработчика.
 
 ## Текущий статус проекта
 
@@ -115,8 +110,7 @@ Telegram Mini App не отменяет будущую отдельную моб
 - интеграция Telegram WebApp проверяется в реальном окружении, а не только локально;
 - есть инженерный контур для диагностики проблем;
 - появились первые фокусные экраны и потоки: Profile, Discover, public buddy profile, interest/match и Chats list;
-- завершена стабилизация Chats / Trips frontend-flow: Chat Room, Trips mock-flow и навигация Chat ↔ Trips приведены к согласованному состоянию;
-- frontend checkpoint завершён на уровне mock/local-state;
+- сохранён frontend mock/local-state checkpoint как UI-основа для незакрытых сценариев;
 - логическая доменная модель backend завершена и согласована;
 - утверждённая ER-модель закреплена как источник истины для дальнейших backend-этапов;
 - настроен local Supabase CLI workflow и local PostgreSQL/Supabase environment;
@@ -124,7 +118,10 @@ Telegram Mini App не отменяет будущую отдельную моб
 - завершён server-side Telegram Auth: проверка raw `initData`, `POST /auth/telegram`, `POST /auth/logout`, Bearer authentication и server-side multiple sessions с opaque token, SHA-256 hash в БД и TTL 30 дней;
 - первый login создаёт базовые User/TelegramIdentity/UserSettings/UserActivityState, повторный использует того же User; revoked, expired и deleted-user sessions отклоняются;
 - `DATABASE_URL` читается и валидируется только в server environment;
-- Profile + TravelIntent API, persistence интересов, чатов и поездок, realtime и AI остаются следующими этапами;
+- реализованы Profile + TravelIntent API, onboarding, persistence Discover interest/match, direct Chats/Messages и прямой Trip slice с `trip_stops`;
+- server-side Trip создаётся из direct Chat, и оба текущих ChatParticipant сразу становятся TripParticipant; TripInvitation не используется; UI-вызов этого API ещё не добавлен;
+- базовый Group Chat MVP пока не реализован; realtime, Trip write/lifecycle, invitations, сложный membership lifecycle, RLS/production backend deployment и AI/Proposal остаются дальнейшими отдельными задачами;
+- AI/Proposal и provider integrations отложены до подключения второго разработчика;
 - это уже не черновой каркас, а рабочая основа для MVP с постоянным URL, понятным процессом разработки и синхронизированной документацией.
 
 ## Идея проекта
@@ -165,7 +162,7 @@ Travel Friend не является просто планировщиком пу
 
 Цель MVP — проверить ключевую гипотезу:
 
-Люди готовы заполнять профиль, искать компанию для поездки, вступать в чат с потенциальными попутчиками и использовать ИИ, чтобы договориться о совместном путешествии.
+Люди готовы заполнять профиль, искать компанию для поездки, вступать в direct Chat с потенциальными попутчиками и создавать совместную Trip.
 
 В MVP входит:
 
@@ -177,8 +174,9 @@ Travel Friend не является просто планировщиком пу
 - механика взаимного интереса / мэтча;
 - создание чата после совпадения;
 - обсуждение поездки;
-- AI-помощник для согласования поездки;
-- генерация черновика маршрута на основе предпочтений участников.
+- базовый Group Chat (пока не реализован): создание создателем с минимум тремя участниками, выбором из existing matched/direct-chat companions, persisted messages, отображением в Chats и фиксированным составом;
+- server API создания Trip из существующего direct Chat;
+- просмотр сохранённого списка и detail Trip, включая участников и `trip_stops`.
 
 В MVP не входит:
 
@@ -192,6 +190,8 @@ Travel Friend не является просто планировщиком пу
 - платные подписки;
 - маркетплейс украшений профиля;
 - интеграции с авиакомпаниями, отелями и туроператорами.
+- AI Travel Copilot, `Proposal` и внешние provider-интеграции — до подключения второго разработчика;
+- TripInvitation, изменение состава Group Chat после создания и расширенный lifecycle Trip.
 
 Эти функции могут быть добавлены позже, если MVP подтвердит спрос.
 
@@ -204,9 +204,8 @@ Travel Friend не является просто планировщиком пу
 5. Отмечает интересных людей.
 6. При взаимном интересе создаётся чат.
 7. Участники обсуждают возможную поездку.
-8. ИИ анализирует сообщения и предпочтения участников.
-9. ИИ предлагает направление, маршрут, бюджет, активности и компромиссы.
-10. Участники получают черновик совместной поездки.
+8. Backend уже поддерживает создание Trip из existing direct Chat и сразу создаёт TripParticipant для обоих участников.
+9. UI-вызов этой команды ещё не реализован; серверные Trips доступны для списка и read-only detail.
 
 ## Основные модули продукта
 
@@ -262,7 +261,7 @@ Travel Friend не является просто планировщиком пу
 
 ### Чат
 
-Чат — центральное место, где пользователи знакомятся и обсуждают будущую поездку. В текущем Mini App уже есть Chat Room MVP на mock-data и local state, но это ещё не backend-реализация и не persistence-слой.
+Чат — центральное место, где пользователи знакомятся и обсуждают будущую поездку. В текущем direct-chat MVP список, история и создание текстовых сообщений уже работают через backend; realtime и read state пока не реализованы.
 
 На старте достаточно:
 
@@ -393,11 +392,11 @@ Backend-документация после завершения логичес�
 
 Ближайший порядок разработки:
 
-1. Profile + TravelIntent API: authenticated read/write профиля, read/write/archive active TravelIntent и onboarding state transitions только для текущего authenticated User.
-2. Frontend onboarding и первый полный flow: Telegram Auth → User → onboarding → Profile → TravelIntent → onboarding completed → основной интерфейс, включая повторный запуск с восстановлением того же пользователя и данных.
-3. Последующие persistence slices для интересов, чатов и поездок.
-4. Realtime chat flow после базовой persistence.
-5. AI только после рабочего backend-контура.
+1. MVP mega-review backend-backed direct-chat flow.
+2. UI-вызов уже существующего Trip creation API, затем один следующий Trip write/lifecycle slice.
+3. Production deployment/RLS/runbook backend.
+4. Realtime chat flow после стабилизации HTTP contracts.
+5. AI только после подключения второго разработчика.
 
 ## Долгосрочное видение
 

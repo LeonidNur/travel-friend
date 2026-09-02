@@ -1,5 +1,30 @@
 # Дневник разработки
 
+## 2026-09-02 — Backend-backed direct-chat MVP и pre-mega-review sync
+
+### Что сделали
+
+- Завершили frontend integration Profile/TravelIntent и onboarding: backend session определяет текущего пользователя, а UI восстанавливает профиль и active TravelIntent.
+- Завершили persisted Discover: candidates доступны только при completed onboarding и active TravelIntent; `interested` / `rejected` final, reciprocal interest создаёт Match и direct Chat.
+- Завершили persisted direct Chats/Messages: доступны list, history и создание текстового сообщения с server-side sequence.
+- Добавили Trips persistence, server API создания Trip из existing direct Chat, `trip_stops` persistence, `GET /trips` и `GET /trips/{tripId}`; Trips List и Detail используют read contracts. UI ещё не вызывает Trip creation endpoint.
+- Зафиксировали current direct-chat rule: при создании Trip оба текущих ChatParticipant сразу создаются как TripParticipant. `TripInvitation` в этом MVP не используется и остаётся частью future/group lifecycle design.
+- Провели docs-only sync перед MVP mega-review: historical/logical design отделён от already implemented HTTP/persistence slices; AI/Proposal явно отложен до подключения второго разработчика.
+
+### Что проверили
+
+- Сверили migrations, FastAPI routes/schemas, contract tests, Next.js API client и integration commits `2026-08-31` — `2026-09-02`.
+- Проверки документационного прохода фиксируются в текущем changeset: `git diff --check` и review ссылок/статусов; код, migrations и tests не менялись.
+
+### Оставшиеся риски и TODO
+
+- Нет documented production deployment backend, RLS policies и production `BACKEND_API_ORIGIN`; Vercel покрывает Mini App, но не весь backend stack.
+- Direct-chat Trip сейчас read/create-only: нет write/lifecycle endpoints, stop editor, invitation/group flow или Proposal.
+- `POST /chats/{chatId}/trips` не подключён к Mini App UI; это DOC/implementation gap для завершения пользовательского creation flow.
+- Messages пока без realtime, pagination, read/unread и UI logout; session token живёт только в runtime state frontend.
+- Current Discover не включает impressions, filters/ranking или отдельный match list.
+- Existing logical ER/AI docs описывают future architecture. Перед реализацией invitation/group lifecycle нужно отдельное решение, а не перенос этой design-модели в current direct-chat flow.
+
 ## 2026-08-26 — Core Identity + Telegram Auth backend checkpoint
 
 ### Что сделали

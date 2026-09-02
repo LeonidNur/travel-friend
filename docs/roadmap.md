@@ -32,29 +32,27 @@
 - ✅ local Supabase CLI workflow и local PostgreSQL/Supabase environment
 - ✅ Core Identity persistence (`users`, `telegram_identities`, `profiles`, `profile_photos`, `user_settings`, `user_activity_states`, `travel_intents`)
 - ✅ Telegram Auth backend: raw `initData` verification, `/auth/telegram`, `/auth/logout`, Bearer authentication и server-side sessions
+- ✅ Profile + TravelIntent API и frontend onboarding / hydration
+- ✅ Discover candidates + финальные interest decisions + Match → direct Chat
+- ✅ persisted direct Chats и Messages
+- ✅ Trips persistence, server Trip creation API из direct Chat, `trip_stops`, Trips List и Trip Detail
 
 ## Текущий этап
 
-### Profile + TravelIntent API
+### MVP mega-review и закрытие незавершённых direct-chat сценариев
 
-#### Backend
+Реализованный frontend vertical slice: `Telegram Auth → onboarding → Profile → TravelIntent → Discover → reciprocal Match → direct Chat → Messages`; Trips List/Detail читают persistence. Server-side Trip creation API уже существует, но UI ещё не вызывает его.
 
-- authenticated Profile read/write;
-- authenticated active TravelIntent read/write/archive;
-- все операции только для текущего authenticated User;
-- onboarding state transitions;
-- backend contract для будущего frontend onboarding.
+Следующие самостоятельные work items:
 
-#### Следом: frontend onboarding
+- UI для уже существующего `POST /chats/{chatId}/trips`, затем Trip write/lifecycle: изменение подтверждённого состояния, stop editor, `start/complete/cancel/leave` и правила версий;
+- realtime, read state и pagination для сообщений;
+- production backend deployment/configuration, RLS и операционный runbook;
+- безопасность и moderation capabilities (block/report/audit);
+- базовый Group Chat MVP: создание создателем с минимум тремя участниками из existing matched/direct-chat companions, persisted messages, отображение в Chats, фиксированный состав и создание Trip из direct/group Chat с переносом всех текущих участников;
+- invitations, изменение состава, leave, roles/admin/permissions, invite links, сложный membership lifecycle Group Chat и расширенный Trip lifecycle — после отдельного решения.
 
-- первый полный flow: Telegram Auth → User → onboarding → Profile → TravelIntent → onboarding completed → основной интерфейс;
-- повторный запуск с восстановлением того же пользователя и данных.
-
-#### Последующие этапы
-
-- persistence slices для интересов, чатов и поездок;
-- realtime chat flow после базовой persistence;
-- AI только после рабочего backend-контура.
+AI/Proposal и provider integrations отложены до подключения второго разработчика. Это не блокер текущего direct-chat MVP и не должно реализовываться в рамках закрытия его persistence flow.
 
 #### UX/UI refinement
 
@@ -64,11 +62,11 @@
 
 ## Дальше
 
-1. Реализовать Profile + TravelIntent API для текущего authenticated User.
-2. Реализовать frontend onboarding и сквозное восстановление существующего пользователя и данных.
-3. Продолжить persistence slices для интересов, чатов и поездок.
-4. Вернуться к realtime chat flow после базовой persistence.
-5. Подключить AI только после рабочего backend-контура.
+1. Провести MVP mega-review текущего backend-backed direct-chat flow.
+2. Согласовать и реализовать следующий один Trip lifecycle/write slice.
+3. Определить production backend deployment, RLS и наблюдаемость до внешнего запуска.
+4. Вернуться к realtime chat flow после стабилизации базовых HTTP contracts.
+5. Вернуться к AI только после подключения второго разработчика.
 
 ## Примечания
 

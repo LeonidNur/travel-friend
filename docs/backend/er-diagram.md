@@ -1,5 +1,7 @@
 # ER-диаграмма
 
+> Статус: утверждённая logical ER design, а не физическая schema и не описание current direct-chat MVP. В текущей реализации TripInvitation/group lifecycle/Proposal/AI отсутствуют; Trip из direct Chat сразу получает обоих ChatParticipant как TripParticipant.
+
 Этот документ переносит утверждённую ER-модель Travel Friend практически без изменений. Она остаётся источником истины для логической доменной модели и последующих backend-этапов.
 
 ## 1. Identity, Profile и Discover

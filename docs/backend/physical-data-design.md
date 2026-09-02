@@ -1,10 +1,16 @@
 # Travel Friend — Physical Data Design
 
-> Статус: reviewed и зафиксирован как design input для последующих Supabase/PostgreSQL migrations.
+> Статус: reviewed design input. Его identity/chat/trip подмножество частично реализовано migrations в `supabase/migrations/` по состоянию на 2026-09-02; остальные разделы не являются описанием поставленной schema.
 >
 > Источники истины: актуальные ER/domain model и backend contracts.
 >
 > Этот документ не является SQL migration, RLS policy или OpenAPI specification.
+
+## Статус реализации и важные расхождения current MVP
+
+Фактические SQL-источники истины — migrations. Уже существуют identity/session, `discover_interest_decisions` + `matches`, direct Chats/Messages, `trips`, `trip_participants` и `trip_stops`.
+
+Этот документ сохраняет более широкую future design. В частности, current Discover пока не создаёт `discover_impressions`, `discover_decisions` или `likes`; а direct-chat Trip создаётся без `TripInvitation`: оба текущих ChatParticipant сразу становятся TripParticipant. Базовый Group Chat входит в MVP, но пока не реализован; invitations, сложный group membership lifecycle, Proposal/AI, transport, external offers, audit/moderation и RLS остаются deferred.
 
 ## Общие правила
 

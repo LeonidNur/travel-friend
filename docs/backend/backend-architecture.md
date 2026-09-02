@@ -1,5 +1,7 @@
 # Backend architecture
 
+> Статус: target architecture. В `develop` реализованы FastAPI, server-side Telegram Auth, часть persistence и HTTP contracts; отдельный AI Orchestrator, external providers, RLS и realtime ещё не реализованы. AI отложен до подключения второго разработчика.
+
 ## Назначение документа
 
 Этот документ фиксирует высокоуровневую backend-архитектуру Travel Friend после завершения логической доменной модели. Он не задаёт API-контракты, схему БД, RLS, persistence-слой или realtime-реализацию.

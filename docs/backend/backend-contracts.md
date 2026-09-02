@@ -2,11 +2,41 @@
 
 ## Назначение и границы
 
-Этот документ фиксирует логические backend contracts Travel Friend для пользовательских и domain actions. Контракты описывают команды, чтение состояния и границы доверия между frontend, backend/domain, AI/ML и внешними provider-ами.
+Этот документ содержит два разных слоя: сначала фактические HTTP contracts `develop`, затем логические contracts будущей архитектуры. Они не равны друг другу: deferred design ниже не является API specification уже реализованного MVP.
 
 API проектируется вокруг пользовательских и domain actions, а не как CRUD поверх каждой ER-сущности. Frontend не может напрямую создавать внутренние сущности `Match`, `ChatParticipant`, `TripParticipant`, `Proposal` и system `Message`. Backend/domain является доверенной точкой применения инвариантов, авторизации и атомарных domain-операций.
 
-Контракты пока логические. Они не являются проектированием FastAPI implementation, OpenAPI, Supabase schema, RLS или realtime transport.
+## Реализованные HTTP contracts (`develop`, 2026-09-02)
+
+Все кроме `GET /health` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
+
+| Method | Path | Назначение |
+| --- | --- | --- |
+| `GET` | `/health` | health check |
+| `POST` | `/auth/telegram` | verify raw `init_data`, login/create identity and session, вернуть bootstrap flags |
+| `POST` | `/auth/logout` | revoke только текущую session, `204` |
+| `GET` / `PATCH` | `/me/profile` | получить/изменить профиль текущего пользователя |
+| `GET` / `PUT` / `DELETE` | `/me/travel-intent` | active TravelIntent; `DELETE` архивирует его, `204` |
+| `PATCH` | `/me/onboarding` | переход только в `in_progress` или `completed`; completed нельзя понизить |
+| `GET` | `/discover/candidates` | eligible candidates без решений текущего пользователя |
+| `PUT` | `/discover/decisions/{targetUserId}` | финальное `interested` / `rejected`; reciprocal interest создаёт Match и direct Chat |
+| `GET` | `/chats` | direct Chats текущего участника |
+| `GET` / `POST` | `/chats/{chatId}/messages` | история / новое текстовое сообщение direct Chat |
+| `POST` | `/chats/{chatId}/trips` | создать одну `forming` Trip из доступного direct Chat |
+| `GET` | `/trips` | Trip текущего участника |
+| `GET` | `/trips/{tripId}` | detail Trip с route stops и активными participants |
+
+Текущие ограничения реализации:
+
+- `GET /chats/{chatId}`, message cursor pagination, read/unread API и realtime не реализованы.
+- `POST /chats/{chatId}/trips` разрешает только один незавершённый (`forming`/`active`) Trip на Chat и отвечает `409` при повторе.
+- Trip создаётся только из direct Chat. Backend в одной transaction читает ровно двух ChatParticipant и сразу создаёт обоих `TripParticipant`; `TripInvitation` в этом MVP flow не создаётся и не используется.
+- `GET /trips` и `GET /trips/{tripId}` — read contracts. Нет Trip/stop write API, start/complete/cancel/leave, invitation, group or Proposal endpoints.
+- Actual Discover не использует `DiscoverImpression`, отдельные Like records, filters или ranking: решение хранится как `discover_interest_decisions` с `interested`/`rejected`.
+
+## Логические contracts future design
+
+Следующие разделы сохраняют утверждённое направление будущей архитектуры. Где они расходятся с таблицей выше, приоритет для текущего MVP имеет реализованный HTTP contract.
 
 ## Identity, Profile и TravelIntent
 
@@ -107,7 +137,9 @@ Chat metadata и message history — разные read-модели и опер�
 - покинуть Trip: `POST /trips/{tripId}/leave`;
 - принять решение об отмене через collective lifecycle decision/voting: `POST /trips/{tripId}/cancellation-decision`.
 
-Trip создаётся только внутри Chat. После создания backend автоматически создаёт `TripInvitation` для текущих участников Chat. `TripParticipant` появляется только после accept invitation. `start-planning` — отдельная domain command; generic `PATCH status` не используется.
+Future/group lifecycle design: Trip создаётся только внутри Chat. После создания backend автоматически создаёт `TripInvitation` для текущих участников Chat. `TripParticipant` появляется только после accept invitation. `start-planning` — отдельная domain command; generic `PATCH status` не используется.
+
+Это **не** описание current direct-chat MVP: в нём TripInvitation не используется, а оба участника existing direct Chat становятся TripParticipant немедленно при создании Trip.
 
 После leave backend сам применяет membership-version, review и cancellation rules из domain model: увеличивает membership version, отменяет pending proposals и запускает необходимые reviews; budget всегда требует пересмотра. Если активных участников становится меньше двух, Trip автоматически отменяется.
 

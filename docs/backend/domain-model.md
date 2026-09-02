@@ -1,5 +1,7 @@
 # Логическая доменная модель
 
+> Статус: future logical design, не описание текущей поставки. Current direct-chat MVP создаёт Trip без `TripInvitation`: оба ChatParticipant сразу становятся TripParticipant. Базовый Group Chat входит в MVP, но пока не реализован; invitations и сложный group membership lifecycle, Proposal и AI остаются deferred.
+
 ## Назначение документа
 
 Этот документ кратко фиксирует логическую доменную модель Travel Friend после завершения этапа проектирования. Он не дублирует ER-диаграмму целиком и не задаёт physical schema, API или persistence-детали.

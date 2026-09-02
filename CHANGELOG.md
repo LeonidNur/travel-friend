@@ -1,5 +1,23 @@
 # Журнал изменений
 
+## 2026-09-02
+
+- Завершён backend-backed MVP flow: frontend использует server-side Telegram Auth и onboarding, а Profile и активный TravelIntent читаются и сохраняются через API текущего пользователя.
+- Persisted Discover возвращает кандидатов с completed onboarding и active TravelIntent; финальное `interested` / `rejected` решение сохраняется, а взаимный интерес атомарно создаёт `Match` и один direct Chat с двумя участниками.
+- Добавлены persisted direct Chats и Messages: список чатов, чтение истории и отправка текстового сообщения с серверным `sequence_number`.
+- Добавлен server-side current direct-chat Trip flow: `POST /chats/{chatId}/trips` создаёт одну `forming` Trip и сразу переносит обоих участников direct Chat в `trip_participants`; invitation flow в этой поставке не используется. Mini App пока не вызывает этот endpoint.
+- Добавлены `trip_stops` persistence, `GET /trips` и `GET /trips/{tripId}`; frontend интегрировал Discover, Chats, Trip List и Trip Detail с backend read/write contracts.
+- Документация синхронизирована с фактической реализацией `develop`. Базовый Group Chat входит в MVP, но пока не реализован; invitations и сложный membership lifecycle остаются deferred вместе с AI/Proposal, realtime, Trip lifecycle commands и внешними provider-интеграциями. AI отложен до подключения второго разработчика.
+
+Known limitations / TODO:
+
+- В direct-chat MVP реализовано только создание и чтение Trip: нет изменения Trip, stop editor, start/complete/cancel/leave, invitation; базовый Group Chat MVP пока не реализован.
+- Отсутствует UI для вызова существующего `POST /chats/{chatId}/trips`; поэтому Trip creation ещё не является завершённым пользовательским flow.
+- Chat messages не имеют pagination, read receipts/unread API, archive/restore и realtime delivery.
+- Нет RLS policies, production deployment/runbook backend и зафиксированного production `BACKEND_API_ORIGIN`; Vercel настроен для Mini App, не как документированное развёртывание FastAPI.
+- Auth bootstrap хранит access token только в runtime state клиента: поведение после browser reload и server-side logout UI требуют отдельной продуктовой/технической задачи.
+- Current Discover — последовательный список без filters/ranking/impressions и без отдельного Match list.
+
 ## 2026-08-26
 
 - Завершён backend checkpoint Core Identity + Telegram Auth.
