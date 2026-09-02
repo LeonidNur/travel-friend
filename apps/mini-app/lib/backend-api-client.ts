@@ -82,6 +82,20 @@ export type DirectChatResponse = Readonly<{
   created_at: string;
 }>;
 
+export type TripListItemResponse = Readonly<{
+  trip_id: string;
+  chat_id: string;
+  status: 'forming' | 'active' | 'completed' | 'cancelled';
+  created_at: string;
+  date_from: string | null;
+  date_to: string | null;
+  destination_status: 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+  dates_status: 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+  budget_status: 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+  transport_status: 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+  route_place_labels: string[];
+}>;
+
 export type ChatMessageResponse = Readonly<{
   message_id: string;
   chat_id: string;
@@ -154,6 +168,7 @@ export type BackendApiClient = Readonly<{
   deleteTravelIntent: (token: string) => Promise<void>;
   patchOnboarding: (token: string, payload: OnboardingPatchRequest) => Promise<OnboardingResponse>;
   getChats: (token: string) => Promise<DirectChatResponse[]>;
+  getTrips: (token: string) => Promise<TripListItemResponse[]>;
   getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
   createChatMessage: (
     token: string,
@@ -243,6 +258,7 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
     patchOnboarding: (token, payload) =>
       request<OnboardingResponse>('/me/onboarding', { method: 'PATCH', token, body: payload }),
     getChats: (token) => request<DirectChatResponse[]>('/chats', { method: 'GET', token }),
+    getTrips: (token) => request<TripListItemResponse[]>('/trips', { method: 'GET', token }),
     getChatMessages: (token, chatId) =>
       request<ChatMessageResponse[]>(`/chats/${chatId}/messages`, { method: 'GET', token }),
     createChatMessage: (token, chatId, payload) =>

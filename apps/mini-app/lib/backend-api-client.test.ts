@@ -110,6 +110,33 @@ test('maps GET /chats through the authenticated backend client', async () => {
   ]);
 });
 
+test('maps GET /trips through the authenticated backend client', async () => {
+  const trips = [{
+    trip_id: 'trip-uuid',
+    chat_id: 'chat-uuid',
+    status: 'forming',
+    created_at: '2026-09-01T10:00:00Z',
+    date_from: null,
+    date_to: null,
+    destination_status: 'empty',
+    dates_status: 'empty',
+    budget_status: 'empty',
+    transport_status: 'empty',
+    route_place_labels: []
+  }];
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(trips)));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(await client.getTrips('session-token'), trips);
+  assert.deepEqual(calls, [{
+    input: '/api/backend/trips',
+    init: {
+      headers: { Accept: 'application/json', Authorization: 'Bearer session-token' },
+      method: 'GET'
+    }
+  }]);
+});
+
 test('loads Discover candidates with the runtime Bearer token', async () => {
   const candidates = [{
     user_id: 'candidate-uuid',
