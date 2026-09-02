@@ -4,15 +4,16 @@
 
 - Завершён backend-backed MVP flow: frontend использует server-side Telegram Auth и onboarding, а Profile и активный TravelIntent читаются и сохраняются через API текущего пользователя.
 - Persisted Discover возвращает кандидатов с completed onboarding и active TravelIntent; финальное `interested` / `rejected` решение сохраняется, а взаимный интерес атомарно создаёт `Match` и один direct Chat с двумя участниками.
-- Добавлены persisted direct Chats и Messages: список чатов, чтение истории и отправка текстового сообщения с серверным `sequence_number`.
-- Добавлен server-side current direct-chat Trip flow: `POST /chats/{chatId}/trips` создаёт одну `forming` Trip и сразу переносит обоих участников direct Chat в `trip_participants`; invitation flow в этой поставке не используется. Mini App пока не вызывает этот endpoint.
+- Добавлены persisted direct и group Chats/Messages: Group Chat создаётся создателем с минимум двумя existing matched/direct-chat companions (итого минимум три участника), его состав фиксирован для MVP, а messages доступны всем активным участникам.
+- `GET /chats` возвращает direct и group projection; Mini App создаёт Group Chat и отображает его участников без persisted title.
+- `POST /chats/{chatId}/trips` создаёт одну `forming` Trip из direct или group Chat и переносит всех активных ChatParticipant в `trip_participants`; invitation flow в этой поставке не используется. Mini App вызывает endpoint из Chat Room и при `409` открывает existing unfinished Trip через `GET /trips`.
 - Добавлены `trip_stops` persistence, `GET /trips` и `GET /trips/{tripId}`; frontend интегрировал Discover, Chats, Trip List и Trip Detail с backend read/write contracts.
-- Документация синхронизирована с фактической реализацией `develop`. Базовый Group Chat входит в MVP, но пока не реализован; invitations и сложный membership lifecycle остаются deferred вместе с AI/Proposal, realtime, Trip lifecycle commands и внешними provider-интеграциями. AI отложен до подключения второго разработчика.
+- Документация синхронизирована с фактической реализацией `develop`. Invitations и сложный membership lifecycle остаются deferred вместе с AI/Proposal, realtime, Trip lifecycle commands и внешними provider-интеграциями. AI отложен до подключения второго разработчика.
 
 Known limitations / TODO:
 
-- В direct-chat MVP реализовано только создание и чтение Trip: нет изменения Trip, stop editor, start/complete/cancel/leave, invitation; базовый Group Chat MVP пока не реализован.
-- Отсутствует UI для вызова существующего `POST /chats/{chatId}/trips`; поэтому Trip creation ещё не является завершённым пользовательским flow.
+- В MVP реализовано создание и чтение Trip из direct/group Chat: нет изменения Trip, stop editor, start/complete/cancel/leave и invitation.
+- Group membership фиксирован после создания; invitations, add/remove/leave, roles/admin/permissions и invite links остаются deferred.
 - Chat messages не имеют pagination, read receipts/unread API, archive/restore и realtime delivery.
 - Нет RLS policies, production deployment/runbook backend и зафиксированного production `BACKEND_API_ORIGIN`; Vercel настроен для Mini App, не как документированное развёртывание FastAPI.
 - Auth bootstrap хранит access token только в runtime state клиента: поведение после browser reload и server-side logout UI требуют отдельной продуктовой/технической задачи.

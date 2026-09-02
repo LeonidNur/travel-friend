@@ -1,6 +1,6 @@
 # Логическая доменная модель
 
-> Статус: future logical design, не описание текущей поставки. Current direct-chat MVP создаёт Trip без `TripInvitation`: оба ChatParticipant сразу становятся TripParticipant. Базовый Group Chat входит в MVP, но пока не реализован; invitations и сложный group membership lifecycle, Proposal и AI остаются deferred.
+> Статус: future logical design, не описание текущей поставки. Current MVP создаёт Trip без `TripInvitation`: все активные ChatParticipant direct или group Chat сразу становятся TripParticipant. Базовый Group Chat реализован с минимум тремя участниками и фиксированным составом; invitations и сложный group membership lifecycle, Proposal и AI остаются deferred.
 
 ## Назначение документа
 
@@ -31,7 +31,7 @@
 
 ### 3. Group chat orchestration
 
-Домен описывает, как direct chat превращается в group chat и как группа расширяется:
+Deferred domain описывает, как group Chat может расширяться после MVP:
 
 - `GroupChatCreation` и `GroupChatCreationVote` для первого перехода из direct chat в group chat;
 - `ChatMembershipProposal` и `ChatMembershipVote` для добавления новых участников в существующий group chat.
@@ -118,11 +118,11 @@
 
 ### Group chat flow
 
-Сначала существует direct `Chat` двух участников. Затем через `GroupChatCreation` можно предложить третьего участника, дождаться единогласия текущих участников и отдельного согласия кандидата, после чего создаётся новый group `Chat`. Дальнейшее расширение идёт через `ChatMembershipProposal` в рамках уже существующего group chat.
+Current MVP создаёт отдельный group `Chat` инициатором с минимум двумя existing matched/direct-chat companions; итоговая группа содержит минимум трёх участников и не меняет состав. `GroupChatCreation` с голосованиями и `ChatMembershipProposal` ниже остаются вариантом deferred design для будущего расширения группы.
 
 ### Trip
 
-`Trip` создаётся внутри `Chat` в статусе `forming`. Всем текущим участникам чата отправляются персональные `TripInvitation`. После принятия приглашений появляются `TripParticipant`. Когда минимум два участника согласились и кто-то явно запускает планирование, состав фиксируется, оставшиеся pending invitation отменяются, а `Trip` переходит в `active`. Далее поездка либо завершается (`completed`), либо отменяется (`cancelled`).
+Current MVP создаёт `Trip` внутри direct или group `Chat` в статусе `forming` и немедленно копирует всех активных `ChatParticipant` в `TripParticipant`. `TripInvitation`, accept flow и дальнейший lifecycle ниже остаются deferred design.
 
 ### Proposal
 

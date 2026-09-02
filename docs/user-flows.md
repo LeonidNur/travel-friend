@@ -12,10 +12,11 @@
 → взаимный мэтч
 → создание чата
 → обсуждение поездки
-→ обсуждение в direct Chat
-→ просмотр server-side Trip в списке и read-only detail, если она уже создана
+→ обсуждение в direct или group Chat
+→ создание Trip из Chat
+→ просмотр server-side Trip в списке и read-only detail
 ```
 
 ## Граница текущего MVP
 
-`POST /chats/{chatId}/trips` уже создаёт Trip и сразу добавляет обоих участников direct Chat как TripParticipant, но кнопка/вызов этого endpoint в Mini App ещё не реализованы. `TripInvitation` в этом direct-chat flow не создаётся и не используется. Базовый Group Chat входит в MVP, но пока не реализован; invitations и сложный membership lifecycle, редактирование Trip, realtime и AI/Proposal остаются отложенными сценариями. AI возвращается в план только после подключения второго разработчика.
+Group Chat создаётся создателем из минимум двух existing matched/direct-chat companions; вместе с создателем в нём минимум три участника. Состав фиксирован для MVP, persisted group title отсутствует, а persisted messages доступны всем участникам. `POST /chats/{chatId}/trips` создаёт Trip из direct или group Chat и сразу добавляет всех активных ChatParticipant как TripParticipant; `TripInvitation` не используется. Mini App вызывает endpoint из Chat Room: при `201` открывает Trip Detail, при `409` читает `GET /trips` и открывает existing unfinished Trip того же Chat. Invitations, add/remove/leave, roles/admin/permissions, invite links, редактирование Trip, realtime, read receipts, pagination и AI/Proposal остаются deferred.

@@ -10,7 +10,7 @@
 - получить взаимный мэтч;
 - перейти в чат;
 - обсудить поездку;
-- проверить server-side создание и просмотр совместной Trip из direct Chat.
+- создать и просмотреть совместную Trip из direct или group Chat.
 
 ## Что входит в MVP
 
@@ -23,9 +23,9 @@
 - механика взаимного интереса / мэтча;
 - создание чата после совпадения;
 - обсуждение поездки;
-- базовый Group Chat (пока не реализован): создатель выбирает existing matched/direct-chat companions; в группе минимум три участника вместе с создателем; сообщения persisted и видны в Chats; состав после создания фиксирован;
+- Group Chat: создатель выбирает existing matched/direct-chat companions; в группе минимум три участника вместе с создателем; сообщения persisted и видны в Chats; состав после создания фиксирован;
 - создание Trip из direct или group Chat с переносом всех текущих `ChatParticipant` в `TripParticipant`;
-- server API создания Trip из существующего direct Chat (UI-вызов ещё не реализован);
+- создание Trip из existing direct или group Chat через Chat Room; при `409` Mini App через `GET /trips` открывает existing unfinished Trip того же Chat;
 - список и read-only detail сохранённых Trip, включая участников и `trip_stops`.
 
 ## Что НЕ входит в MVP
@@ -41,7 +41,8 @@
 - маркетплейс украшений профиля;
 - интеграции с авиакомпаниями, отелями и туроператорами.
 - AI Travel Copilot, `Proposal`, генерация маршрута и внешние provider-интеграции — отложены до подключения второго разработчика;
-- invitations, add/remove members, leave, roles/admin/permissions, invite links и сложный membership lifecycle Group Chat;
+- invitations, add/remove members, leave, roles/admin/permissions, invite links, persisted group title и сложный membership lifecycle Group Chat;
+- realtime, read receipts и pagination сообщений;
 - TripInvitation и расширенный Trip lifecycle.
 
 ## Критерий успеха MVP
@@ -53,4 +54,4 @@ MVP считается успешным, если пользователи:
 - просматривают других пользователей;
 - используют механику интереса / мэтча;
 - переходят к обсуждению поездки;
-- после добавления UI-вызова создают Trip из direct Chat и видят её сохранённое состояние после повторного открытия приложения.
+- создают Trip из direct или group Chat и видят её сохранённое состояние после повторного открытия приложения.

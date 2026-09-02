@@ -8,9 +8,9 @@
 
 ## Статус реализации и важные расхождения current MVP
 
-Фактические SQL-источники истины — migrations. Уже существуют identity/session, `discover_interest_decisions` + `matches`, direct Chats/Messages, `trips`, `trip_participants` и `trip_stops`.
+Фактические SQL-источники истины — migrations. Уже существуют identity/session, `discover_interest_decisions` + `matches`, direct/group Chats/Messages, `trips`, `trip_participants` и `trip_stops`.
 
-Этот документ сохраняет более широкую future design. В частности, current Discover пока не создаёт `discover_impressions`, `discover_decisions` или `likes`; а direct-chat Trip создаётся без `TripInvitation`: оба текущих ChatParticipant сразу становятся TripParticipant. Базовый Group Chat входит в MVP, но пока не реализован; invitations, сложный group membership lifecycle, Proposal/AI, transport, external offers, audit/moderation и RLS остаются deferred.
+Этот документ сохраняет более широкую future design. В частности, current Discover пока не создаёт `discover_impressions`, `discover_decisions` или `likes`; а Trip из direct или group Chat создаётся без `TripInvitation`: все активные ChatParticipant сразу становятся TripParticipant. Group Chat использует существующие `chats(type='group')` и `chat_participants`, начинается минимум с трёх участников и имеет фиксированный MVP-состав без persisted title. Invitations, сложный group membership lifecycle, Proposal/AI, transport, external offers, audit/moderation и RLS остаются deferred.
 
 ## Общие правила
 

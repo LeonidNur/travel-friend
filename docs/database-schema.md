@@ -13,7 +13,7 @@
 - `20260901140000_trip_persistence.sql`: `trips`, `trip_participants`;
 - `20260901150000_trip_stops_persistence.sql`: `trip_stops`.
 
-В current direct-chat MVP одна новая Trip из existing direct Chat сразу получает двух `trip_participants`. Таблицы `trip_invitations`, group lifecycle, `proposals`, transport segments, provider/AI, audit/moderation и RLS policies не созданы.
+В current MVP новая Trip из existing direct или group Chat сразу получает всех активных `trip_participants`. Таблицы `trip_invitations`, membership lifecycle, `proposals`, transport segments, provider/AI, audit/moderation и RLS policies не созданы. Для Group Chat schema использует существующие `chats(type='group')` и `chat_participants`; persisted group title отдельной таблицей или полем не хранится.
 
 ## Design references
 

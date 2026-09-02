@@ -35,13 +35,14 @@
 - чат после мэтча;
 - текстовые сообщения;
 - серверная история сообщений без realtime/read receipts.
-- базовый Group Chat (пока не реализован): создатель выбирает existing matched/direct-chat companions, в группе минимум три участника вместе с создателем, сообщения persisted, а состав после создания фиксирован;
+- Group Chat: создатель выбирает existing matched/direct-chat companions, в группе минимум три участника вместе с создателем, сообщения persisted, а состав после создания фиксирован;
 - из direct и group Chat создаётся Trip, при этом все текущие `ChatParticipant` становятся `TripParticipant`.
 
 ### Trips
 
-- server API создания только из существующего direct Chat (без Mini App UI-вызова);
-- оба ChatParticipant сразу становятся TripParticipant;
+- создание из existing direct или group Chat через Mini App;
+- все активные ChatParticipant сразу становятся TripParticipant;
+- при `409` Mini App читает `GET /trips` и открывает existing unfinished Trip того же Chat;
 - список и read-only detail Trip;
 - read `trip_stops`.
 
@@ -54,7 +55,7 @@
 - интеграции с travel-сервисами;
 - отдельное мобильное приложение.
 - AI Travel Copilot / Proposal и внешние travel provider-интеграции (отложены до подключения второго разработчика);
-- invitations, add/remove members, leave, roles/admin/permissions, invite links и сложный membership lifecycle Group Chat;
+- invitations, add/remove members, leave, roles/admin/permissions, invite links, persisted group title и сложный membership lifecycle Group Chat;
 - TripInvitation и расширенный lifecycle поездки;
 - realtime messaging, pagination и read receipts;
 - Profile photo UI/API и Discover filters/ranking.

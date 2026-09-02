@@ -20,18 +20,20 @@ API проектируется вокруг пользовательских и 
 | `PATCH` | `/me/onboarding` | переход только в `in_progress` или `completed`; completed нельзя понизить |
 | `GET` | `/discover/candidates` | eligible candidates без решений текущего пользователя |
 | `PUT` | `/discover/decisions/{targetUserId}` | финальное `interested` / `rejected`; reciprocal interest создаёт Match и direct Chat |
-| `GET` | `/chats` | direct Chats текущего участника |
-| `GET` / `POST` | `/chats/{chatId}/messages` | история / новое текстовое сообщение direct Chat |
-| `POST` | `/chats/{chatId}/trips` | создать одну `forming` Trip из доступного direct Chat |
+| `GET` | `/chats` | direct и group Chats текущего активного участника |
+| `POST` | `/chats/groups` | создать Group Chat из минимум двух eligible direct-chat companions инициатора |
+| `GET` / `POST` | `/chats/{chatId}/messages` | история / новое текстовое сообщение доступного direct или group Chat |
+| `POST` | `/chats/{chatId}/trips` | создать одну `forming` Trip из доступного direct или group Chat |
 | `GET` | `/trips` | Trip текущего участника |
 | `GET` | `/trips/{tripId}` | detail Trip с route stops и активными participants |
 
 Текущие ограничения реализации:
 
 - `GET /chats/{chatId}`, message cursor pagination, read/unread API и realtime не реализованы.
+- Group Chat создаётся инициатором с минимум двумя unique eligible companions; eligible означает existing matched direct Chat с инициатором. Инициатор добавляется автоматически, а состав после создания не редактируется в MVP.
 - `POST /chats/{chatId}/trips` разрешает только один незавершённый (`forming`/`active`) Trip на Chat и отвечает `409` при повторе.
-- Trip создаётся только из direct Chat. Backend в одной transaction читает ровно двух ChatParticipant и сразу создаёт обоих `TripParticipant`; `TripInvitation` в этом MVP flow не создаётся и не используется.
-- `GET /trips` и `GET /trips/{tripId}` — read contracts. Нет Trip/stop write API, start/complete/cancel/leave, invitation, group or Proposal endpoints.
+- Trip создаётся из direct или group Chat. Backend в одной transaction читает всех активных ChatParticipant и сразу создаёт столько же `TripParticipant`; `TripInvitation` в этом MVP flow не создаётся и не используется.
+- `GET /trips` и `GET /trips/{tripId}` — read contracts. Нет Trip/stop write API, start/complete/cancel/leave, invitation или Proposal endpoints. Mini App при `409` использует `GET /trips`, чтобы найти unfinished Trip того же Chat и открыть её.
 - Actual Discover не использует `DiscoverImpression`, отдельные Like records, filters или ranking: решение хранится как `discover_interest_decisions` с `interested`/`rejected`.
 
 ## Логические contracts future design
@@ -139,7 +141,7 @@ Chat metadata и message history — разные read-модели и опер�
 
 Future/group lifecycle design: Trip создаётся только внутри Chat. После создания backend автоматически создаёт `TripInvitation` для текущих участников Chat. `TripParticipant` появляется только после accept invitation. `start-planning` — отдельная domain command; generic `PATCH status` не используется.
 
-Это **не** описание current direct-chat MVP: в нём TripInvitation не используется, а оба участника existing direct Chat становятся TripParticipant немедленно при создании Trip.
+Это **не** описание current MVP: в нём TripInvitation не используется, а все активные участники existing direct или group Chat становятся TripParticipant немедленно при создании Trip.
 
 После leave backend сам применяет membership-version, review и cancellation rules из domain model: увеличивает membership version, отменяет pending proposals и запускает необходимые reviews; budget всегда требует пересмотра. Если активных участников становится меньше двух, Trip автоматически отменяется.
 
@@ -235,7 +237,9 @@ AI/ML не получает application secrets и не изменяет Trip н
 
 Конкретные поставщики сейчас не выбираются. Все внешние ответы считаются недоверенными, валидируются и нормализуются backend-ом; provider secrets остаются только на backend.
 
-## Group Chat и membership
+## Future Group Chat membership design
+
+Current MVP уже создаёт Group Chat через `POST /chats/groups`: создатель выбирает минимум двух eligible direct-chat companions, инициатор добавляется автоматически, а состав фиксирован. Ниже описан **deferred** design invitations, голосований и изменения состава; его endpoints не реализованы.
 
 ### Первый group chat
 

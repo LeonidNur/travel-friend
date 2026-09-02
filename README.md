@@ -48,19 +48,20 @@ Telegram Mini App не отменяет будущую отдельную моб
 - server-side Telegram Auth: raw `initData` проверяется FastAPI, а backend выдаёт opaque Bearer session; UI проходит onboarding или открывает основной интерфейс по его результату
 - Profile и active TravelIntent: read/write API текущего пользователя и frontend hydration/edit flow
 - Discover: backend candidates, финальные `interested` / `rejected` решения и reciprocal `Match → direct Chat`
-- direct Chats: persisted список, server-side message history и отправка текстовых сообщений
-- Trips: persistence, server API создания из direct Chat, `trip_stops`, backend Trips List и read-only Trip Detail
+- Chats: persisted direct и group список, server-side message history и отправка текстовых сообщений
+- Group Chats: создание из existing matched/direct-chat companions, минимум три участника и фиксированный MVP-состав
+- Trips: persistence, server API создания из direct/group Chat, `trip_stops`, backend Trips List и read-only Trip Detail
 - публичные профили попутчиков на маршруте `/buddies/[id]`
 - сохраняются historical mock/screens как UI fallback и дизайн-ориентир там, где backend contract ещё не реализован
 - единый порядок категорий и текстовые состояния категорий
 - двусторонняя навигация Chat ↔ Trip: Chat Room ведёт в конкретный связанный Trip, а Trip Details ведёт в конкретный Chat
-- direct-chat Trip создаётся только из существующего Chat; оба его ChatParticipant сразу становятся TripParticipant
+- Trip создаётся только из существующего direct или group Chat; все активные ChatParticipant сразу становятся TripParticipant
 - в Chat Room скрыта Bottom Navigation, а длинные и многострочные сообщения уже исправлены
 - проверка Chat Room выполнена локально, через Vercel Preview и внутри Telegram Mini App
 - единый frontend data model слой для профилей, travel preferences, чатов и решений интереса
 - обновлённая нижняя навигация с основной группой Chats / Discover / Trips и отдельным Profile
 
-Рабочий MVP flow уже backend-backed до direct Chat/messages; Trips List и Detail читают persistence. Server API создания Trip из direct Chat реализован, но Mini App пока не вызывает его: UI создания Trip остаётся отдельным незакрытым work item. Базовый Group Chat входит в MVP, но пока не реализован. Realtime, read receipts, Trip write/lifecycle, TripInvitation, сложный membership lifecycle, AI/Proposal и provider integrations также отсутствуют. Логическая ER-модель остаётся design-источником для deferred архитектуры и не должна приниматься за перечень уже поставленных таблиц/API.
+Рабочий MVP flow backend-backed: direct и group Chat, persisted messages, создание Trip из Chat и Trips List/Detail читают persistence. Mini App создаёт Trip через API; при `409` читает `GET /trips` и открывает существующую незавершённую Trip того же Chat. Realtime, read receipts, pagination, Trip write/lifecycle, TripInvitation, сложный membership lifecycle, AI/Proposal и provider integrations также отсутствуют. Логическая ER-модель остаётся design-источником для deferred архитектуры и не должна приниматься за перечень уже поставленных таблиц/API.
 
 ### Почему мы отказались от ngrok
 
@@ -118,9 +119,10 @@ Telegram Mini App не отменяет будущую отдельную моб
 - завершён server-side Telegram Auth: проверка raw `initData`, `POST /auth/telegram`, `POST /auth/logout`, Bearer authentication и server-side multiple sessions с opaque token, SHA-256 hash в БД и TTL 30 дней;
 - первый login создаёт базовые User/TelegramIdentity/UserSettings/UserActivityState, повторный использует того же User; revoked, expired и deleted-user sessions отклоняются;
 - `DATABASE_URL` читается и валидируется только в server environment;
-- реализованы Profile + TravelIntent API, onboarding, persistence Discover interest/match, direct Chats/Messages и прямой Trip slice с `trip_stops`;
-- server-side Trip создаётся из direct Chat, и оба текущих ChatParticipant сразу становятся TripParticipant; TripInvitation не используется; UI-вызов этого API ещё не добавлен;
-- базовый Group Chat MVP пока не реализован; realtime, Trip write/lifecycle, invitations, сложный membership lifecycle, RLS/production backend deployment и AI/Proposal остаются дальнейшими отдельными задачами;
+- реализованы Profile + TravelIntent API, onboarding, persistence Discover interest/match, direct/group Chats/Messages и Trip slice с `trip_stops`;
+- Group Chat создаётся с минимум тремя участниками: создатель выбирает existing matched/direct-chat companions, а состав фиксирован для MVP;
+- Trip создаётся из direct или group Chat; все активные ChatParticipant сразу становятся TripParticipant; TripInvitation не используется; Mini App вызывает API и при `409` открывает существующую unfinished Trip через `GET /trips`;
+- realtime, Trip write/lifecycle, invitations, сложный membership lifecycle, RLS/production backend deployment и AI/Proposal остаются дальнейшими отдельными задачами;
 - AI/Proposal и provider integrations отложены до подключения второго разработчика;
 - это уже не черновой каркас, а рабочая основа для MVP с постоянным URL, понятным процессом разработки и синхронизированной документацией.
 
@@ -174,8 +176,8 @@ Travel Friend не является просто планировщиком пу
 - механика взаимного интереса / мэтча;
 - создание чата после совпадения;
 - обсуждение поездки;
-- базовый Group Chat (пока не реализован): создание создателем с минимум тремя участниками, выбором из existing matched/direct-chat companions, persisted messages, отображением в Chats и фиксированным составом;
-- server API создания Trip из существующего direct Chat;
+- Group Chat: создание создателем с минимум тремя участниками, выбором из existing matched/direct-chat companions, persisted messages, отображением в Chats и фиксированным составом;
+- создание Trip из existing direct или group Chat через Mini App;
 - просмотр сохранённого списка и detail Trip, включая участников и `trip_stops`.
 
 В MVP не входит:
@@ -191,7 +193,7 @@ Travel Friend не является просто планировщиком пу
 - маркетплейс украшений профиля;
 - интеграции с авиакомпаниями, отелями и туроператорами.
 - AI Travel Copilot, `Proposal` и внешние provider-интеграции — до подключения второго разработчика;
-- TripInvitation, изменение состава Group Chat после создания и расширенный lifecycle Trip.
+- TripInvitation, persisted group title, изменение состава Group Chat после создания и расширенный lifecycle Trip.
 
 Эти функции могут быть добавлены позже, если MVP подтвердит спрос.
 
@@ -204,8 +206,8 @@ Travel Friend не является просто планировщиком пу
 5. Отмечает интересных людей.
 6. При взаимном интересе создаётся чат.
 7. Участники обсуждают возможную поездку.
-8. Backend уже поддерживает создание Trip из existing direct Chat и сразу создаёт TripParticipant для обоих участников.
-9. UI-вызов этой команды ещё не реализован; серверные Trips доступны для списка и read-only detail.
+8. Backend поддерживает создание Trip из existing direct или group Chat и сразу создаёт TripParticipant для всех активных участников.
+9. Mini App вызывает эту команду из Chat Room; при `409` открывает найденную через `GET /trips` unfinished Trip.
 
 ## Основные модули продукта
 
@@ -261,7 +263,7 @@ Travel Friend не является просто планировщиком пу
 
 ### Чат
 
-Чат — центральное место, где пользователи знакомятся и обсуждают будущую поездку. В текущем direct-chat MVP список, история и создание текстовых сообщений уже работают через backend; realtime и read state пока не реализованы.
+Чат — центральное место, где пользователи знакомятся и обсуждают будущую поездку. В текущем MVP direct и group Chat, список, история и создание текстовых сообщений работают через backend; realtime, read state и pagination пока не реализованы.
 
 На старте достаточно:
 

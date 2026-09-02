@@ -34,22 +34,22 @@
 - ✅ Telegram Auth backend: raw `initData` verification, `/auth/telegram`, `/auth/logout`, Bearer authentication и server-side sessions
 - ✅ Profile + TravelIntent API и frontend onboarding / hydration
 - ✅ Discover candidates + финальные interest decisions + Match → direct Chat
-- ✅ persisted direct Chats и Messages
-- ✅ Trips persistence, server Trip creation API из direct Chat, `trip_stops`, Trips List и Trip Detail
+- ✅ persisted direct и group Chats/Messages
+- ✅ Group Chat MVP: создание из existing matched/direct-chat companions, минимум три участника, фиксированный состав
+- ✅ Trips persistence, server Trip creation API из direct/group Chat, frontend CTA и 409 → `GET /trips` navigation, `trip_stops`, Trips List и Trip Detail
 
 ## Текущий этап
 
-### MVP mega-review и закрытие незавершённых direct-chat сценариев
+### MVP mega-review и следующий Trip lifecycle slice
 
-Реализованный frontend vertical slice: `Telegram Auth → onboarding → Profile → TravelIntent → Discover → reciprocal Match → direct Chat → Messages`; Trips List/Detail читают persistence. Server-side Trip creation API уже существует, но UI ещё не вызывает его.
+Реализованный frontend vertical slice: `Telegram Auth → onboarding → Profile → TravelIntent → Discover → reciprocal Match → direct/group Chat → Messages → Trip creation → Trip Detail`. Group Chat создаётся из existing matched/direct-chat companions с фиксированным MVP-составом; Trips List/Detail читают persistence.
 
 Следующие самостоятельные work items:
 
-- UI для уже существующего `POST /chats/{chatId}/trips`, затем Trip write/lifecycle: изменение подтверждённого состояния, stop editor, `start/complete/cancel/leave` и правила версий;
+- Trip write/lifecycle: изменение подтверждённого состояния, stop editor, `start/complete/cancel/leave` и правила версий;
 - realtime, read state и pagination для сообщений;
 - production backend deployment/configuration, RLS и операционный runbook;
 - безопасность и moderation capabilities (block/report/audit);
-- базовый Group Chat MVP: создание создателем с минимум тремя участниками из existing matched/direct-chat companions, persisted messages, отображение в Chats, фиксированный состав и создание Trip из direct/group Chat с переносом всех текущих участников;
 - invitations, изменение состава, leave, roles/admin/permissions, invite links, сложный membership lifecycle Group Chat и расширенный Trip lifecycle — после отдельного решения.
 
 AI/Proposal и provider integrations отложены до подключения второго разработчика. Это не блокер текущего direct-chat MVP и не должно реализовываться в рамках закрытия его persistence flow.
@@ -62,7 +62,7 @@ AI/Proposal и provider integrations отложены до подключени�
 
 ## Дальше
 
-1. Провести MVP mega-review текущего backend-backed direct-chat flow.
+1. Провести MVP mega-review текущего backend-backed direct/group Chat flow.
 2. Согласовать и реализовать следующий один Trip lifecycle/write slice.
 3. Определить production backend deployment, RLS и наблюдаемость до внешнего запуска.
 4. Вернуться к realtime chat flow после стабилизации базовых HTTP contracts.
