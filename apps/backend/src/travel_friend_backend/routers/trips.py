@@ -11,10 +11,34 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.db import get_database_connection
 from travel_friend_backend.routers.chats import find_authorized_chat
-from travel_friend_backend.schemas.trips import TripCreateResponse
+from travel_friend_backend.schemas.trips import TripCreateResponse, TripListItemResponse
 
 
 router = APIRouter(prefix="/chats", tags=["trips"])
+trip_list_router = APIRouter(prefix="/trips", tags=["trips"])
+
+
+@trip_list_router.get("", response_model=list[TripListItemResponse])
+def get_trips(
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+) -> list[dict[str, object]]:
+    """List all persisted Trips belonging to the authenticated participant."""
+    rows = connection.execute(
+        "SELECT t.id AS trip_id, t.chat_id, t.status, t.created_at, t.date_from, t.date_to, "
+        "t.destination_status, t.dates_status, t.budget_status, t.transport_status, "
+        "COALESCE(array_agg(ts.place_label ORDER BY ts.position) "
+        "FILTER (WHERE ts.id IS NOT NULL), ARRAY[]::text[]) AS route_place_labels "
+        "FROM public.trips t "
+        "JOIN public.trip_participants tp ON tp.trip_id=t.id "
+        "LEFT JOIN public.trip_stops ts ON ts.trip_id=t.id "
+        "WHERE tp.user_id=%s "
+        "GROUP BY t.id, t.chat_id, t.status, t.created_at, t.date_from, t.date_to, "
+        "t.destination_status, t.dates_status, t.budget_status, t.transport_status "
+        "ORDER BY t.created_at DESC, t.id DESC",
+        (principal.user_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def create_trip_for_direct_chat(

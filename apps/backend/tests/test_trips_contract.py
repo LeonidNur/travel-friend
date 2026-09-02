@@ -20,3 +20,4 @@ def test_trip_creation_route_requires_authentication() -> None:
     )
     with TestClient(app) as client:
         assert client.post("/chats/00000000-0000-0000-0000-000000000000/trips").status_code == 401
+        assert client.get("/trips").status_code == 401

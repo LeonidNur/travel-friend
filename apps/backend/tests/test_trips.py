@@ -36,6 +36,93 @@ def create_trip(client: TestClient, token: str, chat_id: UUID):
     return client.post(f"/chats/{chat_id}/trips", headers=auth_headers(token))
 
 
+def test_trip_list_returns_only_participant_trips_newest_first_with_persisted_route_summary(
+    client: TestClient, database_url: str
+) -> None:
+    first, _, first_match = create_reciprocal_match(client)
+    second = create_discover_eligible_user(client, 3)
+    third = create_discover_eligible_user(client, 4)
+    assert client.put(
+        f"/discover/decisions/{third['user']['id']}",
+        headers=auth_headers(second["access_token"]),
+        json={"decision": "interested"},
+    ).status_code == 200
+    outsider_match = client.put(
+        f"/discover/decisions/{second['user']['id']}",
+        headers=auth_headers(third["access_token"]),
+        json={"decision": "interested"},
+    ).json()
+
+    first_chat_id = direct_chat_id(database_url, first_match["match_id"])
+    outsider_chat_id = direct_chat_id(database_url, outsider_match["match_id"])
+    first_trip = create_trip(client, first["access_token"], first_chat_id).json()
+    assert create_trip(client, second["access_token"], outsider_chat_id).status_code == 201
+
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.trips SET status='completed', created_at='2026-06-01T10:00:00Z', "
+            "date_from='2026-07-01', date_to='2026-07-10', destination_status='confirmed', "
+            "dates_status='confirmed', budget_status='review_required', transport_status='empty' "
+            "WHERE id=%s",
+            (UUID(first_trip["trip_id"]),),
+        )
+        connection.execute(
+            "INSERT INTO public.trip_stops (trip_id, position, place_label) VALUES "
+            "(%s, 2, 'Kyoto'), (%s, 1, 'Tokyo')",
+            (UUID(first_trip["trip_id"]), UUID(first_trip["trip_id"])),
+        )
+
+    second_trip = create_trip(client, first["access_token"], first_chat_id).json()
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.trips SET created_at='2026-06-02T10:00:00Z' WHERE id=%s",
+            (UUID(second_trip["trip_id"]),),
+        )
+
+    response = client.get("/trips", headers=auth_headers(first["access_token"]))
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "trip_id": second_trip["trip_id"],
+            "chat_id": str(first_chat_id),
+            "status": "forming",
+            "created_at": "2026-06-02T10:00:00Z",
+            "date_from": None,
+            "date_to": None,
+            "destination_status": "empty",
+            "dates_status": "empty",
+            "budget_status": "empty",
+            "transport_status": "empty",
+            "route_place_labels": [],
+        },
+        {
+            "trip_id": first_trip["trip_id"],
+            "chat_id": str(first_chat_id),
+            "status": "completed",
+            "created_at": "2026-06-01T10:00:00Z",
+            "date_from": "2026-07-01",
+            "date_to": "2026-07-10",
+            "destination_status": "confirmed",
+            "dates_status": "confirmed",
+            "budget_status": "review_required",
+            "transport_status": "empty",
+            "route_place_labels": ["Tokyo", "Kyoto"],
+        },
+    ]
+
+
+def test_trip_list_returns_an_empty_list_when_current_user_has_no_trip_participation(
+    client: TestClient,
+) -> None:
+    user = create_discover_eligible_user(client, 1)
+
+    response = client.get("/trips", headers=auth_headers(user["access_token"]))
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_participant_creates_forming_trip_with_both_direct_chat_participants(
     client: TestClient, database_url: str
 ) -> None:
