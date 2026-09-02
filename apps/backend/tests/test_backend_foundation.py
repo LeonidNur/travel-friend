@@ -312,7 +312,15 @@ def test_onboarding_patch_uses_only_the_authenticated_users_existing_state() -> 
     assert "UPDATE public.user_activity_states" in query
     assert "WHERE user_id=%s" in query
     assert "IS DISTINCT FROM" in query
-    assert parameters == ("in_progress", "in_progress", principal.user_id, "in_progress")
+    assert parameters == (
+        "in_progress",
+        "in_progress",
+        principal.user_id,
+        "in_progress",
+        "in_progress",
+        principal.user_id,
+        principal.user_id,
+    )
     assert connection.commit_calls == 1
 
 

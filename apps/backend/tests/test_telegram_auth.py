@@ -208,6 +208,15 @@ def auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def create_onboarding_completion_prerequisites(client: TestClient, token: str) -> None:
+    assert client.patch(
+        "/me/profile", headers=auth_headers(token), json={"display_name": "Ada"}
+    ).status_code == 200
+    assert client.put(
+        "/me/travel-intent", headers=auth_headers(token), json={"destination": "Lisbon"}
+    ).status_code == 200
+
+
 def test_get_current_user_profile_returns_existing_profile(
     client: TestClient, database_url: str
 ) -> None:
@@ -264,24 +273,81 @@ def test_current_user_travel_intent_requires_authentication(client: TestClient) 
     assert client.delete("/me/travel-intent").status_code == 401
 
 
-@pytest.mark.parametrize("requested_status", ["in_progress", "completed"])
-def test_onboarding_can_transition_from_not_started(
-    client: TestClient, requested_status: str
-) -> None:
+def test_onboarding_can_transition_from_not_started_to_in_progress(client: TestClient) -> None:
     token = login(client).json()["access_token"]
 
     response = client.patch(
         "/me/onboarding",
         headers=auth_headers(token),
-        json={"status": requested_status},
+        json={"status": "in_progress"},
     )
 
     assert response.status_code == 200
-    assert response.json() == {"status": requested_status}
+    assert response.json() == {"status": "in_progress"}
+
+
+def test_onboarding_completion_requires_a_profile_and_preserves_persisted_status(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client).json()
+    user_id = login_response["user"]["id"]
+    token = login_response["access_token"]
+    assert client.put(
+        "/me/travel-intent", headers=auth_headers(token), json={"destination": "Lisbon"}
+    ).status_code == 200
+
+    response = client.patch("/me/onboarding", headers=auth_headers(token), json={"status": "completed"})
+
+    assert response.status_code == 409
+    with psycopg.connect(database_url) as connection:
+        status = connection.execute(
+            "SELECT onboarding_status FROM public.user_activity_states WHERE user_id=%s", (user_id,)
+        ).fetchone()[0]
+    assert status == "not_started"
+
+
+def test_onboarding_completion_requires_an_active_travel_intent_and_preserves_persisted_status(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client).json()
+    user_id = login_response["user"]["id"]
+    token = login_response["access_token"]
+    assert client.patch(
+        "/me/profile", headers=auth_headers(token), json={"display_name": "Ada"}
+    ).status_code == 200
+    assert client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "in_progress"}
+    ).status_code == 200
+
+    response = client.patch("/me/onboarding", headers=auth_headers(token), json={"status": "completed"})
+
+    assert response.status_code == 409
+    with psycopg.connect(database_url) as connection:
+        status = connection.execute(
+            "SELECT onboarding_status FROM public.user_activity_states WHERE user_id=%s", (user_id,)
+        ).fetchone()[0]
+    assert status == "in_progress"
+
+
+def test_onboarding_completion_succeeds_with_a_profile_and_active_travel_intent(client: TestClient) -> None:
+    login_response = login(client).json()
+    token = login_response["access_token"]
+    assert client.patch(
+        "/me/profile", headers=auth_headers(token), json={"display_name": "Ada"}
+    ).status_code == 200
+    assert client.put(
+        "/me/travel-intent", headers=auth_headers(token), json={"destination": "Lisbon"}
+    ).status_code == 200
+
+    response = client.patch("/me/onboarding", headers=auth_headers(token), json={"status": "completed"})
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "completed"}
 
 
 def test_onboarding_can_transition_from_in_progress_to_completed(client: TestClient) -> None:
     token = login(client).json()["access_token"]
+    create_onboarding_completion_prerequisites(client, token)
     assert client.patch(
         "/me/onboarding", headers=auth_headers(token), json={"status": "in_progress"}
     ).status_code == 200
@@ -327,6 +393,7 @@ def test_onboarding_same_status_is_idempotent_without_touching_updated_at(
 
 def test_onboarding_cannot_regress_from_completed(client: TestClient) -> None:
     token = login(client).json()["access_token"]
+    create_onboarding_completion_prerequisites(client, token)
     assert client.patch(
         "/me/onboarding", headers=auth_headers(token), json={"status": "completed"}
     ).status_code == 200
@@ -347,6 +414,7 @@ def test_onboarding_only_changes_the_authenticated_users_state(
 ) -> None:
     first = login(client, telegram_user(id=1))
     second = login(client, telegram_user(id=2))
+    create_onboarding_completion_prerequisites(client, first.json()["access_token"])
 
     response = client.patch(
         "/me/onboarding",
@@ -383,6 +451,7 @@ def test_onboarding_rejects_invalid_or_server_owned_fields(
 
 def test_login_bootstrap_reflects_onboarding_transition(client: TestClient) -> None:
     token = login(client).json()["access_token"]
+    create_onboarding_completion_prerequisites(client, token)
     assert client.patch(
         "/me/onboarding", headers=auth_headers(token), json={"status": "completed"}
     ).status_code == 200

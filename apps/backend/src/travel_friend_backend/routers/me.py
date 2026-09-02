@@ -145,11 +145,29 @@ def patch_current_user_onboarding(
         "THEN now() ELSE updated_at END "
         "WHERE user_id=%s "
         "AND NOT (onboarding_status='completed' AND %s='in_progress') "
+        "AND ("
+        "%s <> 'completed' OR ("
+        "EXISTS (SELECT 1 FROM public.profiles WHERE user_id=%s) "
+        "AND EXISTS ("
+        "SELECT 1 FROM public.travel_intents WHERE user_id=%s AND status='active'"
+        ")"
+        ")"
+        ") "
         "RETURNING onboarding_status",
-        (payload.status, payload.status, principal.user_id, payload.status),
+        (
+            payload.status,
+            payload.status,
+            principal.user_id,
+            payload.status,
+            payload.status,
+            principal.user_id,
+            principal.user_id,
+        ),
     ).fetchone()
 
     if onboarding is None:
+        if payload.status == "completed":
+            raise HTTPException(409, "Profile and an active TravelIntent are required to complete onboarding")
         raise HTTPException(409, "Cannot transition onboarding from completed to in_progress")
 
     connection.commit()

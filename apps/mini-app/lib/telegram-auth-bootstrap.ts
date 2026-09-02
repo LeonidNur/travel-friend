@@ -57,8 +57,16 @@ export async function runTelegramAuthBootstrap(
       return { status: 'auth_error', message: AUTHENTICATION_FAILED_MESSAGE };
     }
 
-    if (response.onboarding.status === 'completed') {
+    if (
+      response.onboarding.status === 'completed' &&
+      response.profile_exists &&
+      response.travel_intent_exists
+    ) {
       return { status: 'authenticated', session };
+    }
+
+    if (response.onboarding.status === 'completed') {
+      return { status: 'onboarding_required', onboardingStatus: 'in_progress', session };
     }
 
     return {

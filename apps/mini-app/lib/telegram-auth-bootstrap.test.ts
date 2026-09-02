@@ -35,6 +35,20 @@ test('starts in loading and authenticates a completed onboarding session', async
   assert.equal(state.session.accessToken, 'runtime-session-token');
 });
 
+test('requires recoverable onboarding for an inconsistent completed bootstrap response', async () => {
+  for (const incompleteBootstrap of [
+    { ...completedAuthResponse, profile_exists: false },
+    { ...completedAuthResponse, travel_intent_exists: false }
+  ]) {
+    const state = await runTelegramAuthBootstrap(
+      createBootstrapInput({ authenticateWithTelegram: async () => incompleteBootstrap })
+    );
+
+    assert.equal(state.status, 'onboarding_required');
+    assert.equal(state.onboardingStatus, 'in_progress');
+  }
+});
+
 test('transitions runtime onboarding state to authenticated only from onboarding_required', () => {
   const onboardingState = {
     status: 'onboarding_required' as const,

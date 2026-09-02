@@ -95,8 +95,8 @@ def create_discover_eligible_user(client: TestClient, telegram_id: int) -> dict[
     session = login(client, telegram_id)
     token = session["access_token"]
     create_profile(client, token, f"Candidate {telegram_id}")
-    assert client.patch("/me/onboarding", headers=auth_headers(token), json={"status": "completed"}).status_code == 200
     assert client.put("/me/travel-intent", headers=auth_headers(token), json={"destination": "Tbilisi"}).status_code == 200
+    assert client.patch("/me/onboarding", headers=auth_headers(token), json={"status": "completed"}).status_code == 200
     return session
 
 
@@ -177,7 +177,6 @@ def test_discover_candidates_excludes_user_without_active_travel_intent(client: 
     actor = create_discover_eligible_user(client, 1)
     candidate = login(client, 2)
     create_profile(client, candidate["access_token"], "No intent")
-    assert client.patch("/me/onboarding", headers=auth_headers(candidate["access_token"]), json={"status": "completed"}).status_code == 200
 
     response = client.get("/discover/candidates", headers=auth_headers(actor["access_token"]))
 
@@ -298,7 +297,6 @@ def test_decision_rejects_target_without_active_travel_intent(client: TestClient
     actor = login(client, 1)
     target = login(client, 2)
     create_profile(client, target["access_token"], "No intent")
-    assert client.patch("/me/onboarding", headers=auth_headers(target["access_token"]), json={"status": "completed"}).status_code == 200
 
     response = decide(client, actor["access_token"], target["user"]["id"], "interested")
 
