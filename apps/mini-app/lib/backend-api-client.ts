@@ -96,6 +96,54 @@ export type TripListItemResponse = Readonly<{
   route_place_labels: string[];
 }>;
 
+export type TripDetailResponse = Readonly<{
+  trip: Readonly<{
+    trip_id: string;
+    chat_id: string;
+    created_by_user_id: string;
+    status: 'forming' | 'active' | 'completed' | 'cancelled';
+    membership_version: number;
+    state_version: number;
+    destination_version: number;
+    dates_version: number;
+    budget_version: number;
+    transport_version: number;
+    destination_status: 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+    dates_status: 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+    budget_status: 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+    transport_status: 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+    date_from: string | null;
+    date_to: string | null;
+    budget_min: string | null;
+    budget_max: string | null;
+    budget_currency: string | null;
+    budget_scope: 'per_person' | 'group_total' | null;
+    started_at: string | null;
+    completed_at: string | null;
+    cancelled_at: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  route_stops: Array<Readonly<{
+    id: string;
+    position: number;
+    place_label: string;
+    country_code: string | null;
+    place_ref: string | null;
+    stay_from: string | null;
+    stay_to: string | null;
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+  }>>;
+  participants: Array<Readonly<{
+    user_id: string;
+    display_name: string | null;
+    age: number | null;
+    city: string | null;
+  }>>;
+}>;
+
 export type ChatMessageResponse = Readonly<{
   message_id: string;
   chat_id: string;
@@ -169,6 +217,7 @@ export type BackendApiClient = Readonly<{
   patchOnboarding: (token: string, payload: OnboardingPatchRequest) => Promise<OnboardingResponse>;
   getChats: (token: string) => Promise<DirectChatResponse[]>;
   getTrips: (token: string) => Promise<TripListItemResponse[]>;
+  getTrip: (token: string, tripId: string) => Promise<TripDetailResponse>;
   getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
   createChatMessage: (
     token: string,
@@ -259,6 +308,7 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
       request<OnboardingResponse>('/me/onboarding', { method: 'PATCH', token, body: payload }),
     getChats: (token) => request<DirectChatResponse[]>('/chats', { method: 'GET', token }),
     getTrips: (token) => request<TripListItemResponse[]>('/trips', { method: 'GET', token }),
+    getTrip: (token, tripId) => request<TripDetailResponse>(`/trips/${tripId}`, { method: 'GET', token }),
     getChatMessages: (token, chatId) =>
       request<ChatMessageResponse[]>(`/chats/${chatId}/messages`, { method: 'GET', token }),
     createChatMessage: (token, chatId, payload) =>

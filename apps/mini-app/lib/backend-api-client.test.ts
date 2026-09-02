@@ -137,6 +137,54 @@ test('maps GET /trips through the authenticated backend client', async () => {
   }]);
 });
 
+test('maps GET /trips/{trip_id} through the authenticated backend client', async () => {
+  const tripDetail = {
+    trip: {
+      trip_id: 'trip-uuid',
+      chat_id: 'chat-uuid',
+      created_by_user_id: 'creator-uuid',
+      status: 'active',
+      membership_version: 1,
+      state_version: 1,
+      destination_version: 1,
+      dates_version: 1,
+      budget_version: 1,
+      transport_version: 1,
+      destination_status: 'confirmed',
+      dates_status: 'confirmed',
+      budget_status: 'confirmed',
+      transport_status: 'empty',
+      date_from: '2026-10-01',
+      date_to: '2026-10-10',
+      budget_min: '1200.00',
+      budget_max: '1500.00',
+      budget_currency: 'RUB',
+      budget_scope: 'per_person',
+      started_at: null,
+      completed_at: null,
+      cancelled_at: null,
+      created_at: '2026-09-01T10:00:00Z',
+      updated_at: '2026-09-01T11:00:00Z'
+    },
+    route_stops: [{
+      id: 'stop-uuid', position: 1, place_label: 'Tokyo', country_code: 'JP', place_ref: null,
+      stay_from: null, stay_to: null, notes: null, created_at: '2026-09-01T10:00:00Z', updated_at: '2026-09-01T10:00:00Z'
+    }],
+    participants: [{ user_id: 'user-uuid', display_name: 'Алина', age: 30, city: 'Москва' }]
+  };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(tripDetail)));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(await client.getTrip('session-token', 'trip-uuid'), tripDetail);
+  assert.deepEqual(calls, [{
+    input: '/api/backend/trips/trip-uuid',
+    init: {
+      headers: { Accept: 'application/json', Authorization: 'Bearer session-token' },
+      method: 'GET'
+    }
+  }]);
+});
+
 test('loads Discover candidates with the runtime Bearer token', async () => {
   const candidates = [{
     user_id: 'candidate-uuid',
