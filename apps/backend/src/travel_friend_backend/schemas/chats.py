@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DirectChatCompanionResponse(BaseModel):
@@ -24,6 +24,30 @@ class DirectChatListItemResponse(BaseModel):
     chat_id: UUID
     type: Literal["direct"]
     companion: DirectChatCompanionResponse
+    created_at: datetime
+
+
+class GroupChatCreateRequest(BaseModel):
+    """Requested companions for one immutable MVP Group Chat."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_ids: list[UUID] = Field(min_length=2)
+
+    @field_validator("user_ids")
+    @classmethod
+    def user_ids_must_be_unique(cls, value: list[UUID]) -> list[UUID]:
+        if len(value) != len(set(value)):
+            raise ValueError("user_ids must not contain duplicates")
+        return value
+
+
+class GroupChatCreateResponse(BaseModel):
+    """Persisted Group Chat and its initial immutable participant set."""
+
+    chat_id: UUID
+    type: Literal["group"]
+    participant_user_ids: list[UUID]
     created_at: datetime
 
 
