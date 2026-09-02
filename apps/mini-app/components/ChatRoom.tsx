@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
@@ -11,6 +12,7 @@ import {
   type ChatResponse
 } from '@/lib/backend-api-client';
 import { findChatById, getMessageAuthorLabel, mapChatMessages, submitChatMessage } from '@/lib/chat-runtime';
+import { createChatTrip, getCreateTripButtonState } from '@/lib/chat-trip-runtime';
 import { getAvatarInitials } from '@/lib/travel-preferences';
 
 type ChatRoomState = 'error' | 'loaded' | 'loading' | 'not_found';
@@ -27,12 +29,15 @@ function getMessageClassName(isCurrentUser: boolean) {
 
 export function ChatRoom({ chatId }: ChatRoomProps) {
   const { session } = useTelegramAuthSession();
+  const router = useRouter();
   const [chat, setChat] = useState<ChatResponse | null>(null);
   const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
   const [roomState, setRoomState] = useState<ChatRoomState>('loading');
   const [draftMessage, setDraftMessage] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isCreatingTrip, setIsCreatingTrip] = useState(false);
+  const [tripError, setTripError] = useState<string | null>(null);
   const sendingRef = useRef(false);
 
   useEffect(() => {
@@ -106,6 +111,28 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
     setIsSending(false);
   };
 
+  const handleCreateTrip = async () => {
+    if (session === null || chat === null || isCreatingTrip) {
+      return;
+    }
+
+    setIsCreatingTrip(true);
+    setTripError(null);
+    const result = await createChatTrip({
+      chatId: chat.chat_id,
+      createTrip: () => backendApiClient.createTrip(session.accessToken, chat.chat_id),
+      getTrips: () => backendApiClient.getTrips(session.accessToken)
+    });
+
+    if (result.tripPath !== null) {
+      router.push(result.tripPath);
+      return;
+    }
+
+    setTripError(result.error);
+    setIsCreatingTrip(false);
+  };
+
   if (roomState === 'loading') {
     return (
       <section className="page" aria-live="polite">
@@ -128,6 +155,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const isGroupChat = chat.type === 'group';
   const companion = chat.type === 'direct' ? chat.companion : null;
   const chatTitle = isGroupChat ? 'Групповой чат' : companion?.display_name ?? '';
+  const tripButtonState = getCreateTripButtonState(isCreatingTrip);
 
   return (
     <section className="page">
@@ -187,6 +215,15 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
             </div>
           )}
         </div>
+      </article>
+
+      <article className="surface-card surface-card--compact">
+        <p className="surface-card__title">Поездка</p>
+        <p className="surface-card__copy">Создайте поездку для участников этого чата.</p>
+        {tripError !== null ? <p className="chat-room__composer-note" role="alert">{tripError}</p> : null}
+        <button className="profile-button profile-button--primary" disabled={tripButtonState.disabled} type="button" onClick={handleCreateTrip}>
+          {tripButtonState.label}
+        </button>
       </article>
 
       <section className="surface-card chat-room" aria-label="История сообщений">

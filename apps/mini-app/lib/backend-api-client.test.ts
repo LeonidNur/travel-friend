@@ -193,6 +193,27 @@ test('maps GET /trips through the authenticated backend client', async () => {
   }]);
 });
 
+test('maps POST /chats/{chat_id}/trips through the authenticated backend client', async () => {
+  const trip = {
+    trip_id: 'trip-uuid',
+    chat_id: 'chat-uuid',
+    created_by_user_id: 'user-uuid',
+    status: 'forming',
+    created_at: '2026-09-01T10:00:00Z'
+  };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(trip), { status: 201 }));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(await client.createTrip('session-token', 'chat-uuid'), trip);
+  assert.deepEqual(calls[0], {
+    input: '/api/backend/chats/chat-uuid/trips',
+    init: {
+      headers: { Accept: 'application/json', Authorization: 'Bearer session-token' },
+      method: 'POST'
+    }
+  });
+});
+
 test('maps GET /trips/{trip_id} through the authenticated backend client', async () => {
   const tripDetail = {
     trip: {

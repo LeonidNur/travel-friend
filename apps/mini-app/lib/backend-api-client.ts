@@ -106,6 +106,14 @@ export type GroupChatCreateResponse = Readonly<{
   created_at: string;
 }>;
 
+export type TripCreateResponse = Readonly<{
+  trip_id: string;
+  chat_id: string;
+  created_by_user_id: string;
+  status: 'forming';
+  created_at: string;
+}>;
+
 export type TripListItemResponse = Readonly<{
   trip_id: string;
   chat_id: string;
@@ -241,6 +249,7 @@ export type BackendApiClient = Readonly<{
   patchOnboarding: (token: string, payload: OnboardingPatchRequest) => Promise<OnboardingResponse>;
   getChats: (token: string) => Promise<ChatResponse[]>;
   createGroupChat: (token: string, payload: GroupChatCreateRequest) => Promise<GroupChatCreateResponse>;
+  createTrip: (token: string, chatId: string) => Promise<TripCreateResponse>;
   getTrips: (token: string) => Promise<TripListItemResponse[]>;
   getTrip: (token: string, tripId: string) => Promise<TripDetailResponse>;
   getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
@@ -334,6 +343,8 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
     getChats: (token) => request<ChatResponse[]>('/chats', { method: 'GET', token }),
     createGroupChat: (token, payload) =>
       request<GroupChatCreateResponse>('/chats/groups', { method: 'POST', token, body: payload }),
+    createTrip: (token, chatId) =>
+      request<TripCreateResponse>(`/chats/${chatId}/trips`, { method: 'POST', token }),
     getTrips: (token) => request<TripListItemResponse[]>('/trips', { method: 'GET', token }),
     getTrip: (token, tripId) => request<TripDetailResponse>(`/trips/${tripId}`, { method: 'GET', token }),
     getChatMessages: (token, chatId) =>
