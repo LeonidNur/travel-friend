@@ -82,6 +82,30 @@ export type DirectChatResponse = Readonly<{
   created_at: string;
 }>;
 
+export type GroupChatResponse = Readonly<{
+  chat_id: string;
+  type: 'group';
+  participants: Array<Readonly<{
+    user_id: string;
+    display_name: string | null;
+  }>>;
+  participant_count: number;
+  created_at: string;
+}>;
+
+export type ChatResponse = DirectChatResponse | GroupChatResponse;
+
+export type GroupChatCreateRequest = Readonly<{
+  user_ids: string[];
+}>;
+
+export type GroupChatCreateResponse = Readonly<{
+  chat_id: string;
+  type: 'group';
+  participant_user_ids: string[];
+  created_at: string;
+}>;
+
 export type TripListItemResponse = Readonly<{
   trip_id: string;
   chat_id: string;
@@ -215,7 +239,8 @@ export type BackendApiClient = Readonly<{
   putTravelIntent: (token: string, payload: TravelIntentPutRequest) => Promise<TravelIntentResponse>;
   deleteTravelIntent: (token: string) => Promise<void>;
   patchOnboarding: (token: string, payload: OnboardingPatchRequest) => Promise<OnboardingResponse>;
-  getChats: (token: string) => Promise<DirectChatResponse[]>;
+  getChats: (token: string) => Promise<ChatResponse[]>;
+  createGroupChat: (token: string, payload: GroupChatCreateRequest) => Promise<GroupChatCreateResponse>;
   getTrips: (token: string) => Promise<TripListItemResponse[]>;
   getTrip: (token: string, tripId: string) => Promise<TripDetailResponse>;
   getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
@@ -306,7 +331,9 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
     },
     patchOnboarding: (token, payload) =>
       request<OnboardingResponse>('/me/onboarding', { method: 'PATCH', token, body: payload }),
-    getChats: (token) => request<DirectChatResponse[]>('/chats', { method: 'GET', token }),
+    getChats: (token) => request<ChatResponse[]>('/chats', { method: 'GET', token }),
+    createGroupChat: (token, payload) =>
+      request<GroupChatCreateResponse>('/chats/groups', { method: 'POST', token, body: payload }),
     getTrips: (token) => request<TripListItemResponse[]>('/trips', { method: 'GET', token }),
     getTrip: (token, tripId) => request<TripDetailResponse>(`/trips/${tripId}`, { method: 'GET', token }),
     getChatMessages: (token, chatId) =>

@@ -1,16 +1,29 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { ChatMessageResponse } from './backend-api-client';
+import type { ChatMessageResponse, ChatResponse } from './backend-api-client';
 import {
   appendServerMessage,
   findChatById,
+  getMessageAuthorLabel,
   getChatsScreenState,
   mapChatMessages,
   submitChatMessage
 } from './chat-runtime';
 
 const ownUserId = 'own-user-uuid';
+
+const groupChat: ChatResponse = {
+  chat_id: 'group-chat-uuid',
+  type: 'group',
+  participants: [
+    { user_id: ownUserId, display_name: 'Анна' },
+    { user_id: 'companion-uuid', display_name: 'Мария' },
+    { user_id: 'third-user-uuid', display_name: 'Илья' }
+  ],
+  participant_count: 3,
+  created_at: '2026-09-01T10:00:00Z'
+};
 
 const messages: ChatMessageResponse[] = [
   {
@@ -71,6 +84,16 @@ test('maps ordered message history as own, companion, and system messages', () =
       ['second', 'participant', false],
       ['third', 'participant', true]
     ]
+  );
+});
+
+test('finds a group Chat and resolves message authors from persisted participant data', () => {
+  assert.equal(findChatById([groupChat], groupChat.chat_id), groupChat);
+  assert.equal(getMessageAuthorLabel(groupChat, messages[2], ownUserId), 'Мария');
+  assert.equal(getMessageAuthorLabel(groupChat, messages[1], ownUserId), null);
+  assert.equal(
+    getMessageAuthorLabel(groupChat, { ...messages[2], sender_user_id: 'unknown-user-uuid' }, ownUserId),
+    'Участник'
   );
 });
 

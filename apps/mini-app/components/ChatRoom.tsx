@@ -8,9 +8,9 @@ import {
   ApiError,
   createBackendApiClient,
   type ChatMessageResponse,
-  type DirectChatResponse
+  type ChatResponse
 } from '@/lib/backend-api-client';
-import { findChatById, mapChatMessages, submitChatMessage } from '@/lib/chat-runtime';
+import { findChatById, getMessageAuthorLabel, mapChatMessages, submitChatMessage } from '@/lib/chat-runtime';
 import { getAvatarInitials } from '@/lib/travel-preferences';
 
 type ChatRoomState = 'error' | 'loaded' | 'loading' | 'not_found';
@@ -27,7 +27,7 @@ function getMessageClassName(isCurrentUser: boolean) {
 
 export function ChatRoom({ chatId }: ChatRoomProps) {
   const { session } = useTelegramAuthSession();
-  const [chat, setChat] = useState<DirectChatResponse | null>(null);
+  const [chat, setChat] = useState<ChatResponse | null>(null);
   const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
   const [roomState, setRoomState] = useState<ChatRoomState>('loading');
   const [draftMessage, setDraftMessage] = useState('');
@@ -125,7 +125,9 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
     return <ChatRoomUnavailable title="Не удалось загрузить чат" message="Попробуйте открыть чат ещё раз." />;
   }
 
-  const companion = chat.companion;
+  const isGroupChat = chat.type === 'group';
+  const companion = chat.type === 'direct' ? chat.companion : null;
+  const chatTitle = isGroupChat ? 'Групповой чат' : companion?.display_name ?? '';
 
   return (
     <section className="page">
@@ -136,37 +138,54 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
           </Link>
           <span className="profile-status">Чат</span>
         </div>
-        <p className="section-kicker">Диалог</p>
+        <p className="section-kicker">{isGroupChat ? 'Группа' : 'Диалог'}</p>
         {/* TODO: enable this link after public profiles support backend UUID user ids. */}
         <div className="profile-hero">
           <div className="profile-hero__avatar" aria-hidden="true">
-            {getAvatarInitials(companion.display_name)}
+            {getAvatarInitials(chatTitle)}
           </div>
           <div className="profile-hero__content">
-            <h2 className="hero-card__title profile-hero__title">{companion.display_name}</h2>
-            <p className="profile-hero__city">{companion.city ?? 'Город не указан'}</p>
+            <h2 className="hero-card__title profile-hero__title">{chatTitle}</h2>
+            {companion !== null ? <p className="profile-hero__city">{companion.city ?? 'Город не указан'}</p> : null}
           </div>
         </div>
       </article>
 
       <article className="surface-card surface-card--compact">
         <div className="chat-room__participants-header">
-          <p className="surface-card__title">Собеседник</p>
-          <span className="chat-room__participants-count">Прямой чат</span>
+          <p className="surface-card__title">{isGroupChat ? 'Участники' : 'Собеседник'}</p>
+          <span className="chat-room__participants-count">
+            {isGroupChat ? `${chat.participant_count} участников` : 'Прямой чат'}
+          </span>
         </div>
-        <div className="chat-room__participants" aria-label="Собеседник в чате">
-          <div className="chat-room__participant">
-            <div className="chat-room__participant-avatar" aria-hidden="true">
-              {getAvatarInitials(companion.display_name)}
+        <div className="chat-room__participants" aria-label={isGroupChat ? 'Участники чата' : 'Собеседник в чате'}>
+          {isGroupChat ? chat.participants.map((participant) => {
+            const participantName = participant.display_name ?? 'Имя не указано';
+
+            return (
+              <div className="chat-room__participant" key={participant.user_id}>
+                <div className="chat-room__participant-avatar" aria-hidden="true">
+                  {getAvatarInitials(participantName)}
+                </div>
+                <div className="chat-room__participant-copy">
+                  <p className="chat-room__participant-name">{participantName}</p>
+                </div>
+              </div>
+            );
+          }) : companion === null ? null : (
+            <div className="chat-room__participant">
+              <div className="chat-room__participant-avatar" aria-hidden="true">
+                {getAvatarInitials(companion.display_name)}
+              </div>
+              <div className="chat-room__participant-copy">
+                <p className="chat-room__participant-name">
+                  {companion.display_name}
+                  {companion.age === null ? '' : `, ${companion.age}`}
+                </p>
+                <p className="chat-room__participant-meta">{companion.city ?? 'Город не указан'}</p>
+              </div>
             </div>
-            <div className="chat-room__participant-copy">
-              <p className="chat-room__participant-name">
-                {companion.display_name}
-                {companion.age === null ? '' : `, ${companion.age}`}
-              </p>
-              <p className="chat-room__participant-meta">{companion.city ?? 'Город не указан'}</p>
-            </div>
-          </div>
+          )}
         </div>
       </article>
 
@@ -184,9 +203,12 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
               );
             }
 
+            const sourceMessage = messages.find((source) => source.message_id === message.messageId);
+            const authorLabel = sourceMessage === undefined ? null : getMessageAuthorLabel(chat, sourceMessage, session?.userId ?? '');
+
             return (
               <div className={getMessageClassName(message.isOwn)} key={message.messageId}>
-                <p className="chat-room__message-author">{message.isOwn ? 'Вы' : companion.display_name}</p>
+                {authorLabel === null ? null : <p className="chat-room__message-author">{authorLabel}</p>}
                 <p className="chat-room__message-text">{message.text}</p>
                 <span className="chat-room__message-time">{message.sentAtLabel}</span>
               </div>

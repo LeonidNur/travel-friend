@@ -110,6 +110,62 @@ test('maps GET /chats through the authenticated backend client', async () => {
   ]);
 });
 
+test('maps a group Chat from GET /chats through the authenticated backend client', async () => {
+  const groupChat = {
+    chat_id: 'group-chat-uuid',
+    type: 'group',
+    participants: [
+      { user_id: 'user-one', display_name: 'Мария' },
+      { user_id: 'user-two', display_name: 'Илья' },
+      { user_id: 'user-three', display_name: 'Анна' }
+    ],
+    participant_count: 3,
+    created_at: '2026-09-01T10:00:00Z'
+  };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify([groupChat])));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(await client.getChats('session-token'), [groupChat]);
+  assert.deepEqual(calls[0], {
+    input: '/api/backend/chats',
+    init: {
+      headers: {
+        Accept: 'application/json',
+        Authorization: 'Bearer session-token'
+      },
+      method: 'GET'
+    }
+  });
+});
+
+test('maps POST /chats/groups through the authenticated backend client', async () => {
+  const createdGroupChat = {
+    chat_id: 'group-chat-uuid',
+    type: 'group',
+    participant_user_ids: ['user-one', 'user-two', 'user-three'],
+    created_at: '2026-09-01T10:00:00Z'
+  };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(createdGroupChat)));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(
+    await client.createGroupChat('session-token', { user_ids: ['user-one', 'user-two'] }),
+    createdGroupChat
+  );
+  assert.deepEqual(calls[0], {
+    input: '/api/backend/chats/groups',
+    init: {
+      body: JSON.stringify({ user_ids: ['user-one', 'user-two'] }),
+      headers: {
+        Accept: 'application/json',
+        Authorization: 'Bearer session-token',
+        'Content-Type': 'application/json'
+      },
+      method: 'POST'
+    }
+  });
+});
+
 test('maps GET /trips through the authenticated backend client', async () => {
   const trips = [{
     trip_id: 'trip-uuid',

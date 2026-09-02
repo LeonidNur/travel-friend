@@ -1,11 +1,11 @@
-import type { ChatMessageResponse, DirectChatResponse } from './backend-api-client';
+import type { ChatMessageResponse, ChatResponse } from './backend-api-client';
 
 export type ChatsScreenState = 'empty' | 'error' | 'loading' | 'success';
 
 type ChatsScreenInput = Readonly<{
   isLoading: boolean;
   error: string | null;
-  chats: readonly DirectChatResponse[];
+  chats: readonly ChatResponse[];
 }>;
 
 export type RuntimeChatMessage = Readonly<{
@@ -44,8 +44,28 @@ export function getChatsScreenState({ isLoading, error, chats }: ChatsScreenInpu
   return chats.length === 0 ? 'empty' : 'success';
 }
 
-export function findChatById(chats: readonly DirectChatResponse[], chatId: string): DirectChatResponse | undefined {
+export function findChatById(chats: readonly ChatResponse[], chatId: string): ChatResponse | undefined {
   return chats.find((chat) => chat.chat_id === chatId);
+}
+
+export function getMessageAuthorLabel(
+  chat: ChatResponse,
+  message: ChatMessageResponse,
+  currentUserId: string
+): string | null {
+  if (message.type !== 'user' || message.sender_user_id === null) {
+    return null;
+  }
+
+  if (message.sender_user_id === currentUserId) {
+    return 'Вы';
+  }
+
+  if (chat.type === 'direct') {
+    return chat.companion.display_name;
+  }
+
+  return chat.participants.find((participant) => participant.user_id === message.sender_user_id)?.display_name ?? 'Участник';
 }
 
 export function appendServerMessage(

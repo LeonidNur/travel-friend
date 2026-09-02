@@ -358,6 +358,23 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   text-align: right;
 }
 
+.group-chat-create {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.group-chat-create__options {
+  display: grid;
+  gap: 8px;
+}
+
+.group-chat-create__option {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
 .chat-status {
   position: relative;
   display: inline-flex;
