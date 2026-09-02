@@ -17,6 +17,7 @@ from test_discover import (
     create_discover_eligible_user,
     create_reciprocal_match,
     database_url,
+    decide,
 )
 from test_trip_persistence_migration import clean_database
 
@@ -51,6 +52,28 @@ def create_direct_trip(client: TestClient, database_url: str):
     chat_id = direct_chat_id(database_url, match["match_id"])
     trip = create_trip(client, first["access_token"], chat_id).json()
     return first, second, chat_id, trip
+
+
+def create_group_chat_with_three_participants(client: TestClient) -> tuple[dict[str, object], ...]:
+    initiator = create_discover_eligible_user(client, 1)
+    first_member = create_discover_eligible_user(client, 2)
+    second_member = create_discover_eligible_user(client, 3)
+    for member in (first_member, second_member):
+        assert (
+            decide(client, initiator["access_token"], member["user"]["id"], "interested").status_code
+            == 200
+        )
+        assert (
+            decide(client, member["access_token"], initiator["user"]["id"], "interested").status_code
+            == 200
+        )
+    group_response = client.post(
+        "/chats/groups",
+        headers=auth_headers(initiator["access_token"]),
+        json={"user_ids": [first_member["user"]["id"], second_member["user"]["id"]]},
+    )
+    assert group_response.status_code == 201
+    return initiator, first_member, second_member, group_response.json()
 
 
 def test_trip_list_returns_only_participant_trips_newest_first_with_persisted_route_summary(
@@ -348,25 +371,55 @@ def test_participant_creates_forming_trip_with_both_direct_chat_participants(
     )
 
 
+def test_group_chat_participant_creates_trip_with_all_active_chat_participants(
+    client: TestClient, database_url: str
+) -> None:
+    initiator, first_member, second_member, group_chat = create_group_chat_with_three_participants(client)
+    chat_id = UUID(group_chat["chat_id"])
+
+    response = create_trip(client, first_member["access_token"], chat_id)
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "trip_id": response.json()["trip_id"],
+        "chat_id": str(chat_id),
+        "created_by_user_id": first_member["user"]["id"],
+        "status": "forming",
+        "created_at": response.json()["created_at"],
+    }
+    with psycopg.connect(database_url) as connection:
+        participants = connection.execute(
+            "SELECT user_id FROM public.trip_participants WHERE trip_id=%s ORDER BY user_id",
+            (UUID(response.json()["trip_id"]),),
+        ).fetchall()
+    assert participants == sorted(
+        [
+            (UUID(initiator["user"]["id"]),),
+            (UUID(first_member["user"]["id"]),),
+            (UUID(second_member["user"]["id"]),),
+        ]
+    )
+
+
 def test_trip_creation_requires_authenticated_direct_chat_participant(
     client: TestClient, database_url: str
 ) -> None:
     first, _, match = create_reciprocal_match(client)
     outsider = create_discover_eligible_user(client, 3)
     chat_id = direct_chat_id(database_url, match["match_id"])
-    with psycopg.connect(database_url) as connection:
-        group_chat_id = connection.execute(
-            "INSERT INTO public.chats (type) VALUES ('group') RETURNING id"
-        ).fetchone()[0]
-        connection.execute(
-            "INSERT INTO public.chat_participants (chat_id, user_id) VALUES (%s, %s)",
-            (group_chat_id, UUID(first["user"]["id"])),
-        )
 
     assert client.post(f"/chats/{chat_id}/trips").status_code == 401
     assert create_trip(client, outsider["access_token"], chat_id).status_code == 404
     assert create_trip(client, first["access_token"], UUID("00000000-0000-0000-0000-000000000000")).status_code == 404
-    assert create_trip(client, first["access_token"], group_chat_id).status_code == 404
+
+
+def test_trip_creation_hides_group_chat_from_nonparticipant(client: TestClient) -> None:
+    initiator, first_member, second_member, group_chat = create_group_chat_with_three_participants(client)
+    outsider = create_discover_eligible_user(client, 4)
+
+    response = create_trip(client, outsider["access_token"], UUID(group_chat["chat_id"]))
+
+    assert response.status_code == 404
 
 
 def test_repeated_trip_creation_conflicts_without_creating_a_second_trip(
@@ -417,9 +470,9 @@ def test_concurrent_trip_creation_creates_exactly_one_trip(
 def test_participant_insert_failure_rolls_back_trip_creation(
     client: TestClient, database_url: str
 ) -> None:
-    first, second, match = create_reciprocal_match(client)
-    chat_id = direct_chat_id(database_url, match["match_id"])
-    second_user_id = UUID(second["user"]["id"])
+    first, second, third, group_chat = create_group_chat_with_three_participants(client)
+    chat_id = UUID(group_chat["chat_id"])
+    third_user_id = UUID(third["user"]["id"])
     with psycopg.connect(database_url) as connection:
         connection.execute(
             "CREATE FUNCTION public.fail_test_trip_participant_insert() RETURNS trigger "
@@ -431,7 +484,7 @@ def test_participant_insert_failure_rolls_back_trip_creation(
                 "BEFORE INSERT ON public.trip_participants "
                 "FOR EACH ROW WHEN (NEW.user_id = {}) "
                 "EXECUTE FUNCTION public.fail_test_trip_participant_insert()"
-            ).format(sql.Literal(second_user_id))
+            ).format(sql.Literal(third_user_id))
         )
     try:
         with TestClient(client.app, raise_server_exceptions=False) as failure_client:
@@ -441,6 +494,11 @@ def test_participant_insert_failure_rolls_back_trip_creation(
         with psycopg.connect(database_url) as connection:
             assert connection.execute(
                 "SELECT count(*) FROM public.trips WHERE chat_id=%s", (chat_id,)
+            ).fetchone() == (0,)
+            assert connection.execute(
+                "SELECT count(*) FROM public.trip_participants tp "
+                "JOIN public.trips t ON t.id=tp.trip_id WHERE t.chat_id=%s",
+                (chat_id,),
             ).fetchone() == (0,)
     finally:
         with psycopg.connect(database_url) as connection:

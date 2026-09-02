@@ -1,4 +1,4 @@
-"""Authenticated Trip creation from an existing direct Chat."""
+"""Authenticated Trip creation from an existing Chat."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.db import get_database_connection
-from travel_friend_backend.routers.chats import find_authorized_chat
 from travel_friend_backend.schemas.trips import (
     TripCreateResponse,
     TripDetailResponse,
@@ -90,12 +89,26 @@ def get_trip(
     }
 
 
-def create_trip_for_direct_chat(
+def find_authorized_trip_chat(
+    connection: psycopg.Connection, chat_id: UUID, user_id: UUID
+) -> dict[str, object] | None:
+    """Lock and return a Chat only when the requester is an active participant."""
+    return connection.execute(
+        "SELECT c.id FROM public.chats c "
+        "WHERE c.id=%s AND EXISTS ("
+        "SELECT 1 FROM public.chat_participants cp "
+        "WHERE cp.chat_id=c.id AND cp.user_id=%s AND cp.left_at IS NULL"
+        ") FOR UPDATE",
+        (chat_id, user_id),
+    ).fetchone()
+
+
+def create_trip_for_chat(
     connection: psycopg.Connection, chat_id: UUID, principal: AuthenticatedPrincipal
 ) -> dict[str, object]:
-    """Create one forming Trip and its direct Chat participants atomically."""
+    """Create one forming Trip and all active Chat participants atomically."""
     with connection.transaction():
-        if find_authorized_chat(connection, chat_id, principal.user_id, lock=True) is None:
+        if find_authorized_trip_chat(connection, chat_id, principal.user_id) is None:
             raise HTTPException(404, "Chat not found")
 
         existing_trip = connection.execute(
@@ -106,12 +119,13 @@ def create_trip_for_direct_chat(
             raise HTTPException(409, "Unfinished Trip already exists")
 
         participant_rows = connection.execute(
-            "SELECT user_id FROM public.chat_participants WHERE chat_id=%s FOR SHARE",
+            "SELECT user_id FROM public.chat_participants "
+            "WHERE chat_id=%s AND left_at IS NULL FOR SHARE",
             (chat_id,),
         ).fetchall()
         participant_ids = [row["user_id"] for row in participant_rows]
-        if len(participant_ids) != 2 or principal.user_id not in participant_ids:
-            raise RuntimeError("Direct Chat membership invariant is violated")
+        if not participant_ids or principal.user_id not in participant_ids:
+            raise RuntimeError("Chat membership invariant is violated")
 
         trip = connection.execute(
             "INSERT INTO public.trips (chat_id, created_by_user_id, status) "
@@ -125,10 +139,10 @@ def create_trip_for_direct_chat(
         inserted_participants = connection.execute(
             "INSERT INTO public.trip_participants (trip_id, user_id) "
             "SELECT %s, user_id FROM public.chat_participants "
-            "WHERE chat_id=%s RETURNING user_id",
+            "WHERE chat_id=%s AND left_at IS NULL RETURNING user_id",
             (trip["trip_id"], chat_id),
         ).fetchall()
-        if len(inserted_participants) != 2:
+        if len(inserted_participants) != len(participant_ids):
             raise RuntimeError("Trip participant creation invariant is violated")
 
     return dict(trip)
@@ -144,4 +158,4 @@ def create_trip(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
 ) -> dict[str, object]:
-    return create_trip_for_direct_chat(connection, chat_id, principal)
+    return create_trip_for_chat(connection, chat_id, principal)

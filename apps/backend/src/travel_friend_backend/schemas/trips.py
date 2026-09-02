@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 
 class TripCreateResponse(BaseModel):
-    """Server-created initial snapshot for a direct Chat Trip."""
+    """Server-created initial snapshot for a Chat Trip."""
 
     trip_id: UUID
     chat_id: UUID
