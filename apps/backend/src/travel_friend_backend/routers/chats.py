@@ -178,6 +178,22 @@ def find_authorized_chat(
     ).fetchone()
 
 
+def find_authorized_message_chat(
+    connection: psycopg.Connection, chat_id: UUID, user_id: UUID, *, lock: bool
+) -> dict[str, object] | None:
+    """Find a Chat an active participant may access for Messages, optionally locking it."""
+    lock_clause = " FOR UPDATE" if lock else ""
+    return connection.execute(
+        "SELECT c.id FROM public.chats c "
+        "WHERE c.id=%s AND EXISTS ("
+        "SELECT 1 FROM public.chat_participants cp "
+        "WHERE cp.chat_id=c.id AND cp.user_id=%s AND cp.left_at IS NULL"
+        ")"
+        f"{lock_clause}",
+        (chat_id, user_id),
+    ).fetchone()
+
+
 def message_response(row: dict[str, object]) -> dict[str, object]:
     """Map selected persistence columns to the public MVP message contract."""
     return {
@@ -197,7 +213,7 @@ def get_chat_messages(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
 ) -> list[dict[str, object]]:
-    if find_authorized_chat(connection, chat_id, principal.user_id, lock=False) is None:
+    if find_authorized_message_chat(connection, chat_id, principal.user_id, lock=False) is None:
         raise HTTPException(404, "Chat not found")
 
     rows = connection.execute(
@@ -222,7 +238,7 @@ def create_chat_message(
     connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
 ) -> dict[str, object]:
     with connection.transaction():
-        if find_authorized_chat(connection, chat_id, principal.user_id, lock=True) is None:
+        if find_authorized_message_chat(connection, chat_id, principal.user_id, lock=True) is None:
             raise HTTPException(404, "Chat not found")
 
         chat = connection.execute(

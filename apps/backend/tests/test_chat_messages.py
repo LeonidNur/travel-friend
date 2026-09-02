@@ -15,6 +15,7 @@ from test_discover import (
     create_discover_eligible_user,
     create_reciprocal_match,
     database_url,
+    decide,
 )
 
 
@@ -33,6 +34,28 @@ def send_message(client: TestClient, token: str, chat_id: UUID, content_text: st
         headers=auth_headers(token),
         json={"content_text": content_text},
     )
+
+
+def create_group_chat_with_three_participants(client: TestClient) -> tuple[dict[str, object], ...]:
+    initiator = create_discover_eligible_user(client, 1)
+    first_member = create_discover_eligible_user(client, 2)
+    second_member = create_discover_eligible_user(client, 3)
+    for member in (first_member, second_member):
+        assert (
+            decide(client, initiator["access_token"], member["user"]["id"], "interested").status_code
+            == 200
+        )
+        assert (
+            decide(client, member["access_token"], initiator["user"]["id"], "interested").status_code
+            == 200
+        )
+    response = client.post(
+        "/chats/groups",
+        headers=auth_headers(initiator["access_token"]),
+        json={"user_ids": [first_member["user"]["id"], second_member["user"]["id"]]},
+    )
+    assert response.status_code == 201
+    return initiator, first_member, second_member, response.json()
 
 
 def test_messages_require_authentication(client: TestClient) -> None:
@@ -116,33 +139,50 @@ def test_missing_chat_returns_not_found_for_authenticated_user(client: TestClien
     ).status_code == 404
 
 
-def test_group_chat_is_not_supported_by_current_message_endpoints(
+def test_group_chat_participants_send_and_read_shared_history(client: TestClient) -> None:
+    initiator, first_member, second_member, group_chat = create_group_chat_with_three_participants(client)
+    chat_id = UUID(group_chat["chat_id"])
+    participants = (initiator, first_member, second_member)
+
+    sent_messages = [
+        send_message(client, participant["access_token"], chat_id, f"message from {index}")
+        for index, participant in enumerate(participants, start=1)
+    ]
+
+    assert [response.status_code for response in sent_messages] == [201, 201, 201]
+    assert [response.json()["sequence_number"] for response in sent_messages] == [1, 2, 3]
+    for participant in participants:
+        response = client.get(f"/chats/{chat_id}/messages", headers=auth_headers(participant["access_token"]))
+
+        assert response.status_code == 200
+        assert [message["sequence_number"] for message in response.json()] == [1, 2, 3]
+        assert [message["sender_user_id"] for message in response.json()] == [
+            initiator["user"]["id"],
+            first_member["user"]["id"],
+            second_member["user"]["id"],
+        ]
+
+
+def test_non_participant_receives_not_found_for_group_chat_messages(
     client: TestClient, database_url: str
 ) -> None:
-    participant, _, _ = create_reciprocal_match(client)
-    participant_user_id = UUID(participant["user"]["id"])
-    with psycopg.connect(database_url) as connection:
-        group_chat_id = connection.execute(
-            "INSERT INTO public.chats (type) VALUES ('group') RETURNING id"
-        ).fetchone()[0]
-        connection.execute(
-            "INSERT INTO public.chat_participants (chat_id, user_id) VALUES (%s, %s)",
-            (group_chat_id, participant_user_id),
-        )
+    initiator, first_member, second_member, group_chat = create_group_chat_with_three_participants(client)
+    chat_id = UUID(group_chat["chat_id"])
+    outsider = create_discover_eligible_user(client, 4)
 
     get_response = client.get(
-        f"/chats/{group_chat_id}/messages", headers=auth_headers(participant["access_token"])
+        f"/chats/{chat_id}/messages", headers=auth_headers(outsider["access_token"])
     )
-    post_response = send_message(client, participant["access_token"], group_chat_id, "Unsupported")
+    post_response = send_message(client, outsider["access_token"], chat_id, "Not allowed")
 
     assert get_response.status_code == 404
     assert post_response.status_code == 404
     with psycopg.connect(database_url) as connection:
         assert connection.execute(
-            "SELECT last_sequence FROM public.chats WHERE id=%s", (group_chat_id,)
+            "SELECT last_sequence FROM public.chats WHERE id=%s", (chat_id,)
         ).fetchone() == (0,)
         assert connection.execute(
-            "SELECT count(*) FROM public.messages WHERE chat_id=%s", (group_chat_id,)
+            "SELECT count(*) FROM public.messages WHERE chat_id=%s", (chat_id,)
         ).fetchone() == (0,)
 
 
