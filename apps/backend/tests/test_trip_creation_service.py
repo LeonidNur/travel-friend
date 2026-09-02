@@ -33,8 +33,10 @@ class Transaction(AbstractContextManager[None]):
 class FakeConnection:
     def __init__(self, results: list[QueryResult]) -> None:
         self.results = results
+        self.transaction_calls = 0
 
     def transaction(self) -> Transaction:
+        self.transaction_calls += 1
         return Transaction()
 
     def execute(self, *_: object, **__: object) -> QueryResult:
@@ -67,6 +69,7 @@ def test_create_trip_inserts_server_derived_participants() -> None:
 
     assert trip["trip_id"] == trip_id
     assert connection.results == []
+    assert connection.transaction_calls == 1
 
 
 @pytest.mark.parametrize(

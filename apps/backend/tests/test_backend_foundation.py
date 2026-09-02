@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import os
+
+os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token-for-transaction-lifecycle")
+os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-transaction-lifecycle")
+
 from contextlib import contextmanager
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+import psycopg
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from travel_friend_backend import db
 from travel_friend_backend.auth import service
+from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.config import BackendSettings
+from travel_friend_backend.main import create_app
 from travel_friend_backend.routers import me
 from travel_friend_backend.schemas.onboarding import OnboardingPatchRequest
 from travel_friend_backend.schemas.profile import ProfilePatchRequest
@@ -73,6 +82,31 @@ def test_database_dependency_reads_the_application_database_url(monkeypatch) -> 
 
     assert next(dependency) is connection
     dependency.close()
+
+
+def test_write_endpoint_returns_an_error_when_commit_fails() -> None:
+    principal = AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
+
+    class CommitFailingConnection:
+        def execute(self, *_: object, **__: object) -> None:
+            return None
+
+        def commit(self) -> None:
+            raise psycopg.OperationalError("commit failed")
+
+    app = create_app(
+        BackendSettings(
+            telegram_bot_token="test-token",
+            database_url="postgresql://unused-for-transaction-lifecycle",
+        )
+    )
+    app.dependency_overrides[auth_dependency] = lambda: principal
+    app.dependency_overrides[db.get_database_connection] = lambda: CommitFailingConnection()
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post("/auth/logout")
+
+    assert response.status_code == 500
 
 
 def test_current_user_returns_a_typed_authenticated_principal(monkeypatch) -> None:
@@ -149,12 +183,16 @@ class RecordingProfileConnection:
     def __init__(self, rows: list[dict[str, object] | None]) -> None:
         self.rows = rows
         self.calls: list[tuple[str, tuple[object, ...]]] = []
+        self.commit_calls = 0
 
     def execute(
         self, query: str, parameters: tuple[object, ...]
     ) -> ProfileQueryResult:
         self.calls.append((query, parameters))
         return ProfileQueryResult(self.rows.pop(0))
+
+    def commit(self) -> None:
+        self.commit_calls += 1
 
 
 def test_current_user_profile_queries_only_the_authenticated_user() -> None:
@@ -190,6 +228,7 @@ def test_profile_patch_creates_then_updates_only_whitelisted_columns() -> None:
     assert "INSERT INTO public.profiles (user_id, display_name, updated_at)" in create_query
     assert "ON CONFLICT (user_id) DO UPDATE SET display_name=EXCLUDED.display_name" in create_query
     assert create_parameters == (principal.user_id, "Ada")
+    assert create_connection.commit_calls == 1
 
     updated_profile = {"user_id": principal.user_id, "display_name": "Ada", "city": "Paris"}
     update_connection = RecordingProfileConnection([{"exists": 1}, updated_profile])
@@ -200,6 +239,7 @@ def test_profile_patch_creates_then_updates_only_whitelisted_columns() -> None:
     update_query, update_parameters = update_connection.calls[1]
     assert "SET city=%s, updated_at=now()" in update_query
     assert update_parameters == ("Paris", principal.user_id)
+    assert update_connection.commit_calls == 1
 
     unchanged_profile = {"user_id": principal.user_id, "display_name": "Ada"}
     empty_patch_connection = RecordingProfileConnection([unchanged_profile])
@@ -208,6 +248,7 @@ def test_profile_patch_creates_then_updates_only_whitelisted_columns() -> None:
         ProfilePatchRequest(), principal, empty_patch_connection
     ) is unchanged_profile
     assert len(empty_patch_connection.calls) == 1
+    assert empty_patch_connection.commit_calls == 1
 
 
 def test_profile_patch_rejects_null_display_name() -> None:
@@ -241,6 +282,7 @@ def test_put_current_user_travel_intent_upserts_a_single_active_row() -> None:
     assert "updated_at=CASE" in query
     assert "IS DISTINCT FROM" in query
     assert parameters == (principal.user_id, "Lisbon", payload.date_from, payload.date_to)
+    assert connection.commit_calls == 1
 
 
 def test_delete_current_user_travel_intent_archives_only_the_current_users_active_row() -> None:
@@ -254,6 +296,7 @@ def test_delete_current_user_travel_intent_archives_only_the_current_users_activ
     assert "archived_at=now()" in query
     assert "WHERE user_id=%s AND status='active'" in query
     assert parameters == (principal.user_id,)
+    assert connection.commit_calls == 1
 
 
 def test_onboarding_patch_uses_only_the_authenticated_users_existing_state() -> None:
@@ -270,6 +313,7 @@ def test_onboarding_patch_uses_only_the_authenticated_users_existing_state() -> 
     assert "WHERE user_id=%s" in query
     assert "IS DISTINCT FROM" in query
     assert parameters == ("in_progress", "in_progress", principal.user_id, "in_progress")
+    assert connection.commit_calls == 1
 
 
 @pytest.mark.parametrize(

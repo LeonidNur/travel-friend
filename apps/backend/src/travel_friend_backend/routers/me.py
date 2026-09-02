@@ -77,6 +77,7 @@ def patch_current_user_profile(
     else:
         profile = existing_profile
 
+    connection.commit()
     return profile
 
 
@@ -98,7 +99,7 @@ def put_current_user_travel_intent(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
 ) -> dict[str, object]:
-    return connection.execute(
+    travel_intent = connection.execute(
         f"INSERT INTO public.travel_intents "
         "(user_id, destination_label, date_from, date_to, status, updated_at) "
         "VALUES (%s, %s, %s, %s, 'active', now()) "
@@ -113,6 +114,8 @@ def put_current_user_travel_intent(
         f"RETURNING {TRAVEL_INTENT_COLUMNS}",
         (principal.user_id, payload.destination, payload.date_from, payload.date_to),
     ).fetchone()
+    connection.commit()
+    return travel_intent
 
 
 @router.delete("/travel-intent", status_code=204, response_class=Response)
@@ -126,6 +129,7 @@ def delete_current_user_travel_intent(
         "WHERE user_id=%s AND status='active'",
         (principal.user_id,),
     )
+    connection.commit()
 
 
 @router.patch("/onboarding", response_model=OnboardingResponse)
@@ -148,4 +152,5 @@ def patch_current_user_onboarding(
     if onboarding is None:
         raise HTTPException(409, "Cannot transition onboarding from completed to in_progress")
 
+    connection.commit()
     return {"status": onboarding["onboarding_status"]}

@@ -162,6 +162,7 @@ def save_discover_decision(
     if payload.decision == "interested" and match is not None and match["chat_id"] is None:
         ensure_direct_chat_for_match(connection, match["id"], user_a_id, user_b_id)
 
+    connection.commit()
     return {
         "decision": payload.decision,
         "match_created": match_created,

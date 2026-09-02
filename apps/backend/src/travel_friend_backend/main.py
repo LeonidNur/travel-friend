@@ -73,6 +73,7 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
             "UPDATE user_sessions SET revoked_at=now() WHERE id=%s",
             (principal.session_id,),
         )
+        connection.commit()
 
     return app
 

@@ -97,6 +97,26 @@ def test_first_login_creates_identity_defaults_and_bootstrap(client: TestClient,
             assert cursor.fetchone()["user_id"] == user_id
 
 
+def test_profile_write_is_committed_before_a_separate_connection_reads_it(
+    client: TestClient, database_url: str
+) -> None:
+    session = login(client).json()
+
+    response = client.patch(
+        "/me/profile",
+        headers={"Authorization": f"Bearer {session['access_token']}"},
+        json={"display_name": "Committed Ada", "city": "Moscow"},
+    )
+
+    assert response.status_code == 200
+    with psycopg.connect(database_url) as connection:
+        profile = connection.execute(
+            "SELECT display_name, city FROM public.profiles WHERE user_id=%s",
+            (session["user"]["id"],),
+        ).fetchone()
+    assert profile == ("Committed Ada", "Moscow")
+
+
 def test_repeat_login_updates_metadata_without_second_user_or_profile(client: TestClient, database_url: str) -> None:
     first = login(client)
     second = login(client, telegram_user(username="ada-updated", first_name="Augusta"))
