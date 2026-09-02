@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal, TypeAlias
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -25,6 +25,29 @@ class DirectChatListItemResponse(BaseModel):
     type: Literal["direct"]
     companion: DirectChatCompanionResponse
     created_at: datetime
+
+
+class GroupChatParticipantResponse(BaseModel):
+    """One current Group Chat participant from persisted membership and profile data."""
+
+    user_id: UUID
+    display_name: str | None
+
+
+class GroupChatListItemResponse(BaseModel):
+    """Minimal persisted data required to render one Group Chat list item."""
+
+    chat_id: UUID
+    type: Literal["group"]
+    participants: list[GroupChatParticipantResponse]
+    participant_count: int
+    created_at: datetime
+
+
+ChatListItemResponse: TypeAlias = Annotated[
+    DirectChatListItemResponse | GroupChatListItemResponse,
+    Field(discriminator="type"),
+]
 
 
 class GroupChatCreateRequest(BaseModel):

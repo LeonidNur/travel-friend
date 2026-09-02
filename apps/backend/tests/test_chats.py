@@ -74,6 +74,98 @@ def test_chats_returns_only_authenticated_users_direct_chat_with_companion_data(
     assert all(item["companion"]["user_id"] != third["user"]["id"] for item in payload)
 
 
+def test_chats_returns_group_chat_to_every_current_participant(client: TestClient) -> None:
+    initiator, first_member, second_member = create_group_eligible_users(client)
+    created_group = create_group(
+        client,
+        initiator["access_token"],
+        [first_member["user"]["id"], second_member["user"]["id"]],
+    ).json()
+
+    expected_user_ids = {
+        initiator["user"]["id"],
+        first_member["user"]["id"],
+        second_member["user"]["id"],
+    }
+    for participant in (initiator, first_member, second_member):
+        response = client.get("/chats", headers=auth_headers(participant["access_token"]))
+
+        assert response.status_code == 200
+        group_chat = next(
+            item for item in response.json() if item["chat_id"] == created_group["chat_id"]
+        )
+        assert group_chat["type"] == "group"
+        assert group_chat["participant_count"] == 3
+        assert {member["user_id"] for member in group_chat["participants"]} == expected_user_ids
+        assert {member["display_name"] for member in group_chat["participants"]} == {
+            "Candidate 1",
+            "Candidate 2",
+            "Candidate 3",
+        }
+        assert "created_at" in group_chat
+
+
+def test_chats_does_not_return_group_chat_to_nonparticipant(client: TestClient) -> None:
+    initiator, first_member, second_member = create_group_eligible_users(client)
+    created_group = create_group(
+        client,
+        initiator["access_token"],
+        [first_member["user"]["id"], second_member["user"]["id"]],
+    ).json()
+    outsider = create_discover_eligible_user(client, 4)
+
+    response = client.get("/chats", headers=auth_headers(outsider["access_token"]))
+
+    assert response.status_code == 200
+    assert all(item["chat_id"] != created_group["chat_id"] for item in response.json())
+
+
+def test_chats_sorts_direct_and_group_chats_by_created_at_then_chat_id(
+    client: TestClient, database_url: str
+) -> None:
+    initiator, first_member, second_member = create_group_eligible_users(client)
+    created_group = create_group(
+        client,
+        initiator["access_token"],
+        [first_member["user"]["id"], second_member["user"]["id"]],
+    ).json()
+
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.chats SET created_at='2026-01-01T00:00:00Z' "
+            "WHERE id IN ("
+            "SELECT chat_id FROM public.chat_participants WHERE user_id=%s"
+            ")",
+            (initiator["user"]["id"],),
+        )
+        connection.commit()
+        expected_chat_ids = [
+            str(row[0])
+            for row in connection.execute(
+                "SELECT c.id FROM public.chats c "
+                "JOIN public.chat_participants cp ON cp.chat_id=c.id "
+                "WHERE cp.user_id=%s AND cp.left_at IS NULL "
+                "ORDER BY c.created_at DESC, c.id DESC",
+                (initiator["user"]["id"],),
+            ).fetchall()
+        ]
+
+    response = client.get("/chats", headers=auth_headers(initiator["access_token"]))
+
+    assert response.status_code == 200
+    assert [item["chat_id"] for item in response.json()] == expected_chat_ids
+    assert created_group["chat_id"] in expected_chat_ids
+
+
+def test_chats_returns_an_empty_list_when_the_user_has_no_chats(client: TestClient) -> None:
+    user = create_discover_eligible_user(client, 1)
+
+    response = client.get("/chats", headers=auth_headers(user["access_token"]))
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_creates_group_chat_for_initiator_and_eligible_direct_chat_companions(
     client: TestClient, database_url: str
 ) -> None:

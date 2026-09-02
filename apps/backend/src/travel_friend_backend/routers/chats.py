@@ -1,4 +1,4 @@
-"""Authenticated direct Chat list routes."""
+"""Authenticated Chat list and direct-message routes."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.db import get_database_connection
 from travel_friend_backend.schemas.chats import (
+    ChatListItemResponse,
     ChatMessageCreateRequest,
     ChatMessageResponse,
-    DirectChatListItemResponse,
     GroupChatCreateRequest,
     GroupChatCreateResponse,
 )
@@ -81,38 +81,85 @@ def create_group_chat_route(
     return create_group_chat(connection, principal, payload.user_ids)
 
 
-@router.get("", response_model=list[DirectChatListItemResponse])
-def get_direct_chats(
+def direct_chat_list_item(
+    connection: psycopg.Connection, chat_id: UUID, user_id: UUID
+) -> dict[str, object] | None:
+    """Return the existing companion projection for one accessible direct Chat."""
+    row = connection.execute(
+        "SELECT c.id AS chat_id, c.type, other.user_id, p.display_name, "
+        "EXTRACT(YEAR FROM age(CURRENT_DATE, p.birth_date))::integer AS age, p.city, "
+        "c.created_at "
+        "FROM public.chats c "
+        "JOIN public.chat_participants own "
+        "ON own.chat_id=c.id AND own.user_id=%s AND own.left_at IS NULL "
+        "JOIN public.chat_participants other "
+        "ON other.chat_id=c.id AND other.user_id<>own.user_id AND other.left_at IS NULL "
+        "JOIN public.profiles p ON p.user_id=other.user_id "
+        "WHERE c.id=%s AND c.type='direct'",
+        (user_id, chat_id),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "chat_id": row["chat_id"],
+        "type": row["type"],
+        "companion": {
+            "user_id": row["user_id"],
+            "display_name": row["display_name"],
+            "age": row["age"],
+            "city": row["city"],
+        },
+        "created_at": row["created_at"],
+    }
+
+
+def group_chat_list_item(
+    connection: psycopg.Connection, chat_id: UUID, created_at: object
+) -> dict[str, object]:
+    """Return persisted current membership for one accessible Group Chat."""
+    participants = connection.execute(
+        "SELECT cp.user_id, p.display_name "
+        "FROM public.chat_participants cp "
+        "LEFT JOIN public.profiles p ON p.user_id=cp.user_id "
+        "WHERE cp.chat_id=%s AND cp.left_at IS NULL "
+        "ORDER BY cp.joined_at ASC, cp.user_id ASC",
+        (chat_id,),
+    ).fetchall()
+    participant_projection = [
+        {"user_id": participant["user_id"], "display_name": participant["display_name"]}
+        for participant in participants
+    ]
+    return {
+        "chat_id": chat_id,
+        "type": "group",
+        "participants": participant_projection,
+        "participant_count": len(participant_projection),
+        "created_at": created_at,
+    }
+
+
+@router.get("", response_model=list[ChatListItemResponse])
+def get_chats(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
 ) -> list[dict[str, object]]:
     rows = connection.execute(
-        "SELECT c.id AS chat_id, c.type, other.user_id, p.display_name, "
-        "EXTRACT(YEAR FROM age(CURRENT_DATE, p.birth_date))::integer AS age, p.city, "
-        "c.created_at "
-        "FROM public.chat_participants own "
-        "JOIN public.chats c ON c.id=own.chat_id AND c.type='direct' "
-        "JOIN public.chat_participants other "
-        "ON other.chat_id=c.id AND other.user_id<>own.user_id "
-        "JOIN public.profiles p ON p.user_id=other.user_id "
-        "WHERE own.user_id=%s "
+        "SELECT c.id AS chat_id, c.type, c.created_at "
+        "FROM public.chats c "
+        "JOIN public.chat_participants own "
+        "ON own.chat_id=c.id AND own.user_id=%s AND own.left_at IS NULL "
         "ORDER BY c.created_at DESC, c.id DESC",
         (principal.user_id,),
     ).fetchall()
-    return [
-        {
-            "chat_id": row["chat_id"],
-            "type": row["type"],
-            "companion": {
-                "user_id": row["user_id"],
-                "display_name": row["display_name"],
-                "age": row["age"],
-                "city": row["city"],
-            },
-            "created_at": row["created_at"],
-        }
-        for row in rows
-    ]
+    chat_items: list[dict[str, object]] = []
+    for row in rows:
+        if row["type"] == "direct":
+            direct_chat = direct_chat_list_item(connection, row["chat_id"], principal.user_id)
+            if direct_chat is not None:
+                chat_items.append(direct_chat)
+            continue
+        chat_items.append(group_chat_list_item(connection, row["chat_id"], row["created_at"]))
+    return chat_items
 
 
 def find_authorized_chat(
