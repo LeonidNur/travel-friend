@@ -8,7 +8,7 @@ import json
 import os
 import time
 from collections.abc import Iterator
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 from uuid import UUID
 
 import psycopg
@@ -16,6 +16,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from travel_friend_backend.config import BackendSettings
+from integration_database import (
+    IntegrationDatabaseNotConfiguredError,
+    get_disposable_test_database_url,
+    truncate_disposable_test_database,
+)
 
 
 TEST_BOT_TOKEN = "test-bot-token-for-telegram-auth"
@@ -24,18 +29,6 @@ TEST_BOT_TOKEN = "test-bot-token-for-telegram-auth"
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", TEST_BOT_TOKEN)
 os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-test-import")
 from travel_friend_backend.main import create_app
-
-
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-
-
-def require_safe_test_database_url(database_url: str) -> str:
-    parsed = urlparse(database_url)
-    if parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
-        pytest.skip("TEST_DATABASE_URL must point to a disposable local PostgreSQL database")
-    if parsed.path.rstrip("/") in {"", "/postgres"}:
-        pytest.skip("TEST_DATABASE_URL must name a dedicated test database")
-    return database_url
 
 
 def sign_init_data(user: dict[str, object], *, auth_date: int | None = None) -> str:
@@ -50,24 +43,22 @@ def sign_init_data(user: dict[str, object], *, auth_date: int | None = None) -> 
 
 @pytest.fixture
 def database_url() -> str:
-    if not TEST_DATABASE_URL:
-        pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
-    return require_safe_test_database_url(TEST_DATABASE_URL)
+    try:
+        return get_disposable_test_database_url()
+    except IntegrationDatabaseNotConfiguredError as error:
+        pytest.skip(str(error))
 
 
 @pytest.fixture(autouse=True)
 def clean_database(database_url: str) -> Iterator[None]:
-    with psycopg.connect(database_url) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "TRUNCATE public.trip_stops, public.trip_participants, public.trips, public.chat_summaries, "
-                "public.messages, public.chat_participants, "
-                "public.matches, public.chats, public.discover_interest_decisions, "
-                "public.user_sessions, public.travel_intents, "
-                "public.profile_photos, public.profiles, "
-                "public.user_activity_states, public.user_settings, "
-                "public.telegram_identities, public.users RESTART IDENTITY"
-            )
+    truncate_disposable_test_database(
+        database_url,
+        "TRUNCATE public.trip_stops, public.trip_participants, public.trips, public.chat_summaries, "
+        "public.messages, public.chat_participants, public.matches, public.chats, "
+        "public.discover_interest_decisions, public.user_sessions, public.travel_intents, "
+        "public.profile_photos, public.profiles, public.user_activity_states, public.user_settings, "
+        "public.telegram_identities, public.users RESTART IDENTITY",
+    )
     yield
 
 

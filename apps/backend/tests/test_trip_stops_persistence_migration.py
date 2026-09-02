@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from datetime import date
 from pathlib import Path
-from urllib.parse import urlparse
 
 import psycopg
 import pytest
+
+from integration_database import IntegrationDatabaseNotConfiguredError, get_disposable_test_database_url
 
 from test_trip_persistence_migration import (
     clean_database,
@@ -24,20 +24,12 @@ MIGRATION_PATH = (
     / "migrations"
     / "20260901150000_trip_stops_persistence.sql"
 )
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-
-
 @pytest.fixture
 def database_url() -> str:
-    if not TEST_DATABASE_URL:
-        pytest.fail("TEST_DATABASE_URL is required for focused PostgreSQL migration tests")
-
-    parsed = urlparse(TEST_DATABASE_URL)
-    if parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
-        pytest.fail("TEST_DATABASE_URL must point to a disposable local PostgreSQL database")
-    if parsed.path.rstrip("/") in {"", "/postgres"}:
-        pytest.fail("TEST_DATABASE_URL must name a dedicated test database")
-    return TEST_DATABASE_URL
+    try:
+        return get_disposable_test_database_url()
+    except IntegrationDatabaseNotConfiguredError as error:
+        pytest.skip(str(error))
 
 
 def test_trip_stops_migration_declares_the_approved_physical_schema() -> None:

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from collections.abc import Iterator
-from urllib.parse import urlparse
 
 import psycopg
 import pytest
+
+from integration_database import (
+    IntegrationDatabaseNotConfiguredError,
+    get_disposable_test_database_url,
+    truncate_disposable_test_database,
+)
 
 
 MIGRATION_PATH = (
@@ -17,23 +21,12 @@ MIGRATION_PATH = (
     / "migrations"
     / "20260901130000_chat_persistence.sql"
 )
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-
-
-def require_safe_test_database_url(database_url: str) -> str:
-    parsed = urlparse(database_url)
-    if parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
-        pytest.skip("TEST_DATABASE_URL must point to a disposable local PostgreSQL database")
-    if parsed.path.rstrip("/") in {"", "/postgres"}:
-        pytest.skip("TEST_DATABASE_URL must name a dedicated test database")
-    return database_url
-
-
 @pytest.fixture
 def database_url() -> str:
-    if not TEST_DATABASE_URL:
-        pytest.skip("TEST_DATABASE_URL is required for PostgreSQL integration tests")
-    return require_safe_test_database_url(TEST_DATABASE_URL)
+    try:
+        return get_disposable_test_database_url()
+    except IntegrationDatabaseNotConfiguredError as error:
+        pytest.skip(str(error))
 
 
 @pytest.fixture
@@ -46,11 +39,9 @@ def clean_database(database_url: str) -> Iterator[None]:
         "public.profiles, public.user_activity_states, public.user_settings, "
         "public.telegram_identities, public.users RESTART IDENTITY"
     )
-    with psycopg.connect(database_url) as connection:
-        connection.execute(truncate_sql)
+    truncate_disposable_test_database(database_url, truncate_sql)
     yield
-    with psycopg.connect(database_url) as connection:
-        connection.execute(truncate_sql)
+    truncate_disposable_test_database(database_url, truncate_sql)
 
 
 def test_chat_migration_declares_the_mvp_schema_and_fk_semantics() -> None:

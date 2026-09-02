@@ -11,6 +11,7 @@ import pytest
 from psycopg import sql
 from fastapi.testclient import TestClient
 
+from integration_database import require_disposable_test_database_url
 from test_discover import (
     auth_headers,
     client,
@@ -501,6 +502,7 @@ def test_participant_insert_failure_rolls_back_trip_creation(
                 (chat_id,),
             ).fetchone() == (0,)
     finally:
+        require_disposable_test_database_url(database_url)
         with psycopg.connect(database_url) as connection:
             connection.execute("DROP TRIGGER IF EXISTS fail_test_trip_participant_insert ON public.trip_participants")
             connection.execute("DROP FUNCTION IF EXISTS public.fail_test_trip_participant_insert()")
