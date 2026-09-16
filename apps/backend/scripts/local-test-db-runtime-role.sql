@@ -47,6 +47,10 @@ GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
 ) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_eligible_travel_intents() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.archive_current_active_travel_intent() TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.discover_candidate_profile_projection() TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.discover_target_is_eligible(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.chat_participant_profile_projection(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.trip_participant_profile_projection(uuid) TO app_runtime;
 
 -- Future objects created by this migration/test owner receive no runtime grant.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM app_runtime;

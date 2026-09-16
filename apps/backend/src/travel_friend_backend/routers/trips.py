@@ -74,12 +74,8 @@ def get_trip(
         (trip_id,),
     ).fetchall()
     participants = connection.execute(
-        "SELECT tp.user_id, p.display_name, "
-        "EXTRACT(YEAR FROM age(CURRENT_DATE, p.birth_date))::integer AS age, p.city "
-        "FROM public.trip_participants tp "
-        "LEFT JOIN public.profiles p ON p.user_id=tp.user_id "
-        "WHERE tp.trip_id=%s AND tp.left_at IS NULL "
-        "ORDER BY tp.joined_at ASC, tp.user_id ASC",
+        "SELECT user_id, display_name, age, city "
+        "FROM public.trip_participant_profile_projection(%s)",
         (trip_id,),
     ).fetchall()
     return {

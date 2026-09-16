@@ -76,22 +76,14 @@ def get_discover_candidates(
 ) -> list[dict[str, object]]:
     ensure_discover_requester_eligibility(connection, principal.user_id)
     rows = connection.execute(
-        "SELECT p.user_id, p.display_name, "
-        "EXTRACT(YEAR FROM age(CURRENT_DATE, p.birth_date))::integer AS age, "
+        "SELECT p.user_id, p.display_name, p.age, "
         "p.city, p.bio, p.travel_style, p.interests, p.budget_level, p.comfort_level, "
         "ti.destination_label AS destination, ti.date_from, ti.date_to "
-        "FROM public.profiles p "
-        "JOIN public.users u ON u.id=p.user_id AND u.deleted_at IS NULL "
-        "JOIN public.user_activity_states activity "
-        "ON activity.user_id=p.user_id AND activity.onboarding_status='completed' "
+        "FROM public.discover_candidate_profile_projection() WITH ORDINALITY AS p("
+        "user_id, display_name, age, city, bio, travel_style, interests, budget_level, "
+        "comfort_level, candidate_order) "
         "JOIN public.discover_eligible_travel_intents() ti ON ti.user_id=p.user_id "
-        "WHERE p.user_id <> %s "
-        "AND NOT EXISTS ("
-        "SELECT 1 FROM public.discover_interest_decisions decision "
-        "WHERE decision.actor_user_id=%s AND decision.target_user_id=p.user_id"
-        ") "
-        "ORDER BY p.created_at ASC, p.user_id ASC",
-        (principal.user_id, principal.user_id),
+        "ORDER BY p.candidate_order ASC",
     ).fetchall()
     return [
         {
@@ -138,16 +130,11 @@ def save_discover_decision(
         raise HTTPException(409, "Discover decision is final")
 
     if existing_decision is None:
-        target_exists = connection.execute(
-            "SELECT 1 FROM public.users u "
-            "JOIN public.profiles p ON p.user_id=u.id "
-            "JOIN public.user_activity_states activity "
-            "ON activity.user_id=u.id AND activity.onboarding_status='completed' "
-            "JOIN public.discover_eligible_travel_intents() ti ON ti.user_id=u.id "
-            "WHERE u.id=%s AND u.deleted_at IS NULL",
+        target_is_eligible = connection.execute(
+            "SELECT public.discover_target_is_eligible(%s) AS is_eligible",
             (target_user_id,),
-        ).fetchone()
-        if target_exists is None:
+        ).fetchone()["is_eligible"]
+        if not target_is_eligible:
             raise HTTPException(404, "Discover target not found")
         connection.execute(
             "INSERT INTO public.discover_interest_decisions "
