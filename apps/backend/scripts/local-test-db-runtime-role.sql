@@ -23,17 +23,15 @@ REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public FROM app_runtime;
 
 GRANT USAGE ON SCHEMA public TO app_runtime;
 
-GRANT SELECT, INSERT ON TABLE public.users TO app_runtime;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.telegram_identities TO app_runtime;
+GRANT SELECT ON TABLE public.users TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.profiles TO app_runtime;
-GRANT INSERT ON TABLE public.user_settings TO app_runtime;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.user_activity_states TO app_runtime;
+GRANT SELECT, UPDATE ON TABLE public.user_activity_states TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.travel_intents TO app_runtime;
--- INSERT supports the current Telegram login bootstrap; UPDATE supports logout.
+-- UPDATE supports logout.
 -- PostgreSQL requires SELECT(id) for logout's UPDATE ... WHERE id=%s, but this
 -- is not table-level session reads. Their further narrowing is a separate slice.
 -- Bearer resolution uses the function below.
-GRANT INSERT, UPDATE ON TABLE public.user_sessions TO app_runtime;
+GRANT UPDATE ON TABLE public.user_sessions TO app_runtime;
 GRANT SELECT (id) ON TABLE public.user_sessions TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.discover_interest_decisions TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.matches TO app_runtime;
@@ -44,6 +42,9 @@ GRANT SELECT, INSERT ON TABLE public.trips TO app_runtime;
 GRANT SELECT, INSERT ON TABLE public.trip_participants TO app_runtime;
 GRANT SELECT ON TABLE public.trip_stops TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
+  bigint, text, text, text, text, text, timestamptz, timestamptz
+) TO app_runtime;
 
 -- Future objects created by this migration/test owner receive no runtime grant.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM app_runtime;
