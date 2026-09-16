@@ -121,12 +121,7 @@ def delete_current_user_travel_intent(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> None:
-    connection.execute(
-        "UPDATE public.travel_intents "
-        "SET status='archived', archived_at=now(), updated_at=now() "
-        "WHERE user_id=%s AND status='active'",
-        (principal.user_id,),
-    )
+    connection.execute("SELECT public.archive_current_active_travel_intent()", ())
 
 
 @router.patch("/onboarding", response_model=OnboardingResponse)

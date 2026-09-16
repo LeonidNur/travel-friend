@@ -84,7 +84,7 @@ def get_discover_candidates(
         "JOIN public.users u ON u.id=p.user_id AND u.deleted_at IS NULL "
         "JOIN public.user_activity_states activity "
         "ON activity.user_id=p.user_id AND activity.onboarding_status='completed' "
-        "JOIN public.travel_intents ti ON ti.user_id=p.user_id AND ti.status='active' "
+        "JOIN public.discover_eligible_travel_intents() ti ON ti.user_id=p.user_id "
         "WHERE p.user_id <> %s "
         "AND NOT EXISTS ("
         "SELECT 1 FROM public.discover_interest_decisions decision "
@@ -143,7 +143,7 @@ def save_discover_decision(
             "JOIN public.profiles p ON p.user_id=u.id "
             "JOIN public.user_activity_states activity "
             "ON activity.user_id=u.id AND activity.onboarding_status='completed' "
-            "JOIN public.travel_intents ti ON ti.user_id=u.id AND ti.status='active' "
+            "JOIN public.discover_eligible_travel_intents() ti ON ti.user_id=u.id "
             "WHERE u.id=%s AND u.deleted_at IS NULL",
             (target_user_id,),
         ).fetchone()
