@@ -47,6 +47,10 @@ AI provider и travel API — полудоверенные внешние зон
 
 База данных — доверенное хранилище состояния, но доступ к ней должен идти через backend-контур и least-privilege-политику.
 
+Локальный disposable PostgreSQL workflow уже проверяет foundation этой политики: application objects принадлежат privileged migration/test owner, а FastAPI использует отдельную non-owner `app_runtime` с минимальными table grants. Это пока не RLS: backend authorization остаётся текущей server-side логикой, а RLS policies будут отдельной задачей. Role SQL намеренно не включён в обычные Supabase migrations, поскольку managed Supabase migration identity не считается доказанно способной создавать роли; для hosted deployment потребуется отдельный approved runbook с платформенно разрешённой identity.
+
+До RLS два table-level `UPDATE` grants существуют именно для row locks: `discover_interest_decisions` для `SELECT ... FOR UPDATE` в Discover и `chat_participants` для `SELECT ... FOR SHARE` при создании Trip. Они шире фактически блокируемых строк; ограничение scope по строкам — ответственность следующего RLS slice. Production runtime role от этого local foundation не переключается.
+
 ## UserBlock
 
 `UserBlock` нужен как серверная safety-граница между двумя пользователями.

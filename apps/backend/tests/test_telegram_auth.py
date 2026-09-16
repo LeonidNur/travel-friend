@@ -63,8 +63,8 @@ def clean_database(database_url: str) -> Iterator[None]:
 
 
 @pytest.fixture
-def client(database_url: str) -> Iterator[TestClient]:
-    app = create_app(BackendSettings(telegram_bot_token=TEST_BOT_TOKEN, database_url=database_url))
+def client(runtime_database_url: str) -> Iterator[TestClient]:
+    app = create_app(BackendSettings(telegram_bot_token=TEST_BOT_TOKEN, database_url=runtime_database_url))
     with TestClient(app) as test_client:
         yield test_client
 

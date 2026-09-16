@@ -37,9 +37,10 @@ uv run --python 3.12 --group dev pytest --cov
 # Полностью пересоздать public schema, включить pgcrypto и применить все migrations.
 ./scripts/local-test-db.sh reset
 
-# Получить local TEST_DATABASE_URL, если tests нужно запустить вручную.
+# Получить отдельные owner/runtime URL, если tests нужно запустить вручную.
 export TEST_DATABASE_URL="$(./scripts/local-test-db.sh url)"
-env -u DATABASE_URL uv run --python 3.12 --group dev pytest --cov
+export DATABASE_URL="$(./scripts/local-test-db.sh runtime-url)"
+uv run --python 3.12 --group dev pytest --cov
 
 # Или выполнить reset и весь PostgreSQL-backed suite одной командой.
 ./scripts/local-test-db.sh test
@@ -49,5 +50,7 @@ env -u DATABASE_URL uv run --python 3.12 --group dev pytest --cov
 ```
 
 Скрипт создаёт только контейнер `travel-friend-test-postgres` с label disposable test DB, binding исключительно на loopback и БД `travel_friend_test`; он откажется удалять контейнер без этого label. Guard в tests допускает только loopback URL этой БД на порту `55432`, повторно валидирует target непосредственно перед `TRUNCATE` и отклоняет совпадение с `DATABASE_URL`. В workflow `DATABASE_URL` удаляется из окружения pytest, поэтому production/development URL не может стать target тестов.
+
+После migrations workflow применяет version-controlled `scripts/local-test-db-runtime-role.sql`: application objects остаются owned `travel_friend_test`, а FastAPI подключается как non-owner `app_runtime`. Runtime role имеет только audited CRUD grants, `USAGE` на `public` и не имеет `CREATE`, `DELETE`, DDL, ownership или grants на `profile_photos`/`chat_summaries`. `UPDATE` на `discover_interest_decisions` нужен исключительно для существующего `SELECT ... FOR UPDATE` в Discover; `UPDATE` на `chat_participants` — для `SELECT ... FOR SHARE` при atomically creating a Trip. Оба table-level grants шире самой lock-потребности; row-level boundary будет отдельным RLS slice. `TEST_DATABASE_URL` остаётся privileged owner connection только для fixture setup/cleanup; `DATABASE_URL` обязан быть local `app_runtime`, поэтому SQL из `TestClient` выполняется именно runtime role. Скрипт не является hosted Supabase migration: право создавать роли в managed Supabase не предполагается и требует отдельного approved production runbook.
 
 `TELEGRAM_BOT_TOKEN` не имеет fallback-значения: без него backend не запускается. Verifier принимает только raw `initData`; он не доверяет `initDataUnsafe` или отдельно переданному user id.

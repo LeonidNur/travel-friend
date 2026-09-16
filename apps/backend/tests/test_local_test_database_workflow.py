@@ -22,7 +22,9 @@ def test_local_test_database_script_is_dedicated_and_disposable() -> None:
     assert 'supabase/migrations' in script
 
 
-def test_local_test_database_script_unsets_runtime_database_url_for_pytest() -> None:
+def test_local_test_database_script_uses_separate_owner_and_runtime_urls_for_pytest() -> None:
     script = SCRIPT_PATH.read_text()
 
-    assert 'env -u DATABASE_URL TEST_DATABASE_URL="$(database_url)"' in script
+    assert 'TEST_DATABASE_URL="$(database_url)" DATABASE_URL="$(runtime_database_url)"' in script
+    assert 'local-test-db-runtime-role.sql' in script
+    assert 'runtime-url)' in script
