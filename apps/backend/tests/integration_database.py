@@ -10,6 +10,7 @@ import psycopg
 
 
 DISPOSABLE_TEST_DATABASE_NAME = "travel_friend_test"
+DISPOSABLE_TEST_DATABASE_PORT = 55432
 RESERVED_DATABASE_NAMES = frozenset({"postgres", "template0", "template1"})
 POSTGRESQL_SCHEMES = frozenset({"postgres", "postgresql"})
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
@@ -37,6 +38,10 @@ def require_disposable_test_database_url(
     if database_name != DISPOSABLE_TEST_DATABASE_NAME:
         raise UnsafeTestDatabaseUrlError(
             f"TEST_DATABASE_URL must target the dedicated disposable database {DISPOSABLE_TEST_DATABASE_NAME!r}"
+        )
+    if parsed.hostname.lower() not in LOOPBACK_HOSTS or (parsed.port or 5432) != DISPOSABLE_TEST_DATABASE_PORT:
+        raise UnsafeTestDatabaseUrlError(
+            "TEST_DATABASE_URL must target the local disposable PostgreSQL test container"
         )
 
     source = os.environ if environment is None else environment

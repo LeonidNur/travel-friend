@@ -12,7 +12,7 @@ from integration_database import (
 
 
 def test_allows_the_dedicated_disposable_test_database() -> None:
-    database_url = "postgresql://tester:password@localhost:5432/travel_friend_test"
+    database_url = "postgresql://tester:password@localhost:55432/travel_friend_test"
 
     assert require_disposable_test_database_url(database_url, environment={}) == database_url
 
@@ -34,8 +34,20 @@ def test_rejects_a_dev_like_database() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "database_url",
+    [
+        "postgresql://tester:password@db.example.test:55432/travel_friend_test",
+        "postgresql://tester:password@localhost:5432/travel_friend_test",
+    ],
+)
+def test_rejects_non_workflow_host_or_port_for_the_disposable_database(database_url: str) -> None:
+    with pytest.raises(UnsafeTestDatabaseUrlError, match="local disposable PostgreSQL"):
+        require_disposable_test_database_url(database_url, environment={})
+
+
 def test_rejects_the_same_url_as_the_runtime_database() -> None:
-    database_url = "postgresql://tester:password@localhost:5432/travel_friend_test"
+    database_url = "postgresql://tester:password@localhost:55432/travel_friend_test"
 
     with pytest.raises(UnsafeTestDatabaseUrlError, match="must not equal DATABASE_URL"):
         require_disposable_test_database_url(
@@ -47,15 +59,15 @@ def test_rejects_the_same_url_as_the_runtime_database() -> None:
 def test_rejects_an_equivalent_loopback_runtime_database_url() -> None:
     with pytest.raises(UnsafeTestDatabaseUrlError, match="must not equal DATABASE_URL"):
         require_disposable_test_database_url(
-            "postgresql://tester:password@localhost:5432/travel_friend_test",
+            "postgresql://tester:password@localhost:55432/travel_friend_test",
             environment={
-                "DATABASE_URL": "postgres://runtime:other-password@127.0.0.1:5432/travel_friend_test"
+                "DATABASE_URL": "postgres://runtime:other-password@127.0.0.1:55432/travel_friend_test"
             },
         )
 
 
 def test_cleanup_revalidates_before_connecting_to_the_database(monkeypatch: pytest.MonkeyPatch) -> None:
-    database_url = "postgresql://tester:password@localhost:5432/travel_friend_test"
+    database_url = "postgresql://tester:password@localhost:55432/travel_friend_test"
     connect_was_called = False
 
     def fail_if_called(*args: object, **kwargs: object) -> None:
