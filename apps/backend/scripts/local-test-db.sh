@@ -74,6 +74,18 @@ DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 SQL
+  docker exec -i "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+DROP ROLE IF EXISTS app_runtime;
+CREATE ROLE app_runtime
+  LOGIN
+  PASSWORD 'app_runtime_local_only'
+  NOSUPERUSER
+  NOBYPASSRLS
+  NOCREATEDB
+  NOCREATEROLE
+  NOINHERIT
+  NOREPLICATION;
+SQL
   for migration in "$MIGRATIONS_DIR"/*.sql; do
     docker exec -i "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" < "$migration"
   done
