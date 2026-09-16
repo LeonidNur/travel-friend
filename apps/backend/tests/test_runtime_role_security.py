@@ -22,7 +22,7 @@ EXPECTED_PRIVILEGES = {
     "user_settings": {"insert"},
     "user_activity_states": {"select", "insert", "update"},
     "travel_intents": {"select", "insert", "update"},
-    "user_sessions": {"select", "insert", "update"},
+    "user_sessions": {"insert", "update"},
     "discover_interest_decisions": {"select", "insert", "update"},
     "matches": {"select", "insert", "update"},
     "chats": {"select", "insert", "update"},
@@ -87,6 +87,25 @@ def test_runtime_role_has_exactly_the_audited_effective_table_privileges(
                 ).fetchone()[0]
             }
             assert actual_privileges == expected_privileges
+
+
+def test_runtime_role_has_only_the_logout_identifier_column_select_on_sessions(
+    test_owner_database_url: str,
+) -> None:
+    with psycopg.connect(test_owner_database_url) as owner_connection:
+        for column_name, expected_select in {
+            "id": True,
+            "user_id": False,
+            "token_hash": False,
+            "created_at": False,
+            "expires_at": False,
+            "last_used_at": False,
+            "revoked_at": False,
+        }.items():
+            assert owner_connection.execute(
+                "SELECT has_column_privilege(%s, %s, %s, 'SELECT')",
+                (APP_RUNTIME_ROLE, "public.user_sessions", column_name),
+            ).fetchone()[0] is expected_select
 
 
 def test_runtime_role_cannot_run_ddl_or_access_ungranted_tables(

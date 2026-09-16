@@ -65,11 +65,14 @@ def current_user(
     if not authorization or not authorization.startswith("Bearer ") or not authorization[7:].strip():
         raise HTTPException(401, "Authentication required")
     with database_connection(database_url) as conn, conn.cursor() as cur:
-        cur.execute("SELECT u.id, s.id AS session_id FROM user_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=%s AND s.revoked_at IS NULL AND s.expires_at > now() AND u.deleted_at IS NULL", (token_hash(authorization[7:].strip()),))
+        cur.execute(
+            "SELECT session_id, user_id FROM public.resolve_bearer_session(%s)",
+            (token_hash(authorization[7:].strip()),),
+        )
         row = cur.fetchone()
     if not row:
         raise HTTPException(401, "Invalid authentication")
-    return AuthenticatedPrincipal(user_id=row["id"], session_id=row["session_id"])
+    return AuthenticatedPrincipal(user_id=row["user_id"], session_id=row["session_id"])
 
 
 def auth_dependency(
