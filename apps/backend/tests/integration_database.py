@@ -11,6 +11,8 @@ import psycopg
 
 DISPOSABLE_TEST_DATABASE_NAME = "travel_friend_test"
 DISPOSABLE_TEST_DATABASE_PORT = 55432
+DISPOSABLE_TEST_OWNER_ROLE = "travel_friend_test"
+APP_RUNTIME_ROLE = "app_runtime"
 RESERVED_DATABASE_NAMES = frozenset({"postgres", "template0", "template1"})
 POSTGRESQL_SCHEMES = frozenset({"postgres", "postgresql"})
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
@@ -30,24 +32,24 @@ def require_disposable_test_database_url(
     environment: Mapping[str, str] | None = None,
 ) -> str:
     """Validate the only database target permitted for destructive test cleanup."""
-    parsed = _parse_postgresql_url(database_url)
-    database_name = unquote(parsed.path.lstrip("/"))
-
-    if database_name in RESERVED_DATABASE_NAMES:
-        raise UnsafeTestDatabaseUrlError("TEST_DATABASE_URL must not target a reserved PostgreSQL database")
-    if database_name != DISPOSABLE_TEST_DATABASE_NAME:
+    parsed = _require_disposable_database_target(database_url, "TEST_DATABASE_URL")
+    if unquote(parsed.username or "") != DISPOSABLE_TEST_OWNER_ROLE:
         raise UnsafeTestDatabaseUrlError(
-            f"TEST_DATABASE_URL must target the dedicated disposable database {DISPOSABLE_TEST_DATABASE_NAME!r}"
-        )
-    if parsed.hostname.lower() not in LOOPBACK_HOSTS or (parsed.port or 5432) != DISPOSABLE_TEST_DATABASE_PORT:
-        raise UnsafeTestDatabaseUrlError(
-            "TEST_DATABASE_URL must target the local disposable PostgreSQL test container"
+            f"TEST_DATABASE_URL must authenticate as the disposable owner role {DISPOSABLE_TEST_OWNER_ROLE!r}"
         )
 
     source = os.environ if environment is None else environment
     runtime_database_url = source.get("DATABASE_URL")
-    if runtime_database_url and _same_database_target(database_url, runtime_database_url):
-        raise UnsafeTestDatabaseUrlError("TEST_DATABASE_URL must not equal DATABASE_URL")
+    if runtime_database_url:
+        try:
+            get_disposable_runtime_database_url({"DATABASE_URL": runtime_database_url})
+        except UnsafeTestDatabaseUrlError as error:
+            if _same_database_target(database_url, runtime_database_url):
+                raise UnsafeTestDatabaseUrlError(
+                    "TEST_DATABASE_URL must not share a physical target with an unvalidated DATABASE_URL; "
+                    f"DATABASE_URL must authenticate as {APP_RUNTIME_ROLE!r}"
+                ) from error
+            raise
 
     return database_url
 
@@ -61,6 +63,22 @@ def get_disposable_test_database_url(
     if database_url is None or not database_url.strip():
         raise IntegrationDatabaseNotConfiguredError("TEST_DATABASE_URL is required for PostgreSQL integration tests")
     return require_disposable_test_database_url(database_url, environment=source)
+
+
+def get_disposable_runtime_database_url(
+    environment: Mapping[str, str] | None = None,
+) -> str:
+    """Read and validate the application connection used by local integration tests."""
+    source = os.environ if environment is None else environment
+    database_url = source.get("DATABASE_URL")
+    if database_url is None or not database_url.strip():
+        raise IntegrationDatabaseNotConfiguredError("DATABASE_URL is required for runtime PostgreSQL integration tests")
+    parsed = _require_disposable_database_target(database_url, "DATABASE_URL")
+    if unquote(parsed.username or "") != APP_RUNTIME_ROLE:
+        raise UnsafeTestDatabaseUrlError(
+            f"DATABASE_URL must authenticate as the disposable runtime role {APP_RUNTIME_ROLE!r}"
+        )
+    return database_url
 
 
 def truncate_disposable_test_database(database_url: str, truncate_sql: str) -> None:
@@ -83,9 +101,23 @@ def _parse_postgresql_url(database_url: str):
     return parsed
 
 
+def _require_disposable_database_target(database_url: str, variable_name: str):
+    parsed = _parse_postgresql_url(database_url)
+    database_name = unquote(parsed.path.lstrip("/"))
+    if database_name in RESERVED_DATABASE_NAMES:
+        raise UnsafeTestDatabaseUrlError(f"{variable_name} must not target a reserved PostgreSQL database")
+    if database_name != DISPOSABLE_TEST_DATABASE_NAME:
+        raise UnsafeTestDatabaseUrlError(
+            f"{variable_name} must target the dedicated disposable database {DISPOSABLE_TEST_DATABASE_NAME!r}"
+        )
+    if parsed.hostname.lower() not in LOOPBACK_HOSTS or (parsed.port or 5432) != DISPOSABLE_TEST_DATABASE_PORT:
+        raise UnsafeTestDatabaseUrlError(
+            f"{variable_name} must target the local disposable PostgreSQL test container"
+        )
+    return parsed
+
+
 def _same_database_target(first_url: str, second_url: str) -> bool:
-    if first_url == second_url:
-        return True
     try:
         return _database_target(first_url) == _database_target(second_url)
     except UnsafeTestDatabaseUrlError:
