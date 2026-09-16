@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token-for-transaction-lifecycle")
@@ -117,25 +118,36 @@ def test_current_user_returns_a_typed_authenticated_principal(monkeypatch) -> No
     session_id = uuid4()
 
     class FakeCursor:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, tuple[object, ...]]] = []
+
         def __enter__(self) -> FakeCursor:
             return self
 
         def __exit__(self, *_: object) -> None:
             return None
 
-        def execute(self, *_: object) -> None:
+        def execute(self, query: str, parameters: tuple[object, ...]) -> None:
+            self.calls.append((query, parameters))
             return None
 
         def fetchone(self) -> dict[str, UUID]:
-            return {"id": user_id, "session_id": session_id}
+            return {"user_id": user_id, "session_id": session_id}
 
     class FakeDatabaseConnection:
+        def __init__(self) -> None:
+            self.cursor_instance = FakeCursor()
+
         def cursor(self) -> FakeCursor:
-            return FakeCursor()
+            return self.cursor_instance
+
+    connection_instance: FakeDatabaseConnection | None = None
 
     @contextmanager
     def connection(_: str):
-        yield FakeDatabaseConnection()
+        nonlocal connection_instance
+        connection_instance = FakeDatabaseConnection()
+        yield connection_instance
 
     monkeypatch.setattr(service, "database_connection", connection)
 
@@ -145,6 +157,13 @@ def test_current_user_returns_a_typed_authenticated_principal(monkeypatch) -> No
         user_id=user_id,
         session_id=session_id,
     )
+    assert connection_instance is not None
+    assert connection_instance.cursor_instance.calls == [
+        (
+            "SELECT session_id, user_id FROM public.resolve_bearer_session(%s)",
+            (hashlib.sha256(b"token").hexdigest(),),
+        )
+    ]
 
 
 def test_auth_dependency_reads_settings_and_authorization_header(monkeypatch) -> None:
