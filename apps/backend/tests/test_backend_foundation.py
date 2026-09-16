@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from travel_friend_backend import db
+from travel_friend_backend import dependencies
 from travel_friend_backend.auth import service
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.config import BackendSettings
@@ -84,7 +85,7 @@ def test_database_dependency_reads_the_application_database_url(monkeypatch) -> 
     dependency.close()
 
 
-def test_write_endpoint_returns_an_error_when_commit_fails() -> None:
+def test_logout_does_not_bypass_the_authenticated_unit_of_work() -> None:
     principal = AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
 
     class CommitFailingConnection:
@@ -101,12 +102,14 @@ def test_write_endpoint_returns_an_error_when_commit_fails() -> None:
         )
     )
     app.dependency_overrides[auth_dependency] = lambda: principal
-    app.dependency_overrides[db.get_database_connection] = lambda: CommitFailingConnection()
+    app.dependency_overrides[dependencies.get_authenticated_database_connection] = (
+        lambda: CommitFailingConnection()
+    )
 
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post("/auth/logout")
 
-    assert response.status_code == 500
+    assert response.status_code == 204
 
 
 def test_current_user_returns_a_typed_authenticated_principal(monkeypatch) -> None:
@@ -228,7 +231,7 @@ def test_profile_patch_creates_then_updates_only_whitelisted_columns() -> None:
     assert "INSERT INTO public.profiles (user_id, display_name, updated_at)" in create_query
     assert "ON CONFLICT (user_id) DO UPDATE SET display_name=EXCLUDED.display_name" in create_query
     assert create_parameters == (principal.user_id, "Ada")
-    assert create_connection.commit_calls == 1
+    assert create_connection.commit_calls == 0
 
     updated_profile = {"user_id": principal.user_id, "display_name": "Ada", "city": "Paris"}
     update_connection = RecordingProfileConnection([{"exists": 1}, updated_profile])
@@ -239,7 +242,7 @@ def test_profile_patch_creates_then_updates_only_whitelisted_columns() -> None:
     update_query, update_parameters = update_connection.calls[1]
     assert "SET city=%s, updated_at=now()" in update_query
     assert update_parameters == ("Paris", principal.user_id)
-    assert update_connection.commit_calls == 1
+    assert update_connection.commit_calls == 0
 
     unchanged_profile = {"user_id": principal.user_id, "display_name": "Ada"}
     empty_patch_connection = RecordingProfileConnection([unchanged_profile])
@@ -248,7 +251,7 @@ def test_profile_patch_creates_then_updates_only_whitelisted_columns() -> None:
         ProfilePatchRequest(), principal, empty_patch_connection
     ) is unchanged_profile
     assert len(empty_patch_connection.calls) == 1
-    assert empty_patch_connection.commit_calls == 1
+    assert empty_patch_connection.commit_calls == 0
 
 
 def test_profile_patch_rejects_null_display_name() -> None:
@@ -282,7 +285,7 @@ def test_put_current_user_travel_intent_upserts_a_single_active_row() -> None:
     assert "updated_at=CASE" in query
     assert "IS DISTINCT FROM" in query
     assert parameters == (principal.user_id, "Lisbon", payload.date_from, payload.date_to)
-    assert connection.commit_calls == 1
+    assert connection.commit_calls == 0
 
 
 def test_delete_current_user_travel_intent_archives_only_the_current_users_active_row() -> None:
@@ -296,7 +299,7 @@ def test_delete_current_user_travel_intent_archives_only_the_current_users_activ
     assert "archived_at=now()" in query
     assert "WHERE user_id=%s AND status='active'" in query
     assert parameters == (principal.user_id,)
-    assert connection.commit_calls == 1
+    assert connection.commit_calls == 0
 
 
 def test_onboarding_patch_uses_only_the_authenticated_users_existing_state() -> None:
@@ -321,7 +324,7 @@ def test_onboarding_patch_uses_only_the_authenticated_users_existing_state() -> 
         principal.user_id,
         principal.user_id,
     )
-    assert connection.commit_calls == 1
+    assert connection.commit_calls == 0
 
 
 @pytest.mark.parametrize(

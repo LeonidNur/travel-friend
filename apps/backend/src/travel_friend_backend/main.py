@@ -12,7 +12,7 @@ from travel_friend_backend.auth.service import (
     auth_dependency,
     login,
 )
-from travel_friend_backend.db import get_database_connection
+from travel_friend_backend.dependencies import get_authenticated_database_connection
 from travel_friend_backend.routers.chats import router as chats_router
 from travel_friend_backend.routers.discover import router as discover_router
 from travel_friend_backend.routers.me import router as me_router
@@ -67,13 +67,12 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     @app.post("/auth/logout", status_code=204)
     def logout(
         principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-        connection: Annotated[object, Depends(get_database_connection)],
+        connection: Annotated[object, Depends(get_authenticated_database_connection)],
     ) -> None:
         connection.execute(
             "UPDATE user_sessions SET revoked_at=now() WHERE id=%s",
             (principal.session_id,),
         )
-        connection.commit()
 
     return app
 

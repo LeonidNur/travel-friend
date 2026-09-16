@@ -9,7 +9,7 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
-from travel_friend_backend.db import get_database_connection
+from travel_friend_backend.dependencies import get_authenticated_database_connection
 from travel_friend_backend.schemas.trips import (
     TripCreateResponse,
     TripDetailResponse,
@@ -24,7 +24,7 @@ trip_list_router = APIRouter(prefix="/trips", tags=["trips"])
 @trip_list_router.get("", response_model=list[TripListItemResponse])
 def get_trips(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> list[dict[str, object]]:
     """List all persisted Trips belonging to the authenticated participant."""
     rows = connection.execute(
@@ -48,7 +48,7 @@ def get_trips(
 def get_trip(
     trip_id: UUID,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
     """Read a persisted Trip only when the caller is a current participant."""
     trip = connection.execute(
@@ -156,6 +156,6 @@ def create_trip_for_chat(
 def create_trip(
     chat_id: UUID,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
     return create_trip_for_chat(connection, chat_id, principal)

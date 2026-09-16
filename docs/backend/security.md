@@ -49,6 +49,10 @@ AI provider и travel API — полудоверенные внешние зон
 
 Локальный disposable PostgreSQL workflow уже проверяет foundation этой политики: application objects принадлежат privileged migration/test owner, а FastAPI использует отдельную non-owner `app_runtime` с минимальными table grants. Это пока не RLS: backend authorization остаётся текущей server-side логикой, а RLS policies будут отдельной задачей. Role SQL намеренно не включён в обычные Supabase migrations, поскольку managed Supabase migration identity не считается доказанно способной создавать роли; для hosted deployment потребуется отдельный approved runbook с платформенно разрешённой identity.
 
+Для authenticated business request FastAPI после успешной Bearer authentication является единственным источником `app.user_id`: dependency открывает explicit outer transaction и выполняет параметризованный `set_config('app.user_id', <principal.user_id>, true)` до router/service SQL. Флаг `true` делает контекст transaction-local; при commit или rollback он больше не представляет identity запроса. Auth/bootstrap lookup (`user_sessions → principal`) остаётся отдельным bootstrap connection вне authenticated business context, чтобы не создавать circular dependency до будущего RLS slice.
+
+`public.current_authenticated_user_id()` — минимальный fail-closed accessor для будущих RLS policies и DB tests: он возвращает `NULL` при отсутствующем, пустом или некорректном UUID setting. В этом slice RLS не включается и policies не создаются. Принятое MVP-ограничение сохраняется: transaction-local context не предназначен для per-user containment при компрометации credential `app_runtime` с прямым произвольным SQL доступом.
+
 До RLS два table-level `UPDATE` grants существуют именно для row locks: `discover_interest_decisions` для `SELECT ... FOR UPDATE` в Discover и `chat_participants` для `SELECT ... FOR SHARE` при создании Trip. Они шире фактически блокируемых строк; ограничение scope по строкам — ответственность следующего RLS slice. Production runtime role от этого local foundation не переключается.
 
 ## UserBlock

@@ -9,7 +9,7 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
-from travel_friend_backend.db import get_database_connection
+from travel_friend_backend.dependencies import get_authenticated_database_connection
 from travel_friend_backend.schemas.discover import (
     DiscoverCandidateResponse,
     DiscoverDecisionRequest,
@@ -72,7 +72,7 @@ def ensure_direct_chat_for_match(
 @router.get("/candidates", response_model=list[DiscoverCandidateResponse])
 def get_discover_candidates(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> list[dict[str, object]]:
     ensure_discover_requester_eligibility(connection, principal.user_id)
     rows = connection.execute(
@@ -119,7 +119,7 @@ def save_discover_decision(
     target_user_id: UUID,
     payload: DiscoverDecisionRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
     ensure_discover_requester_eligibility(connection, principal.user_id)
     if target_user_id == principal.user_id:
@@ -183,7 +183,6 @@ def save_discover_decision(
     if payload.decision == "interested" and match is not None and match["chat_id"] is None:
         ensure_direct_chat_for_match(connection, match["id"], user_a_id, user_b_id)
 
-    connection.commit()
     return {
         "decision": payload.decision,
         "match_created": match_created,
