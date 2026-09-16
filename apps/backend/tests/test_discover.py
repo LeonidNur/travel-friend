@@ -108,6 +108,52 @@ def decide(client: TestClient, token: str, target_user_id: str, decision: str):
     )
 
 
+def make_requester_discover_ineligible(
+    client: TestClient, database_url: str, state: str
+) -> dict[str, object]:
+    requester = create_discover_eligible_user(client, 1)
+    with psycopg.connect(database_url) as connection:
+        if state == "incomplete_onboarding":
+            connection.execute(
+                "UPDATE public.user_activity_states SET onboarding_status='in_progress' WHERE user_id=%s",
+                (requester["user"]["id"],),
+            )
+        elif state == "without_profile":
+            connection.execute(
+                "DELETE FROM public.profiles WHERE user_id=%s", (requester["user"]["id"],)
+            )
+        elif state == "without_active_travel_intent":
+            connection.execute(
+                "UPDATE public.travel_intents SET status='archived' WHERE user_id=%s AND status='active'",
+                (requester["user"]["id"],),
+            )
+        else:
+            raise ValueError(f"Unsupported requester state: {state}")
+    return requester
+
+
+@pytest.mark.parametrize(
+    "requester_state",
+    ["incomplete_onboarding", "without_profile", "without_active_travel_intent"],
+)
+@pytest.mark.parametrize("endpoint", ["candidates", "decision"])
+def test_discover_rejects_ineligible_requester(
+    client: TestClient, database_url: str, requester_state: str, endpoint: str
+) -> None:
+    requester = make_requester_discover_ineligible(client, database_url, requester_state)
+    target = create_discover_eligible_user(client, 2)
+
+    if endpoint == "candidates":
+        response = client.get("/discover/candidates", headers=auth_headers(requester["access_token"]))
+    else:
+        response = decide(client, requester["access_token"], target["user"]["id"], "interested")
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Discover requires completed onboarding, a profile, and an active TravelIntent"
+    }
+
+
 def test_discover_candidates_excludes_current_user(client: TestClient) -> None:
     actor = create_discover_eligible_user(client, 1)
     candidate = create_discover_eligible_user(client, 2)
@@ -186,7 +232,7 @@ def test_discover_candidates_excludes_user_without_active_travel_intent(client: 
 
 @pytest.mark.parametrize("decision", ["interested", "rejected"])
 def test_decision_is_saved(client: TestClient, database_url: str, decision: str) -> None:
-    actor = login(client, 1)
+    actor = create_discover_eligible_user(client, 1)
     target = create_discover_eligible_user(client, 2)
 
     response = decide(client, actor["access_token"], target["user"]["id"], decision)
@@ -199,7 +245,7 @@ def test_decision_is_saved(client: TestClient, database_url: str, decision: str)
 
 
 def test_self_decision_is_rejected(client: TestClient) -> None:
-    actor = login(client, 1)
+    actor = create_discover_eligible_user(client, 1)
 
     response = decide(client, actor["access_token"], actor["user"]["id"], "interested")
 
@@ -207,7 +253,7 @@ def test_self_decision_is_rejected(client: TestClient) -> None:
 
 
 def test_one_way_interest_does_not_create_match(client: TestClient, database_url: str) -> None:
-    actor = login(client, 1)
+    actor = create_discover_eligible_user(client, 1)
     target = create_discover_eligible_user(client, 2)
 
     response = decide(client, actor["access_token"], target["user"]["id"], "interested")
@@ -245,7 +291,7 @@ def test_repeated_interested_is_idempotent_and_does_not_duplicate_match(client: 
 
 
 def test_repeated_rejected_is_idempotent(client: TestClient) -> None:
-    actor = login(client, 1)
+    actor = create_discover_eligible_user(client, 1)
     target = create_discover_eligible_user(client, 2)
     assert decide(client, actor["access_token"], target["user"]["id"], "rejected").status_code == 200
 
@@ -260,7 +306,7 @@ def test_repeated_rejected_is_idempotent(client: TestClient) -> None:
     [("interested", "rejected"), ("rejected", "interested")],
 )
 def test_conflicting_decision_is_rejected(client: TestClient, first_decision: str, second_decision: str) -> None:
-    actor = login(client, 1)
+    actor = create_discover_eligible_user(client, 1)
     target = create_discover_eligible_user(client, 2)
     assert decide(client, actor["access_token"], target["user"]["id"], first_decision).status_code == 200
 
@@ -282,7 +328,7 @@ def test_reversed_pair_returns_existing_match_without_duplicate(client: TestClie
 
 
 def test_decision_rejects_target_with_incomplete_onboarding(client: TestClient) -> None:
-    actor = login(client, 1)
+    actor = create_discover_eligible_user(client, 1)
     target = login(client, 2)
     create_profile(client, target["access_token"], "Incomplete")
     assert client.put("/me/travel-intent", headers=auth_headers(target["access_token"]), json={"destination": "Tbilisi"}).status_code == 200
@@ -294,7 +340,7 @@ def test_decision_rejects_target_with_incomplete_onboarding(client: TestClient) 
 
 
 def test_decision_rejects_target_without_active_travel_intent(client: TestClient) -> None:
-    actor = login(client, 1)
+    actor = create_discover_eligible_user(client, 1)
     target = login(client, 2)
     create_profile(client, target["access_token"], "No intent")
 
@@ -305,7 +351,7 @@ def test_decision_rejects_target_without_active_travel_intent(client: TestClient
 
 
 def test_existing_decision_remains_idempotent_after_target_loses_eligibility(client: TestClient) -> None:
-    actor = login(client, 1)
+    actor = create_discover_eligible_user(client, 1)
     target = create_discover_eligible_user(client, 2)
     assert decide(client, actor["access_token"], target["user"]["id"], "rejected").status_code == 200
     assert client.delete("/me/travel-intent", headers=auth_headers(target["access_token"])).status_code == 204

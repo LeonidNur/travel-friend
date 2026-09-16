@@ -19,6 +19,25 @@ from travel_friend_backend.schemas.discover import (
 
 router = APIRouter(prefix="/discover", tags=["discover"])
 
+DISCOVER_REQUESTER_INELIGIBLE_DETAIL = (
+    "Discover requires completed onboarding, a profile, and an active TravelIntent"
+)
+
+
+def ensure_discover_requester_eligibility(
+    connection: psycopg.Connection, requester_user_id: UUID
+) -> None:
+    """Require the persisted state needed to use Discover."""
+    requester_is_eligible = connection.execute(
+        "SELECT 1 FROM public.user_activity_states activity "
+        "JOIN public.profiles p ON p.user_id=activity.user_id "
+        "JOIN public.travel_intents ti ON ti.user_id=activity.user_id AND ti.status='active' "
+        "WHERE activity.user_id=%s AND activity.onboarding_status='completed'",
+        (requester_user_id,),
+    ).fetchone()
+    if requester_is_eligible is None:
+        raise HTTPException(403, DISCOVER_REQUESTER_INELIGIBLE_DETAIL)
+
 
 def ensure_direct_chat_for_match(
     connection: psycopg.Connection,
@@ -55,6 +74,7 @@ def get_discover_candidates(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
 ) -> list[dict[str, object]]:
+    ensure_discover_requester_eligibility(connection, principal.user_id)
     rows = connection.execute(
         "SELECT p.user_id, p.display_name, "
         "EXTRACT(YEAR FROM age(CURRENT_DATE, p.birth_date))::integer AS age, "
@@ -101,6 +121,7 @@ def save_discover_decision(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
 ) -> dict[str, object]:
+    ensure_discover_requester_eligibility(connection, principal.user_id)
     if target_user_id == principal.user_id:
         raise HTTPException(422, "Cannot decide about the current user")
 
