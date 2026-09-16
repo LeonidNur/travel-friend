@@ -115,6 +115,22 @@ def test_repeat_capability_refreshes_metadata_without_duplicate_defaults(
         assert connection.execute("SELECT count(*) FROM public.user_sessions").fetchone() == (2,)
 
 
+def test_bootstrap_profile_exists_transitions_from_false_to_true_without_context(
+    database_url: str, runtime_database_url: str
+) -> None:
+    first = bootstrap(runtime_database_url, 700_020, hashlib.sha256(b"without-profile").hexdigest())
+    assert first["profile_exists"] is False
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "INSERT INTO public.profiles (user_id, display_name) VALUES (%s, 'Ada')",
+            (first["user_id"],),
+        )
+
+    second = bootstrap(runtime_database_url, 700_020, hashlib.sha256(b"with-profile").hexdigest())
+    assert second["user_id"] == first["user_id"]
+    assert second["profile_exists"] is True
+
+
 def test_capability_returns_deleted_state_without_creating_another_session(
     database_url: str, runtime_database_url: str
 ) -> None:
