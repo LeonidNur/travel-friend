@@ -164,6 +164,28 @@ def test_trip_list_returns_an_empty_list_when_current_user_has_no_trip_participa
     assert response.json() == []
 
 
+def test_trip_list_returns_only_active_participant_trips(
+    client: TestClient, database_url: str
+) -> None:
+    active_participant, former_participant, _, trip = create_direct_trip(client, database_url)
+    outsider = create_discover_eligible_user(client, 3)
+
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.trip_participants SET left_at=now() WHERE trip_id=%s AND user_id=%s",
+            (UUID(trip["trip_id"]), UUID(former_participant["user"]["id"])),
+        )
+
+    active_response = client.get("/trips", headers=auth_headers(active_participant["access_token"]))
+    former_response = client.get("/trips", headers=auth_headers(former_participant["access_token"]))
+    outsider_response = client.get("/trips", headers=auth_headers(outsider["access_token"]))
+
+    assert active_response.status_code == former_response.status_code == outsider_response.status_code == 200
+    assert [item["trip_id"] for item in active_response.json()] == [trip["trip_id"]]
+    assert former_response.json() == []
+    assert outsider_response.json() == []
+
+
 def test_trip_detail_returns_persisted_snapshot_ordered_stops_and_trip_participants(
     client: TestClient, database_url: str
 ) -> None:

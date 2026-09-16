@@ -33,7 +33,7 @@ def get_trips(
         "COALESCE(array_agg(ts.place_label ORDER BY ts.position) "
         "FILTER (WHERE ts.id IS NOT NULL), ARRAY[]::text[]) AS route_place_labels "
         "FROM public.trips t "
-        "JOIN public.trip_participants tp ON tp.trip_id=t.id "
+        "JOIN public.trip_participants tp ON tp.trip_id=t.id AND tp.left_at IS NULL "
         "LEFT JOIN public.trip_stops ts ON ts.trip_id=t.id "
         "WHERE tp.user_id=%s "
         "GROUP BY t.id, t.chat_id, t.status, t.created_at, t.date_from, t.date_to, "
