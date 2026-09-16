@@ -307,17 +307,14 @@ def test_put_current_user_travel_intent_upserts_a_single_active_row() -> None:
     assert connection.commit_calls == 0
 
 
-def test_delete_current_user_travel_intent_archives_only_the_current_users_active_row() -> None:
+def test_delete_current_user_travel_intent_uses_the_current_user_archive_capability() -> None:
     principal = service.AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
     connection = RecordingProfileConnection([None])
 
     assert me.delete_current_user_travel_intent(principal, connection) is None  # type: ignore[arg-type]
     query, parameters = connection.calls[0]
-    assert "UPDATE public.travel_intents" in query
-    assert "status='archived'" in query
-    assert "archived_at=now()" in query
-    assert "WHERE user_id=%s AND status='active'" in query
-    assert parameters == (principal.user_id,)
+    assert query == "SELECT public.archive_current_active_travel_intent()"
+    assert parameters == ()
     assert connection.commit_calls == 0
 
 
