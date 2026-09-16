@@ -1,5 +1,17 @@
 # Дневник разработки
 
+## 2026-09-16 — Entry-point documentation sync
+
+### Что сделали
+
+- Сверили текущие FastAPI routes, tests и Supabase migrations с README, roadmap и обязательными Codex-инструкциями.
+- Зафиксировали hierarchy current source-of-truth; `CHANGELOG` и `dev-log` остаются historical records и не переопределяют current implementation.
+- Добавили отдельный current technical hardening backlog и связали с ним entry-point документы.
+
+### Что проверили
+
+- Код, migrations, tests и runtime behavior не менялись; выполнена документальная проверка `git diff --check`.
+
 ## 2026-09-02 — Backend-backed Chat MVP и pre-mega-review sync
 
 ### Что сделали

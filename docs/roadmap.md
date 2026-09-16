@@ -40,16 +40,14 @@
 
 ## Текущий этап
 
-### MVP mega-review и следующий Trip lifecycle slice
+### Hardening persisted MVP и следующий Trip lifecycle slice
 
-Реализованный frontend vertical slice: `Telegram Auth → onboarding → Profile → TravelIntent → Discover → reciprocal Match → direct/group Chat → Messages → Trip creation → Trip Detail`. Group Chat создаётся из existing matched/direct-chat companions с фиксированным MVP-составом; Trips List/Detail читают persistence.
+Реализованный backend-backed vertical slice: `Telegram Auth → onboarding → Profile → TravelIntent → Discover → reciprocal Match → direct/group Chat → Messages → Trip creation → Trip List/Detail`. Group Chat создаётся из existing matched/direct-chat companions с фиксированным MVP-составом; Trips List/Detail читают persistence.
 
 Следующие самостоятельные work items:
 
 - Trip write/lifecycle: изменение подтверждённого состояния, stop editor, `start/complete/cancel/leave` и правила версий;
-- realtime, read state и pagination для сообщений;
-- production backend deployment/configuration, RLS и операционный runbook;
-- безопасность и moderation capabilities (block/report/audit);
+- отдельные hardening work items из [technical hardening backlog](technical-hardening-backlog.md), включая production backend/RLS, messages realtime/read state/pagination и moderation;
 - invitations, изменение состава, leave, roles/admin/permissions, invite links, сложный membership lifecycle Group Chat и расширенный Trip lifecycle — после отдельного решения.
 
 AI/Proposal и provider integrations отложены до подключения второго разработчика. Это не блокер текущего direct-chat MVP и не должно реализовываться в рамках закрытия его persistence flow.
@@ -62,13 +60,12 @@ AI/Proposal и provider integrations отложены до подключени�
 
 ## Дальше
 
-1. Провести MVP mega-review текущего backend-backed direct/group Chat flow.
-2. Согласовать и реализовать следующий один Trip lifecycle/write slice.
-3. Определить production backend deployment, RLS и наблюдаемость до внешнего запуска.
-4. Вернуться к realtime chat flow после стабилизации базовых HTTP contracts.
-5. Вернуться к AI только после подключения второго разработчика.
+1. Согласовать и реализовать следующий один Trip lifecycle/write slice.
+2. Закрыть приоритетные пункты [technical hardening backlog](technical-hardening-backlog.md) до внешнего запуска backend.
+3. Вернуться к realtime chat flow после стабилизации базовых HTTP contracts.
+4. Вернуться к AI только после подключения второго разработчика.
 
 ## Примечания
 
 - AI-помощник должен быть встроен в сценарий чатов и поездок, а не существовать как отдельная вкладка.
-- Для командной синхронизации важно держать `roadmap`, `dev-log`, `CHANGELOG` и README в согласованном состоянии.
+- Roadmap показывает направление; детальные technical risks ведутся в [technical hardening backlog](technical-hardening-backlog.md). `CHANGELOG` и `dev-log` — historical records, а не описание current state.

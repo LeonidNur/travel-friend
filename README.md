@@ -103,15 +103,14 @@ Telegram Mini App не отменяет будущую отдельную моб
 
 Сейчас проект можно описать так:
 
-- завершён первый инфраструктурный этап проекта;
-- `develop` успешно объединён в `main` как первый стабильный checkpoint;
-- команда уже перешла от настройки инфраструктуры к первым пользовательским MVP-сценариям;
+- реализован persisted backend-backed MVP checkpoint, а не только mock/local-state прототип;
+- вертикальный flow включает Telegram Auth, onboarding, Profile/TravelIntent, Discover/Match, direct/group Chats/Messages и создание/чтение Trip;
 - Telegram Mini App уже разворачивается и проверяется через Vercel;
 - базовая навигация и маршрутизация закреплены;
 - интеграция Telegram WebApp проверяется в реальном окружении, а не только локально;
 - есть инженерный контур для диагностики проблем;
 - появились первые фокусные экраны и потоки: Profile, Discover, public buddy profile, interest/match и Chats list;
-- сохранён frontend mock/local-state checkpoint как UI-основа для незакрытых сценариев;
+- historical mock/local-state screens сохранены только как UI fallback/дизайн-ориентир для незакрытых contracts;
 - логическая доменная модель backend завершена и согласована;
 - утверждённая ER-модель закреплена как источник истины для дальнейших backend-этапов;
 - настроен local Supabase CLI workflow и local PostgreSQL/Supabase environment;
@@ -124,7 +123,7 @@ Telegram Mini App не отменяет будущую отдельную моб
 - Trip создаётся из direct или group Chat; все активные ChatParticipant сразу становятся TripParticipant; TripInvitation не используется; Mini App вызывает API и при `409` открывает существующую unfinished Trip через `GET /trips`;
 - realtime, Trip write/lifecycle, invitations, сложный membership lifecycle, RLS/production backend deployment и AI/Proposal остаются дальнейшими отдельными задачами;
 - AI/Proposal и provider integrations отложены до подключения второго разработчика;
-- это уже не черновой каркас, а рабочая основа для MVP с постоянным URL, понятным процессом разработки и синхронизированной документацией.
+- ближайший этап — hardening реализованного checkpoint и один согласованный Trip lifecycle/write slice; подробные риски находятся в [technical hardening backlog](docs/technical-hardening-backlog.md).
 
 ## Идея проекта
 
@@ -372,19 +371,23 @@ npm run build
 
 ## Документация проекта
 
-Основные рабочие документы:
+Начните с [AGENTS.md](AGENTS.md): в нём закреплена иерархия источников истины для implementation questions. Основные current documents:
 
-- `CHANGELOG.md` — список значимых изменений;
-- `docs/roadmap.md` — ближайшие шаги;
-- `docs/dev-log.md` — дневник разработки;
-- `docs/team-workflow.md` — правила работы команды.
+- [Engineering Handbook](docs/engineering-handbook/README.md) — обязательные правила разработки и Codex workflow;
+- [roadmap](docs/roadmap.md) — текущий этап и направление;
+- [technical hardening backlog](docs/technical-hardening-backlog.md) — детальные известные технические риски;
+- [database schema](docs/database-schema.md) и `supabase/migrations/` — навигация и SQL-источник истины для current physical schema.
+
+`CHANGELOG.md` и [dev-log](docs/dev-log.md) — historical records: они не заменяют current code, tests/migrations и source-of-truth documentation.
 
 ## Architecture documentation
 
-Backend-документация после завершения логической доменной модели:
+Backend/domain/data источники:
 
 - `docs/backend/domain-model.md` — краткая карта доменов, сущностей, lifecycle и инвариантов;
-- `docs/backend/er-diagram.md` — утверждённая ER-модель как источник истины;
+- `docs/backend/er-diagram.md` — утверждённая logical ER-модель; current physical schema определяется migrations;
+- `docs/backend/physical-data-design.md` — reviewed design input, не перечень поставленных таблиц;
+- `docs/backend/backend-contracts.md` — current HTTP contracts и отделённый future design;
 - `docs/backend/backend-architecture.md` — высокоуровневый backend-контур и зоны ответственности;
 - `docs/backend/ai-architecture.md` — модель AIRequest / ChatSummary / Proposal / usage / premium AI;
 - `docs/backend/integrations.md` — Telegram, AI Provider и внешние travel-интеграции;
@@ -394,8 +397,8 @@ Backend-документация после завершения логичес�
 
 Ближайший порядок разработки:
 
-1. MVP mega-review backend-backed direct-chat flow.
-2. UI-вызов уже существующего Trip creation API, затем один следующий Trip write/lifecycle slice.
+1. MVP mega-review backend-backed direct/group Chat flow.
+2. Один следующий Trip write/lifecycle slice.
 3. Production deployment/RLS/runbook backend.
 4. Realtime chat flow после стабилизации HTTP contracts.
 5. AI только после подключения второго разработчика.

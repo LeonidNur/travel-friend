@@ -14,7 +14,7 @@ Travel Friend мы строим не как набор разрозненных 
 - новые участники быстрее понимают, как здесь принято работать;
 - проект остаётся управляемым даже тогда, когда в нём становится больше экранов, сценариев и интеграций.
 
-Начать лучше с [workflow.md](workflow.md), затем перейти к [decision-making.md](decision-making.md), а после этого держать под рукой [codex-rules.md](codex-rules.md) и [documentation-rules.md](documentation-rules.md).
+Начать лучше с [workflow.md](workflow.md), затем перейти к [decision-making.md](decision-making.md), а после этого держать под рукой [codex-rules.md](codex-rules.md) и [documentation-rules.md](documentation-rules.md). Текущее состояние реализации всегда проверяется по иерархии из [AGENTS.md](../../AGENTS.md), а не по historical журналам.
 
 Для повседневной работы особенно важны несколько разделов:
 

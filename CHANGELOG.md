@@ -1,5 +1,10 @@
 # Журнал изменений
 
+## 2026-09-16
+
+- Синхронизированы entry-point документы с persisted backend-backed MVP checkpoint; добавлена явная иерархия current source-of-truth и historical records.
+- Добавлен current [technical hardening backlog](docs/technical-hardening-backlog.md); roadmap теперь ссылается на него для детальных рисков.
+
 ## 2026-09-02
 
 - Завершён backend-backed MVP flow: frontend использует server-side Telegram Auth и onboarding, а Profile и активный TravelIntent читаются и сохраняются через API текущего пользователя.
