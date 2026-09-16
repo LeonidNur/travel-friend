@@ -9,7 +9,7 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
-from travel_friend_backend.db import get_database_connection
+from travel_friend_backend.dependencies import get_authenticated_database_connection
 from travel_friend_backend.schemas.chats import (
     ChatListItemResponse,
     ChatMessageCreateRequest,
@@ -76,7 +76,7 @@ def create_group_chat(
 def create_group_chat_route(
     payload: GroupChatCreateRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
     return create_group_chat(connection, principal, payload.user_ids)
 
@@ -141,7 +141,7 @@ def group_chat_list_item(
 @router.get("", response_model=list[ChatListItemResponse])
 def get_chats(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> list[dict[str, object]]:
     rows = connection.execute(
         "SELECT c.id AS chat_id, c.type, c.created_at "
@@ -211,7 +211,7 @@ def message_response(row: dict[str, object]) -> dict[str, object]:
 def get_chat_messages(
     chat_id: UUID,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> list[dict[str, object]]:
     if find_authorized_message_chat(connection, chat_id, principal.user_id, lock=False) is None:
         raise HTTPException(404, "Chat not found")
@@ -235,7 +235,7 @@ def create_chat_message(
     chat_id: UUID,
     payload: ChatMessageCreateRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
     with connection.transaction():
         if find_authorized_message_chat(connection, chat_id, principal.user_id, lock=True) is None:

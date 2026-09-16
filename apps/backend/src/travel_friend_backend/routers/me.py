@@ -6,7 +6,7 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
-from travel_friend_backend.db import get_database_connection
+from travel_friend_backend.dependencies import get_authenticated_database_connection
 from travel_friend_backend.schemas.onboarding import (
     OnboardingPatchRequest,
     OnboardingResponse,
@@ -33,7 +33,7 @@ TRAVEL_INTENT_COLUMNS = (
 @router.get("/profile", response_model=ProfileResponse | None)
 def get_current_user_profile(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object] | None:
     profile = connection.execute(
         f"SELECT {PROFILE_COLUMNS} FROM public.profiles WHERE user_id=%s",
@@ -46,7 +46,7 @@ def get_current_user_profile(
 def patch_current_user_profile(
     payload: ProfilePatchRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
     changes = payload.model_dump(exclude_unset=True)
     existing_profile = connection.execute(
@@ -77,14 +77,13 @@ def patch_current_user_profile(
     else:
         profile = existing_profile
 
-    connection.commit()
     return profile
 
 
 @router.get("/travel-intent", response_model=TravelIntentResponse | None)
 def get_current_user_travel_intent(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object] | None:
     return connection.execute(
         f"SELECT {TRAVEL_INTENT_COLUMNS} FROM public.travel_intents "
@@ -97,7 +96,7 @@ def get_current_user_travel_intent(
 def put_current_user_travel_intent(
     payload: TravelIntentPutRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
     travel_intent = connection.execute(
         f"INSERT INTO public.travel_intents "
@@ -114,14 +113,13 @@ def put_current_user_travel_intent(
         f"RETURNING {TRAVEL_INTENT_COLUMNS}",
         (principal.user_id, payload.destination, payload.date_from, payload.date_to),
     ).fetchone()
-    connection.commit()
     return travel_intent
 
 
 @router.delete("/travel-intent", status_code=204, response_class=Response)
 def delete_current_user_travel_intent(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> None:
     connection.execute(
         "UPDATE public.travel_intents "
@@ -129,14 +127,13 @@ def delete_current_user_travel_intent(
         "WHERE user_id=%s AND status='active'",
         (principal.user_id,),
     )
-    connection.commit()
 
 
 @router.patch("/onboarding", response_model=OnboardingResponse)
 def patch_current_user_onboarding(
     payload: OnboardingPatchRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
-    connection: Annotated[psycopg.Connection, Depends(get_database_connection)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, str]:
     onboarding = connection.execute(
         "UPDATE public.user_activity_states "
@@ -170,5 +167,4 @@ def patch_current_user_onboarding(
             raise HTTPException(409, "Profile and an active TravelIntent are required to complete onboarding")
         raise HTTPException(409, "Cannot transition onboarding from completed to in_progress")
 
-    connection.commit()
     return {"status": onboarding["onboarding_status"]}

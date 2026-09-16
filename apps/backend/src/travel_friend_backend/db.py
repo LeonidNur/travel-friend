@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from uuid import UUID
 
 import psycopg
 from fastapi import HTTPException, Request
@@ -16,6 +17,19 @@ from travel_friend_backend.config import BackendSettings
 def database_connection(database_url: str) -> Generator[psycopg.Connection, None, None]:
     """Open one short-lived connection with dictionary rows."""
     with psycopg.connect(database_url, row_factory=dict_row) as connection:
+        yield connection
+
+
+@contextmanager
+def authenticated_transaction(
+    connection: psycopg.Connection, principal_user_id: UUID
+) -> Generator[psycopg.Connection, None, None]:
+    """Bind one trusted principal to an explicit outer business transaction."""
+    with connection.transaction():
+        connection.execute(
+            "SELECT set_config('app.user_id', %s, true)",
+            (str(principal_user_id),),
+        )
         yield connection
 
 
