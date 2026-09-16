@@ -15,14 +15,14 @@ from integration_database import (
 
 
 EXPECTED_PRIVILEGES = {
-    "users": {"select", "insert"},
-    "telegram_identities": {"select", "insert", "update"},
+    "users": {"select"},
+    "telegram_identities": set(),
     "profiles": {"select", "insert", "update"},
     "profile_photos": set(),
-    "user_settings": {"insert"},
-    "user_activity_states": {"select", "insert", "update"},
+    "user_settings": set(),
+    "user_activity_states": {"select", "update"},
     "travel_intents": {"select", "insert", "update"},
-    "user_sessions": {"insert", "update"},
+    "user_sessions": {"update"},
     "discover_interest_decisions": {"select", "insert", "update"},
     "matches": {"select", "insert", "update"},
     "chats": {"select", "insert", "update"},
