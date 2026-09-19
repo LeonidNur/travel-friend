@@ -21,6 +21,18 @@ MIGRATION_PATH = (
     / "migrations"
     / "20260901130000_chat_persistence.sql"
 )
+TRIGGER_FUNCTION_HARDENING_MIGRATION_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "supabase"
+    / "migrations"
+    / "20260901210000_revoke_trigger_function_public_execute.sql"
+)
+TRIGGER_FUNCTION_SIGNATURES = (
+    "public.enforce_chat_participant_read_sequences()",
+    "public.enforce_direct_chat_participant_count()",
+)
+
+
 @pytest.fixture
 def database_url() -> str:
     try:
@@ -56,6 +68,83 @@ def test_chat_migration_declares_the_mvp_schema_and_fk_semantics() -> None:
     assert "create constraint trigger chats_direct_participant_count" in migration_sql
     assert "create constraint trigger chat_participants_direct_participant_count" in migration_sql
     assert "create trigger chat_participants_read_sequences_only_move_forward" in migration_sql
+
+
+def test_trigger_function_execute_is_private_and_triggers_remain_registered(
+    database_url: str,
+    clean_database: None,
+) -> None:
+    hardening_sql = TRIGGER_FUNCTION_HARDENING_MIGRATION_PATH.read_text()
+
+    with psycopg.connect(database_url) as connection:
+        for function_signature in TRIGGER_FUNCTION_SIGNATURES:
+            connection.execute(f"grant execute on function {function_signature} to public")
+        connection.execute(hardening_sql)
+
+    for function_signature in TRIGGER_FUNCTION_SIGNATURES:
+        assert f"revoke execute on function {function_signature} from public;" in hardening_sql.lower()
+
+        with psycopg.connect(database_url) as connection:
+            assert connection.execute(
+                "select has_function_privilege('public', %s, 'execute')",
+                (function_signature,),
+            ).fetchone() == (False,)
+            assert connection.execute(
+                "select has_function_privilege('app_runtime', %s, 'execute')",
+                (function_signature,),
+            ).fetchone() == (False,)
+
+    with psycopg.connect(database_url) as connection:
+        trigger_rows = connection.execute(
+            """
+            select triggers.tgname, pg_get_function_identity_arguments(functions.oid)
+            from pg_trigger as triggers
+            join pg_proc as functions on functions.oid = triggers.tgfoid
+            join pg_namespace as namespaces on namespaces.oid = functions.pronamespace
+            where not triggers.tgisinternal
+              and namespaces.nspname = 'public'
+              and functions.proname in (
+                'enforce_chat_participant_read_sequences',
+                'enforce_direct_chat_participant_count'
+              )
+            order by triggers.tgname
+            """
+        ).fetchall()
+
+    assert trigger_rows == [
+        ("chat_participants_direct_participant_count", ""),
+        ("chat_participants_read_sequences_only_move_forward", ""),
+        ("chats_direct_participant_count", ""),
+    ]
+
+    chat_id, user_ids = create_direct_chat(database_url, 2)
+    assert chat_id
+    assert len(user_ids) == 2
+
+    with psycopg.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("insert into public.users default values returning id")
+            user_id = cursor.fetchone()[0]
+            cursor.execute("insert into public.chats (type) values ('group') returning id")
+            group_chat_id = cursor.fetchone()[0]
+            cursor.execute(
+                """
+                insert into public.chat_participants (
+                    chat_id, user_id, last_read_sequence, last_visible_message_sequence
+                ) values (%s, %s, 0, 1) returning id
+                """,
+                (group_chat_id, user_id),
+            )
+            participant_id = cursor.fetchone()[0]
+            cursor.execute(
+                "update public.chat_participants set last_read_sequence = 1 where id = %s",
+                (participant_id,),
+            )
+            with pytest.raises(psycopg.errors.CheckViolation, match="read sequences can only move forward"):
+                cursor.execute(
+                    "update public.chat_participants set last_read_sequence = 0 where id = %s",
+                    (participant_id,),
+                )
 
 
 def create_direct_chat(database_url: str, participant_count: int) -> tuple[object, tuple[object, ...]]:
