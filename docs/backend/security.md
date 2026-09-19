@@ -53,6 +53,16 @@ AI provider и travel API — полудоверенные внешние зон
 
 Обязательный production порядок: **role provisioning → migrations → grants → verification → Render DSN → backend deploy**. Grants — самостоятельный, последующий шаг после migrations; этот work item их намеренно не предоставляет. До смены Render DSN FastAPI продолжает использовать старый privileged DSN, а Auto-Deploy и rollback `46526f8` не меняются. Verification script только читает catalogs: он показывает effective role attributes, owner каждой current application table и memberships. `NOINHERIT` не удаляет существующие memberships и не запрещает возможный `SET ROLE`, поэтому любой результат в последнем query — finding для отдельного approved remediation, не повод менять memberships этим provisioning script.
 
+Перед заменой Render `DATABASE_URL` обязательно запустить runtime gate через реальный Session Pooler DSN роли `app_runtime` (не provisioning/migrator DSN):
+
+```bash
+cd apps/backend
+PRODUCTION_RUNTIME_DATABASE_URL='…' \
+  uv run --python 3.12 scripts/production-runtime-deployment-gate.py
+```
+
+Gate fail closed: подтверждает `current_user`/`session_user`, непривилегированные attributes роли, существование и `EXECUTE` нужных security capabilities, RLS и ожидаемые policies `profiles`/`travel_intents`. Он также проверяет transaction-local `app.user_id`, отсутствие утечки context в следующую transaction, fail-closed RLS без context, безопасный boolean-only runtime read и запрет `DELETE`. Он не создаёт fixture-данные: отрицательный `DELETE ... WHERE false` всегда завершается rollback и не может оставить изменения. Только результат `passed` разрешает следующий ручной шаг переключения DSN; сам script Render не изменяет.
+
 Telegram `initData` по-прежнему проверяется только FastAPI: raw payload, freshness и HMAC не передаются в PostgreSQL. После проверки FastAPI нормализует metadata, генерирует raw session token, вычисляет SHA-256 и вызывает узкую owner-owned `SECURITY DEFINER` capability `public.bootstrap_telegram_login(...)`. Она атомарно resolve/create Telegram identity, обновляет verified metadata, при необходимости создаёт bootstrap defaults и session, но получает только token hash; raw token остаётся в FastAPI и HTTP response. First-login race сериализуется transaction-scoped PostgreSQL advisory lock по verified Telegram user ID до создания `users` row.
 
 Bearer session resolution — отдельная pre-auth bootstrap capability. FastAPI извлекает raw Bearer token, вычисляет его hash и передаёт только hash в `public.resolve_bearer_session(text)`. Эта owner-owned `SECURITY DEFINER` capability возвращает только `session_id` и `user_id` активной, неотозванной, неистёкшей сессии не удалённого пользователя; raw token, `token_hash` и business/profile data она не возвращает. Lookup остаётся в отдельном bootstrap connection: authenticated business transaction с `app.user_id` ещё не существует в этот момент.
