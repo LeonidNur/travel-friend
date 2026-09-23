@@ -1,12 +1,8 @@
-"""Unit coverage for Chat Trip creation transaction branches."""
+"""Unit coverage for the Chat Trip creation capability boundary."""
 
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
 from uuid import uuid4
-
-import pytest
-from fastapi import HTTPException
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal
 from travel_friend_backend.routers import trips
@@ -25,31 +21,20 @@ class QueryResult:
         return self.rows
 
 
-class Transaction(AbstractContextManager[None]):
-    def __exit__(self, *_: object) -> None:
-        return None
-
-
 class FakeConnection:
     def __init__(self, results: list[QueryResult]) -> None:
         self.results = results
-        self.transaction_calls = 0
+        self.queries: list[tuple[object, ...]] = []
 
-    def transaction(self) -> Transaction:
-        self.transaction_calls += 1
-        return Transaction()
-
-    def execute(self, *_: object, **__: object) -> QueryResult:
+    def execute(self, *args: object, **__: object) -> QueryResult:
+        self.queries.append(args)
         return self.results.pop(0)
 
 
-def test_create_trip_inserts_server_derived_participants() -> None:
-    chat_id, creator_id, companion_id, trip_id = uuid4(), uuid4(), uuid4(), uuid4()
+def test_create_trip_delegates_to_the_server_derived_capability() -> None:
+    chat_id, creator_id, trip_id = uuid4(), uuid4(), uuid4()
     connection = FakeConnection(
         [
-            QueryResult({"id": chat_id}),
-            QueryResult(),
-            QueryResult(rows=[{"user_id": creator_id}, {"user_id": companion_id}]),
             QueryResult(
                 {
                     "trip_id": trip_id,
@@ -58,8 +43,7 @@ def test_create_trip_inserts_server_derived_participants() -> None:
                     "status": "forming",
                     "created_at": object(),
                 }
-            ),
-            QueryResult(rows=[{"user_id": creator_id}, {"user_id": companion_id}]),
+            )
         ]
     )
 
@@ -69,38 +53,9 @@ def test_create_trip_inserts_server_derived_participants() -> None:
 
     assert trip["trip_id"] == trip_id
     assert connection.results == []
-    assert connection.transaction_calls == 1
-
-
-@pytest.mark.parametrize(
-    ("results", "expected_status"),
-    [([QueryResult()], 404), ([QueryResult({"id": uuid4()}), QueryResult({"id": uuid4()})], 409)],
-)
-def test_create_trip_hides_inaccessible_chat_and_rejects_existing_unfinished_trip(
-    results: list[QueryResult], expected_status: int
-) -> None:
-    with pytest.raises(HTTPException) as error:
-        create_trip_for_chat(
-            FakeConnection(results), uuid4(), AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
-        )
-
-    assert error.value.status_code == expected_status
-
-
-def test_create_trip_rejects_broken_chat_membership() -> None:
-    chat_id, creator_id, other_participant_id = uuid4(), uuid4(), uuid4()
-    connection = FakeConnection(
-        [
-            QueryResult({"id": chat_id}),
-            QueryResult(),
-            QueryResult(rows=[{"user_id": other_participant_id}]),
-        ]
-    )
-
-    with pytest.raises(RuntimeError, match="membership invariant"):
-        create_trip_for_chat(
-            connection, chat_id, AuthenticatedPrincipal(user_id=creator_id, session_id=uuid4())
-        )
+    assert connection.queries == [
+        ("SELECT * FROM public.create_current_trip_from_chat(%s)", (chat_id,))
+    ]
 
 
 def test_create_trip_route_delegates_to_the_transactional_use_case(monkeypatch) -> None:

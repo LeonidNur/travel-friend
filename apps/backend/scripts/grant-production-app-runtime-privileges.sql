@@ -61,17 +61,8 @@ GRANT SELECT (actor_user_id, target_user_id, decision)
 GRANT SELECT (id, user_a_id, user_b_id, chat_id) ON TABLE public.matches TO app_runtime;
 
 GRANT SELECT (id, type, created_at) ON TABLE public.chats TO app_runtime;
--- Temporary Trip compatibility bridge: the current Trip creation flow uses
--- SELECT ... FOR UPDATE on its Chat. The paired RLS policy permits row locking
--- for an active participant but WITH CHECK (false) prohibits real writes.
--- Remove this grant with the dedicated Trip RLS slice.
-GRANT UPDATE (id) ON TABLE public.chats TO app_runtime;
 
 GRANT SELECT (chat_id, user_id, left_at) ON TABLE public.chat_participants TO app_runtime;
--- Temporary Trip compatibility bridge: SELECT ... FOR SHARE requires UPDATE
--- privilege. The paired RLS policy remains lock-only and rejects mutations.
--- Remove this grant with the dedicated Trip RLS slice.
-GRANT UPDATE (id) ON TABLE public.chat_participants TO app_runtime;
 
 GRANT SELECT (id, chat_id, sequence_number, type, sender_user_id,
   recipient_user_id, content_text, created_at) ON TABLE public.messages TO app_runtime;
@@ -82,10 +73,8 @@ GRANT SELECT (id, chat_id, created_by_user_id, status, membership_version,
   transport_status, date_from, date_to, budget_min, budget_max,
   budget_currency, budget_scope, started_at, completed_at, cancelled_at,
   created_at, updated_at) ON TABLE public.trips TO app_runtime;
-GRANT INSERT (chat_id, created_by_user_id, status) ON TABLE public.trips TO app_runtime;
 
 GRANT SELECT (trip_id, user_id, left_at) ON TABLE public.trip_participants TO app_runtime;
-GRANT INSERT (trip_id, user_id) ON TABLE public.trip_participants TO app_runtime;
 
 GRANT SELECT (id, trip_id, position, place_label, country_code, place_ref,
   stay_from, stay_to, notes, created_at, updated_at)
@@ -110,6 +99,8 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.record_current_discover_decision(uuid, 
 REVOKE ALL PRIVILEGES ON FUNCTION public.is_current_active_chat_participant(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.create_current_group_chat(uuid[]) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.send_current_chat_message(uuid, text) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.is_current_active_trip_participant(uuid) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.create_current_trip_from_chat(uuid) FROM app_runtime;
 
 GRANT EXECUTE ON FUNCTION public.current_authenticated_user_id() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
@@ -127,3 +118,5 @@ GRANT EXECUTE ON FUNCTION public.record_current_discover_decision(uuid, text) TO
 GRANT EXECUTE ON FUNCTION public.is_current_active_chat_participant(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.create_current_group_chat(uuid[]) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.send_current_chat_message(uuid, text) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.is_current_active_trip_participant(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.create_current_trip_from_chat(uuid) TO app_runtime;

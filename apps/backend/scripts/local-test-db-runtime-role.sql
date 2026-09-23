@@ -36,16 +36,11 @@ GRANT SELECT (id) ON TABLE public.user_sessions TO app_runtime;
 GRANT SELECT (actor_user_id, target_user_id, decision) ON TABLE public.discover_interest_decisions TO app_runtime;
 GRANT SELECT (id, user_a_id, user_b_id, chat_id) ON TABLE public.matches TO app_runtime;
 GRANT SELECT (id, type, created_at) ON TABLE public.chats TO app_runtime;
--- Temporary Trip compatibility bridge for SELECT ... FOR UPDATE only. The
--- Chat RLS policy has WITH CHECK (false), so this cannot perform a write.
-GRANT UPDATE (id) ON TABLE public.chats TO app_runtime;
 GRANT SELECT (chat_id, user_id, left_at) ON TABLE public.chat_participants TO app_runtime;
--- Temporary Trip compatibility bridge for SELECT ... FOR SHARE only.
-GRANT UPDATE (id) ON TABLE public.chat_participants TO app_runtime;
 GRANT SELECT (id, chat_id, sequence_number, type, sender_user_id,
   recipient_user_id, content_text, created_at) ON TABLE public.messages TO app_runtime;
-GRANT SELECT, INSERT ON TABLE public.trips TO app_runtime;
-GRANT SELECT, INSERT ON TABLE public.trip_participants TO app_runtime;
+GRANT SELECT ON TABLE public.trips TO app_runtime;
+GRANT SELECT (trip_id, user_id, left_at) ON TABLE public.trip_participants TO app_runtime;
 GRANT SELECT ON TABLE public.trip_stops TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
@@ -62,6 +57,8 @@ GRANT EXECUTE ON FUNCTION public.record_current_discover_decision(uuid, text) TO
 GRANT EXECUTE ON FUNCTION public.is_current_active_chat_participant(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.create_current_group_chat(uuid[]) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.send_current_chat_message(uuid, text) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.is_current_active_trip_participant(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.create_current_trip_from_chat(uuid) TO app_runtime;
 
 -- Future objects created by this migration/test owner receive no runtime grant.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM app_runtime;

@@ -27,21 +27,22 @@ REQUIRED_FUNCTIONS = (
     "public.is_current_active_chat_participant(uuid)",
     "public.create_current_group_chat(uuid[])",
     "public.send_current_chat_message(uuid,text)",
+    "public.is_current_active_trip_participant(uuid)",
+    "public.create_current_trip_from_chat(uuid)",
 )
 
-CHAT_TABLE_OPERATION_SURFACE = {
-    "chats": {"SELECT", "UPDATE"},
-    "chat_participants": {"SELECT", "UPDATE"},
+RUNTIME_TABLE_OPERATION_SURFACE = {
+    "chats": {"SELECT"},
+    "chat_participants": {"SELECT"},
     "messages": {"SELECT"},
+    "trips": {"SELECT"},
+    "trip_participants": {"SELECT"},
+    "trip_stops": {"SELECT"},
 }
 
-CHAT_COLUMN_PRIVILEGES = {
+RUNTIME_COLUMN_PRIVILEGES = {
     ("chats", "SELECT"): {"id", "type", "created_at"},
-    # Temporary Trip compatibility bridge. Its RLS policy is lock-only.
-    ("chats", "UPDATE"): {"id"},
     ("chat_participants", "SELECT"): {"chat_id", "user_id", "left_at"},
-    # Temporary Trip compatibility bridge. Its RLS policy is lock-only.
-    ("chat_participants", "UPDATE"): {"id"},
     ("messages", "SELECT"): {
         "id",
         "chat_id",
@@ -51,6 +52,19 @@ CHAT_COLUMN_PRIVILEGES = {
         "recipient_user_id",
         "content_text",
         "created_at",
+    },
+    ("trips", "SELECT"): {
+        "id", "chat_id", "created_by_user_id", "status", "membership_version",
+        "state_version", "destination_version", "dates_version", "budget_version",
+        "transport_version", "destination_status", "dates_status", "budget_status",
+        "transport_status", "date_from", "date_to", "budget_min", "budget_max",
+        "budget_currency", "budget_scope", "started_at", "completed_at", "cancelled_at",
+        "created_at", "updated_at",
+    },
+    ("trip_participants", "SELECT"): {"trip_id", "user_id", "left_at"},
+    ("trip_stops", "SELECT"): {
+        "id", "trip_id", "position", "place_label", "country_code", "place_ref",
+        "stay_from", "stay_to", "notes", "created_at", "updated_at",
     },
 }
 
@@ -126,12 +140,14 @@ def check_required_functions(connection: psycopg.Connection) -> None:
     require(not missing, f"required runtime function is absent or not executable: {', '.join(missing)}")
 
 
-def check_chat_capability_metadata(connection: psycopg.Connection) -> None:
+def check_capability_metadata(connection: psycopg.Connection) -> None:
     """Require hardened definer functions and no accidental PUBLIC execution."""
     expected = {
         "public.is_current_active_chat_participant(uuid)": True,
         "public.create_current_group_chat(uuid[])": True,
         "public.send_current_chat_message(uuid,text)": True,
+        "public.is_current_active_trip_participant(uuid)": True,
+        "public.create_current_trip_from_chat(uuid)": True,
         "public.enforce_direct_chat_participant_count()": False,
     }
     rows = connection.execute(
@@ -153,7 +169,7 @@ def check_chat_capability_metadata(connection: psycopg.Connection) -> None:
         """,
         (list(expected),),
     ).fetchall()
-    require(len(rows) == len(expected), "Chat capability catalog lookup was incomplete")
+    require(len(rows) == len(expected), "capability catalog lookup was incomplete")
     invalid = [
         signature
         for signature, exists, security_definer, fixed_search_path, public_execute, runtime_execute in rows
@@ -163,18 +179,17 @@ def check_chat_capability_metadata(connection: psycopg.Connection) -> None:
         or public_execute
         or runtime_execute is not expected[signature]
     ]
-    require(not invalid, f"Chat capability security metadata is invalid: {', '.join(invalid)}")
+    require(not invalid, f"capability security metadata is invalid: {', '.join(invalid)}")
 
 
-def check_chat_table_privileges(connection: psycopg.Connection) -> None:
-    """Prove Chat writes are capability-only, except the temporary lock bridge."""
+def check_runtime_table_privileges(connection: psycopg.Connection) -> None:
+    """Prove Chat and Trip writes are capability-only."""
     operation_rows = connection.execute(
         """
         WITH expected(table_name, privilege_type) AS (
           VALUES
-            ('chats', 'SELECT'), ('chats', 'UPDATE'),
-            ('chat_participants', 'SELECT'), ('chat_participants', 'UPDATE'),
-            ('messages', 'SELECT')
+            ('chats', 'SELECT'), ('chat_participants', 'SELECT'), ('messages', 'SELECT'),
+            ('trips', 'SELECT'), ('trip_participants', 'SELECT'), ('trip_stops', 'SELECT')
         ), operations(privilege_type) AS (
           VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')
         )
@@ -197,22 +212,23 @@ def check_chat_table_privileges(connection: psycopg.Connection) -> None:
     ).fetchall()
     expected_operation_rows = {
         (table_name, operation, operation in allowed_operations)
-        for table_name, allowed_operations in CHAT_TABLE_OPERATION_SURFACE.items()
+        for table_name, allowed_operations in RUNTIME_TABLE_OPERATION_SURFACE.items()
         for operation in ("SELECT", "INSERT", "UPDATE", "DELETE")
     }
     actual_operation_rows = {(table_name, operation, expected) for table_name, operation, expected, _ in operation_rows}
-    require(actual_operation_rows == expected_operation_rows, "Chat table privilege catalog lookup was incomplete")
+    require(actual_operation_rows == expected_operation_rows, "runtime table privilege catalog lookup was incomplete")
     mismatch = [
         f"{table_name} {operation}"
         for table_name, operation, expected, actual in operation_rows
         if expected != actual
     ]
-    require(not mismatch, f"Chat table privilege surface is not capability-only: {', '.join(mismatch)}")
+    require(not mismatch, f"runtime table privilege surface is not capability-only: {', '.join(mismatch)}")
 
     column_rows = connection.execute(
         """
         WITH tables(table_name) AS (
-          VALUES ('chats'), ('chat_participants'), ('messages')
+          VALUES ('chats'), ('chat_participants'), ('messages'), ('trips'),
+            ('trip_participants'), ('trip_stops')
         ), operations(privilege_type) AS (
           VALUES ('SELECT'), ('INSERT'), ('UPDATE')
         )
@@ -231,9 +247,9 @@ def check_chat_table_privileges(connection: psycopg.Connection) -> None:
     mismatch = [
         f"{table_name}.{column_name} {operation}"
         for table_name, column_name, operation, actual in column_rows
-        if actual != (column_name in CHAT_COLUMN_PRIVILEGES.get((table_name, operation), set()))
+        if actual != (column_name in RUNTIME_COLUMN_PRIVILEGES.get((table_name, operation), set()))
     ]
-    require(not mismatch, f"Chat column privilege surface is not exact: {', '.join(mismatch)}")
+    require(not mismatch, f"runtime column privilege surface is not exact: {', '.join(mismatch)}")
 
 
 def check_rls_catalog(connection: psycopg.Connection) -> None:
@@ -249,7 +265,7 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         WHERE namespace.nspname = 'public'
           AND relation.relname = ANY(%s::text[])
         """,
-        (["profiles", "travel_intents", "user_activity_states", "user_sessions", "discover_interest_decisions", "matches", "chats", "chat_participants", "messages"],),
+        (["profiles", "travel_intents", "user_activity_states", "user_sessions", "discover_interest_decisions", "matches", "chats", "chat_participants", "messages", "trips", "trip_participants", "trip_stops"],),
     ).fetchall()
     require(
         {name: (enabled, runtime_is_not_owner) for name, enabled, runtime_is_not_owner in rls_rows}
@@ -263,6 +279,9 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
             "chats": (True, True),
             "chat_participants": (True, True),
             "messages": (True, True),
+            "trips": (True, True),
+            "trip_participants": (True, True),
+            "trip_stops": (True, True),
         },
         "RLS must be enabled and app_runtime must not own protected runtime tables",
     )
@@ -304,14 +323,16 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
               '((user_a_id = current_authenticated_user_id()) OR (user_b_id = current_authenticated_user_id()))', NULL::text),
             ('chats_select_active_participant', 'chats', 'r',
               'is_current_active_chat_participant(id)', NULL::text),
-            ('chats_lock_active_participant', 'chats', 'w',
-              'is_current_active_chat_participant(id)', 'false'),
             ('chat_participants_select_active_chat', 'chat_participants', 'r',
               '((left_at IS NULL) AND is_current_active_chat_participant(chat_id))', NULL::text),
-            ('chat_participants_lock_active_chat', 'chat_participants', 'w',
-              '((left_at IS NULL) AND is_current_active_chat_participant(chat_id))', 'false'),
             ('messages_select_active_participant', 'messages', 'r',
-              '(is_current_active_chat_participant(chat_id) AND ((recipient_user_id IS NULL) OR (recipient_user_id = current_authenticated_user_id())))', NULL::text)
+              '(is_current_active_chat_participant(chat_id) AND ((recipient_user_id IS NULL) OR (recipient_user_id = current_authenticated_user_id())))', NULL::text),
+            ('trips_select_active_participant', 'trips', 'r',
+              'is_current_active_trip_participant(id)', NULL::text),
+            ('trip_participants_select_active_trip', 'trip_participants', 'r',
+              '((left_at IS NULL) AND is_current_active_trip_participant(trip_id))', NULL::text),
+            ('trip_stops_select_active_participant', 'trip_stops', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text)
         )
         SELECT expected.policy_name,
           policy.oid IS NOT NULL AS exists_for_runtime
@@ -350,9 +371,12 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
     for table_name, expected_surface in (
         ("discover_interest_decisions", [("discover_interest_decisions_select_own", "SELECT")]),
         ("matches", [("matches_select_participant", "SELECT")]),
-        ("chats", [("chats_lock_active_participant", "UPDATE"), ("chats_select_active_participant", "SELECT")]),
-        ("chat_participants", [("chat_participants_lock_active_chat", "UPDATE"), ("chat_participants_select_active_chat", "SELECT")]),
+        ("chats", [("chats_select_active_participant", "SELECT")]),
+        ("chat_participants", [("chat_participants_select_active_chat", "SELECT")]),
         ("messages", [("messages_select_active_participant", "SELECT")]),
+        ("trips", [("trips_select_active_participant", "SELECT")]),
+        ("trip_participants", [("trip_participants_select_active_trip", "SELECT")]),
+        ("trip_stops", [("trip_stops_select_active_participant", "SELECT")]),
     ):
         surface = connection.execute(
             "SELECT policyname, cmd FROM pg_policies WHERE schemaname='public' "
@@ -433,29 +457,44 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
         require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.chats)") is False, "chats RLS did not fail closed without authenticated context")
         require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.chat_participants)") is False, "chat participants RLS did not fail closed without authenticated context")
         require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.messages)") is False, "messages RLS did not fail closed without authenticated context")
+        require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.trips)") is False, "trips RLS did not fail closed without authenticated context")
+        require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.trip_participants)") is False, "trip participants RLS did not fail closed without authenticated context")
+        require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.trip_stops)") is False, "trip stops RLS did not fail closed without authenticated context")
 
 
-def check_delete_is_denied_and_rolled_back(connection: psycopg.Connection) -> None:
-    try:
-        with connection.transaction():
-            try:
-                connection.execute("DELETE FROM public.profiles WHERE false")
-            except psycopg.errors.InsufficientPrivilege:
-                raise RollbackProbe from None
-            raise GateFailure("app_runtime unexpectedly has DELETE on profiles")
-    except RollbackProbe:
-        return
+def check_mutations_are_denied_and_rolled_back(connection: psycopg.Connection) -> None:
+    for statement in (
+        "DELETE FROM public.profiles WHERE false",
+        "INSERT INTO public.trips (chat_id, created_by_user_id, status) SELECT NULL, NULL, 'forming' WHERE false",
+        "UPDATE public.trips SET status='forming' WHERE false",
+        "DELETE FROM public.trips WHERE false",
+        "INSERT INTO public.trip_participants (trip_id, user_id) SELECT NULL, NULL WHERE false",
+        "UPDATE public.trip_participants SET left_at=now() WHERE false",
+        "DELETE FROM public.trip_participants WHERE false",
+        "INSERT INTO public.trip_stops (trip_id, position, place_label) SELECT NULL, 1, 'blocked' WHERE false",
+        "UPDATE public.trip_stops SET place_label='blocked' WHERE false",
+        "DELETE FROM public.trip_stops WHERE false",
+    ):
+        try:
+            with connection.transaction():
+                try:
+                    connection.execute(statement)
+                except psycopg.errors.InsufficientPrivilege:
+                    raise RollbackProbe from None
+                raise GateFailure(f"app_runtime unexpectedly ran: {statement}")
+        except RollbackProbe:
+            continue
 
 
 def run_gate(database_url: str) -> None:
     with psycopg.connect(database_url, autocommit=True) as connection:
         check_runtime_identity(connection)
         check_required_functions(connection)
-        check_chat_capability_metadata(connection)
-        check_chat_table_privileges(connection)
+        check_capability_metadata(connection)
+        check_runtime_table_privileges(connection)
         check_rls_catalog(connection)
         check_transaction_context_and_rls(connection)
-        check_delete_is_denied_and_rolled_back(connection)
+        check_mutations_are_denied_and_rolled_back(connection)
 
 
 def main() -> None:
