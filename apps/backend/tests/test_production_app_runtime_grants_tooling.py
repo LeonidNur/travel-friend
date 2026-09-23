@@ -29,6 +29,9 @@ REQUIRED_CAPABILITIES = {
     "public.chat_participant_profile_projection(uuid)",
     "public.trip_participant_profile_projection(uuid)",
     "public.record_current_discover_decision(uuid, text)",
+    "public.is_current_active_chat_participant(uuid)",
+    "public.create_current_group_chat(uuid[])",
+    "public.send_current_chat_message(uuid, text)",
 }
 
 EXPECTED_TRIGGER_FUNCTION_FINDINGS = [
@@ -83,7 +86,11 @@ def test_production_grants_cover_the_audited_runtime_matrix() -> None:
         "TO app_runtime;"
     ) in script
     assert "GRANT UPDATE (onboarding_status, updated_at) ON TABLE public.user_activity_states" not in script
+    assert "GRANT UPDATE (id) ON TABLE public.chats TO app_runtime;" in script
     assert "GRANT UPDATE (id) ON TABLE public.chat_participants TO app_runtime;" in script
+    assert "GRANT INSERT (type) ON TABLE public.chats TO app_runtime;" not in script
+    assert "GRANT INSERT (chat_id, user_id) ON TABLE public.chat_participants TO app_runtime;" not in script
+    assert "GRANT INSERT (chat_id, sender_user_id, recipient_user_id, sequence_number, type, content_text)" not in script
     assert "GRANT INSERT (actor_user_id, target_user_id, decision)" not in script
     assert "GRANT UPDATE (id) ON TABLE public.discover_interest_decisions" not in script
     assert "GRANT INSERT (user_a_id, user_b_id) ON TABLE public.matches" not in script
