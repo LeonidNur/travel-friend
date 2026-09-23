@@ -109,12 +109,16 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         WHERE namespace.nspname = 'public'
           AND relation.relname = ANY(%s::text[])
         """,
-        (["profiles", "travel_intents"],),
+        (["profiles", "travel_intents", "user_sessions"],),
     ).fetchall()
     require(
         {name: (enabled, runtime_is_not_owner) for name, enabled, runtime_is_not_owner in rls_rows}
-        == {"profiles": (True, True), "travel_intents": (True, True)},
-        "RLS must be enabled and app_runtime must not own profiles or travel_intents",
+        == {
+            "profiles": (True, True),
+            "travel_intents": (True, True),
+            "user_sessions": (True, True),
+        },
+        "RLS must be enabled and app_runtime must not own protected runtime tables",
     )
 
     policy_rows = connection.execute(
@@ -140,7 +144,12 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
               NULL::text, '((user_id = current_authenticated_user_id()) AND (status = ''active''::text))'),
             ('travel_intents_update_own_active', 'travel_intents', 'w',
               '((user_id = current_authenticated_user_id()) AND (status = ''active''::text))',
-              '((user_id = current_authenticated_user_id()) AND (status = ANY (ARRAY[''active''::text, ''archived''::text])))')
+              '((user_id = current_authenticated_user_id()) AND (status = ANY (ARRAY[''active''::text, ''archived''::text])))'),
+            ('user_sessions_select_own', 'user_sessions', 'r',
+              '(user_id = current_authenticated_user_id())', NULL::text),
+            ('user_sessions_update_own', 'user_sessions', 'w',
+              '(user_id = current_authenticated_user_id())',
+              '(user_id = current_authenticated_user_id())')
         )
         SELECT expected.policy_name,
           policy.oid IS NOT NULL AS exists_for_runtime
@@ -161,6 +170,21 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
     ).fetchall()
     missing = [name for name, exists in policy_rows if not exists]
     require(not missing, f"required RLS policy is missing for app_runtime: {', '.join(missing)}")
+    session_policy_surface = connection.execute(
+        """
+        SELECT policyname, cmd
+        FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'user_sessions'
+        ORDER BY policyname
+        """
+    ).fetchall()
+    require(
+        session_policy_surface == [
+            ("user_sessions_select_own", "SELECT"),
+            ("user_sessions_update_own", "UPDATE"),
+        ],
+        "user_sessions has an unexpected RLS policy surface",
+    )
 
 
 def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
@@ -179,6 +203,11 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
             (probe_user_id,),
         )
         require(isinstance(permitted_read, bool), "runtime profile read did not execute")
+        permitted_session_read = scalar(
+            connection,
+            "SELECT EXISTS (SELECT 1 FROM public.user_sessions)",
+        )
+        require(isinstance(permitted_session_read, bool), "runtime session read did not execute")
 
     with connection.transaction():
         require(
@@ -192,6 +221,10 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
         require(
             scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.travel_intents)") is False,
             "travel_intents RLS did not fail closed without authenticated context",
+        )
+        require(
+            scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.user_sessions)") is False,
+            "user_sessions RLS did not fail closed without authenticated context",
         )
 
 
