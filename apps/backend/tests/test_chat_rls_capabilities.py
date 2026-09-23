@@ -111,14 +111,11 @@ def test_chat_rls_catalog_and_private_capabilities(database_url: str) -> None:
         ).fetchall()
         assert [(table, command, roles) for table, command, roles, _, _ in policies] == [
             ("chat_participants", "SELECT", "{app_runtime}"),
-            ("chat_participants", "UPDATE", "{app_runtime}"),
             ("chats", "SELECT", "{app_runtime}"),
-            ("chats", "UPDATE", "{app_runtime}"),
             ("messages", "SELECT", "{app_runtime}"),
         ]
         predicate_name = ACTIVE_PARTICIPANT_PREDICATE.rsplit(".", maxsplit=1)[1].split("(", maxsplit=1)[0]
         assert all(predicate_name in (qual or "") for _, command, _, qual, _ in policies if command == "SELECT")
-        assert all(check in {"false", "(false)"} for _, command, _, _, check in policies if command == "UPDATE")
         for function_name in (ACTIVE_PARTICIPANT_PREDICATE, CREATE_GROUP_CAPABILITY, SEND_MESSAGE_CAPABILITY):
             assert connection.execute(
                 "SELECT prosecdef, proconfig FROM pg_proc WHERE oid=%s::regprocedure", (function_name,)
@@ -207,18 +204,20 @@ def test_hardened_direct_participant_trigger_rejects_non_two_physical_rows(
         ).fetchone() == (2,)
 
 
-def test_runtime_direct_chat_mutations_are_denied_but_trip_lock_bridge_is_narrow(
+def test_runtime_direct_chat_mutations_and_locking_are_denied(
     database_url: str, runtime_database_url: str
 ) -> None:
     actor, companion = create_user(database_url), create_user(database_url)
     chat_id = create_direct_chat(database_url, actor, companion)
     with psycopg.connect(runtime_database_url) as runtime:
-        with runtime.transaction():
-            set_authenticated_user(runtime, actor)
-            assert runtime.execute("SELECT id FROM public.chats WHERE id=%s FOR UPDATE", (chat_id,)).fetchall() == [(chat_id,)]
-            assert runtime.execute(
-                "SELECT user_id FROM public.chat_participants WHERE chat_id=%s FOR SHARE", (chat_id,)
-            ).fetchall()
+        for statement in (
+            "SELECT id FROM public.chats WHERE id='%s' FOR UPDATE" % chat_id,
+            "SELECT user_id FROM public.chat_participants WHERE chat_id='%s' FOR SHARE" % chat_id,
+        ):
+            with pytest.raises(psycopg.Error):
+                with runtime.transaction():
+                    set_authenticated_user(runtime, actor)
+                    runtime.execute(statement)
         for statement in (
             "INSERT INTO public.chats (type) VALUES ('group')",
             "INSERT INTO public.chat_participants (chat_id, user_id) VALUES ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000001')",

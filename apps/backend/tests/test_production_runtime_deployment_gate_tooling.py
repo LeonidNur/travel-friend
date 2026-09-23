@@ -47,6 +47,8 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "is_current_active_chat_participant",
         "create_current_group_chat",
         "send_current_chat_message",
+        "is_current_active_trip_participant",
+        "create_current_trip_from_chat",
         "enforce_direct_chat_participant_count",
         "set_config('app.user_id', %s, true)",
         "public.profiles",
@@ -56,6 +58,9 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "public.chats",
         "public.chat_participants",
         "public.messages",
+        "public.trips",
+        "public.trip_participants",
+        "public.trip_stops",
         "DELETE FROM public.profiles WHERE false",
         "InsufficientPrivilege",
     ):
@@ -74,12 +79,16 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "discover_interest_decisions_select_own",
         "matches_select_participant",
         "chats_select_active_participant",
-        "chats_lock_active_participant",
         "chat_participants_select_active_chat",
-        "chat_participants_lock_active_chat",
         "messages_select_active_participant",
+        "trips_select_active_participant",
+        "trip_participants_select_active_trip",
+        "trip_stops_select_active_participant",
     ):
         assert policy_name in script
+
+    assert "chats_lock_active_participant" not in script
+    assert "chat_participants_lock_active_chat" not in script
 
 
 def test_deployment_gate_uses_rollback_only_for_the_negative_write_probe() -> None:
@@ -88,5 +97,4 @@ def test_deployment_gate_uses_rollback_only_for_the_negative_write_probe() -> No
     assert "class RollbackProbe" in script
     assert "raise RollbackProbe" in script
     assert "except RollbackProbe:" in script
-    assert "INSERT INTO" not in script
-    assert "UPDATE public." not in script
+    assert "WHERE false" in script

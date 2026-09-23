@@ -25,12 +25,12 @@ EXPECTED_PRIVILEGES = {
     "user_sessions": {"select", "update"},
     "discover_interest_decisions": {"select"},
     "matches": {"select"},
-    "chats": {"select", "update"},
-    "chat_participants": {"select", "update"},
+    "chats": {"select"},
+    "chat_participants": {"select"},
     "messages": {"select"},
     "chat_summaries": set(),
-    "trips": {"select", "insert"},
-    "trip_participants": {"select", "insert"},
+    "trips": {"select"},
+    "trip_participants": {"select"},
     "trip_stops": {"select"},
 }
 CRUD_PRIVILEGES = ("select", "insert", "update", "delete")

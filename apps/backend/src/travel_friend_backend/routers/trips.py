@@ -85,62 +85,26 @@ def get_trip(
     }
 
 
-def find_authorized_trip_chat(
-    connection: psycopg.Connection, chat_id: UUID, user_id: UUID
-) -> dict[str, object] | None:
-    """Lock and return a Chat only when the requester is an active participant."""
-    return connection.execute(
-        "SELECT c.id FROM public.chats c "
-        "WHERE c.id=%s AND EXISTS ("
-        "SELECT 1 FROM public.chat_participants cp "
-        "WHERE cp.chat_id=c.id AND cp.user_id=%s AND cp.left_at IS NULL"
-        ") FOR UPDATE",
-        (chat_id, user_id),
-    ).fetchone()
-
-
 def create_trip_for_chat(
     connection: psycopg.Connection, chat_id: UUID, principal: AuthenticatedPrincipal
 ) -> dict[str, object]:
-    """Create one forming Trip and all active Chat participants atomically."""
-    with connection.transaction():
-        if find_authorized_trip_chat(connection, chat_id, principal.user_id) is None:
-            raise HTTPException(404, "Chat not found")
-
-        existing_trip = connection.execute(
-            "SELECT id FROM public.trips WHERE chat_id=%s AND status IN ('forming', 'active')",
-            (chat_id,),
-        ).fetchone()
-        if existing_trip is not None:
-            raise HTTPException(409, "Unfinished Trip already exists")
-
-        participant_rows = connection.execute(
-            "SELECT user_id FROM public.chat_participants "
-            "WHERE chat_id=%s AND left_at IS NULL FOR SHARE",
-            (chat_id,),
-        ).fetchall()
-        participant_ids = [row["user_id"] for row in participant_rows]
-        if not participant_ids or principal.user_id not in participant_ids:
-            raise RuntimeError("Chat membership invariant is violated")
-
+    """Create one forming Trip through the database-owned capability."""
+    del principal
+    try:
         trip = connection.execute(
-            "INSERT INTO public.trips (chat_id, created_by_user_id, status) "
-            "VALUES (%s, %s, 'forming') "
-            "RETURNING id AS trip_id, chat_id, created_by_user_id, status, created_at",
-            (chat_id, principal.user_id),
+            "SELECT * FROM public.create_current_trip_from_chat(%s)", (chat_id,)
         ).fetchone()
-        if trip is None:
-            raise RuntimeError("Trip was not created")
-
-        inserted_participants = connection.execute(
-            "INSERT INTO public.trip_participants (trip_id, user_id) "
-            "SELECT %s, user_id FROM public.chat_participants "
-            "WHERE chat_id=%s AND left_at IS NULL RETURNING user_id",
-            (trip["trip_id"], chat_id),
-        ).fetchall()
-        if len(inserted_participants) != len(participant_ids):
-            raise RuntimeError("Trip participant creation invariant is violated")
-
+    except psycopg.Error as error:
+        if error.sqlstate == "P0002":
+            raise HTTPException(404, "Chat not found") from error
+        if error.sqlstate == "23505" or (
+            error.sqlstate == "P0001"
+            and error.diag.message_primary == "unfinished trip already exists"
+        ):
+            raise HTTPException(409, "Unfinished Trip already exists") from error
+        raise
+    if trip is None:
+        raise RuntimeError("Trip creation capability returned no Trip")
     return dict(trip)
 
 
