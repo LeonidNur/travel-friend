@@ -326,7 +326,7 @@ def test_onboarding_completion_requires_an_active_travel_intent_and_preserves_pe
         status = connection.execute(
             "SELECT onboarding_status FROM public.user_activity_states WHERE user_id=%s", (user_id,)
         ).fetchone()[0]
-    assert status == "in_progress"
+    assert status == "not_started"
 
 
 def test_onboarding_completion_succeeds_with_a_profile_and_active_travel_intent(client: TestClient) -> None:

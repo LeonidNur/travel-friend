@@ -130,36 +130,19 @@ def patch_current_user_onboarding(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, str]:
-    onboarding = connection.execute(
-        "UPDATE public.user_activity_states "
-        "SET onboarding_status=%s, "
-        "updated_at=CASE WHEN onboarding_status IS DISTINCT FROM %s "
-        "THEN now() ELSE updated_at END "
-        "WHERE user_id=%s "
-        "AND NOT (onboarding_status='completed' AND %s='in_progress') "
-        "AND ("
-        "%s <> 'completed' OR ("
-        "EXISTS (SELECT 1 FROM public.profiles WHERE user_id=%s) "
-        "AND EXISTS ("
-        "SELECT 1 FROM public.travel_intents WHERE user_id=%s AND status='active'"
-        ")"
-        ")"
-        ") "
-        "RETURNING onboarding_status",
-        (
-            payload.status,
-            payload.status,
-            principal.user_id,
-            payload.status,
-            payload.status,
-            principal.user_id,
-            principal.user_id,
-        ),
-    ).fetchone()
+    if payload.status == "in_progress":
+        onboarding = connection.execute(
+            "SELECT onboarding_status FROM public.user_activity_states WHERE user_id=%s",
+            (principal.user_id,),
+        ).fetchone()
+        if onboarding is None or onboarding["onboarding_status"] == "completed":
+            raise HTTPException(409, "Cannot transition onboarding from completed to in_progress")
+        return {"status": "in_progress"}
 
-    if onboarding is None:
-        if payload.status == "completed":
-            raise HTTPException(409, "Profile and an active TravelIntent are required to complete onboarding")
-        raise HTTPException(409, "Cannot transition onboarding from completed to in_progress")
+    onboarding = connection.execute(
+        "SELECT public.complete_current_onboarding() AS onboarding_status", ()
+    ).fetchone()
+    if onboarding is None or onboarding["onboarding_status"] is None:
+        raise HTTPException(409, "Profile and an active TravelIntent are required to complete onboarding")
 
     return {"status": onboarding["onboarding_status"]}

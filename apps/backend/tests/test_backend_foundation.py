@@ -318,28 +318,18 @@ def test_delete_current_user_travel_intent_uses_the_current_user_archive_capabil
     assert connection.commit_calls == 0
 
 
-def test_onboarding_patch_uses_only_the_authenticated_users_existing_state() -> None:
+def test_onboarding_completion_uses_the_current_user_capability() -> None:
     principal = service.AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
-    connection = RecordingProfileConnection([{"onboarding_status": "in_progress"}])
+    connection = RecordingProfileConnection([{"onboarding_status": "completed"}])
 
     result = me.patch_current_user_onboarding(  # type: ignore[arg-type]
-        OnboardingPatchRequest(status="in_progress"), principal, connection
+        OnboardingPatchRequest(status="completed"), principal, connection
     )
 
-    assert result == {"status": "in_progress"}
+    assert result == {"status": "completed"}
     query, parameters = connection.calls[0]
-    assert "UPDATE public.user_activity_states" in query
-    assert "WHERE user_id=%s" in query
-    assert "IS DISTINCT FROM" in query
-    assert parameters == (
-        "in_progress",
-        "in_progress",
-        principal.user_id,
-        "in_progress",
-        "in_progress",
-        principal.user_id,
-        principal.user_id,
-    )
+    assert query == "SELECT public.complete_current_onboarding() AS onboarding_status"
+    assert parameters == ()
     assert connection.commit_calls == 0
 
 

@@ -20,9 +20,9 @@ EXPECTED_PRIVILEGES = {
     "profiles": {"select", "insert", "update"},
     "profile_photos": set(),
     "user_settings": set(),
-    "user_activity_states": {"select", "update"},
+    "user_activity_states": {"select"},
     "travel_intents": {"select", "insert", "update"},
-    "user_sessions": {"update"},
+    "user_sessions": {"select", "update"},
     "discover_interest_decisions": {"select", "insert", "update"},
     "matches": {"select", "insert", "update"},
     "chats": {"select", "insert", "update"},
@@ -82,8 +82,18 @@ def test_runtime_role_has_exactly_the_audited_effective_table_privileges(
                 privilege
                 for privilege in CRUD_PRIVILEGES
                 if owner_connection.execute(
-                    "SELECT has_table_privilege(%s, %s, %s)",
-                    (APP_RUNTIME_ROLE, f"public.{table_name}", privilege),
+                    "SELECT has_table_privilege(%s, %s, %s) "
+                    "OR CASE WHEN %s IN ('select', 'insert', 'update') "
+                    "THEN has_any_column_privilege(%s, %s, %s) ELSE false END",
+                    (
+                        APP_RUNTIME_ROLE,
+                        f"public.{table_name}",
+                        privilege,
+                        privilege,
+                        APP_RUNTIME_ROLE,
+                        f"public.{table_name}",
+                        privilege,
+                    ),
                 ).fetchone()[0]
             }
             assert actual_privileges == expected_privileges
