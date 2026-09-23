@@ -23,6 +23,7 @@ REQUIRED_FUNCTIONS = (
     "public.discover_target_is_eligible(uuid)",
     "public.chat_participant_profile_projection(uuid)",
     "public.trip_participant_profile_projection(uuid)",
+    "public.record_current_discover_decision(uuid,text)",
 )
 
 
@@ -110,7 +111,7 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         WHERE namespace.nspname = 'public'
           AND relation.relname = ANY(%s::text[])
         """,
-        (["profiles", "travel_intents", "user_activity_states", "user_sessions"],),
+        (["profiles", "travel_intents", "user_activity_states", "user_sessions", "discover_interest_decisions", "matches"],),
     ).fetchall()
     require(
         {name: (enabled, runtime_is_not_owner) for name, enabled, runtime_is_not_owner in rls_rows}
@@ -119,6 +120,8 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
             "travel_intents": (True, True),
             "user_activity_states": (True, True),
             "user_sessions": (True, True),
+            "discover_interest_decisions": (True, True),
+            "matches": (True, True),
         },
         "RLS must be enabled and app_runtime must not own protected runtime tables",
     )
@@ -153,7 +156,11 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
               '(user_id = current_authenticated_user_id())', NULL::text),
             ('user_sessions_update_own', 'user_sessions', 'w',
               '(user_id = current_authenticated_user_id())',
-              '(user_id = current_authenticated_user_id())')
+              '(user_id = current_authenticated_user_id())'),
+            ('discover_interest_decisions_select_own', 'discover_interest_decisions', 'r',
+              '(actor_user_id = current_authenticated_user_id())', NULL::text),
+            ('matches_select_participant', 'matches', 'r',
+              '((user_a_id = current_authenticated_user_id()) OR (user_b_id = current_authenticated_user_id()))', NULL::text)
         )
         SELECT expected.policy_name,
           policy.oid IS NOT NULL AS exists_for_runtime
@@ -189,6 +196,16 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         ],
         "user_sessions has an unexpected RLS policy surface",
     )
+    for table_name, expected_surface in (
+        ("discover_interest_decisions", [("discover_interest_decisions_select_own", "SELECT")]),
+        ("matches", [("matches_select_participant", "SELECT")]),
+    ):
+        surface = connection.execute(
+            "SELECT policyname, cmd FROM pg_policies WHERE schemaname='public' "
+            "AND tablename=%s ORDER BY policyname",
+            (table_name,),
+        ).fetchall()
+        require(surface == expected_surface, f"{table_name} has an unexpected RLS policy surface")
     activity_state_policy_surface = connection.execute(
         """
         SELECT policyname, cmd
@@ -233,6 +250,8 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
             "SELECT EXISTS (SELECT 1 FROM public.user_sessions)",
         )
         require(isinstance(permitted_session_read, bool), "runtime session read did not execute")
+        require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.discover_interest_decisions)") is False, "decision RLS exposed an unrelated row")
+        require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.matches)") is False, "match RLS exposed an unrelated row")
 
     with connection.transaction():
         require(
@@ -255,6 +274,8 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
             scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.user_sessions)") is False,
             "user_sessions RLS did not fail closed without authenticated context",
         )
+        require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.discover_interest_decisions)") is False, "decisions RLS did not fail closed without authenticated context")
+        require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.matches)") is False, "matches RLS did not fail closed without authenticated context")
 
 
 def check_delete_is_denied_and_rolled_back(connection: psycopg.Connection) -> None:

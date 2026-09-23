@@ -42,6 +42,7 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "has_function_privilege",
         "current_authenticated_user_id",
         "complete_current_onboarding",
+        "record_current_discover_decision",
         "set_config('app.user_id', %s, true)",
         "public.profiles",
         "public.travel_intents",
@@ -62,6 +63,8 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "user_activity_states_select_own",
         "user_sessions_select_own",
         "user_sessions_update_own",
+        "discover_interest_decisions_select_own",
+        "matches_select_participant",
     ):
         assert policy_name in script
 

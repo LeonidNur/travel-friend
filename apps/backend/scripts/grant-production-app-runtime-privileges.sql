@@ -57,14 +57,8 @@ GRANT UPDATE (revoked_at) ON TABLE public.user_sessions TO app_runtime;
 
 GRANT SELECT (actor_user_id, target_user_id, decision)
   ON TABLE public.discover_interest_decisions TO app_runtime;
-GRANT INSERT (actor_user_id, target_user_id, decision)
-  ON TABLE public.discover_interest_decisions TO app_runtime;
--- SELECT ... FOR UPDATE needs UPDATE on one column; id is never updated by backend.
-GRANT UPDATE (id) ON TABLE public.discover_interest_decisions TO app_runtime;
 
 GRANT SELECT (id, user_a_id, user_b_id, chat_id) ON TABLE public.matches TO app_runtime;
-GRANT INSERT (user_a_id, user_b_id) ON TABLE public.matches TO app_runtime;
-GRANT UPDATE (chat_id) ON TABLE public.matches TO app_runtime;
 
 GRANT SELECT (id, type, last_sequence, created_at) ON TABLE public.chats TO app_runtime;
 GRANT INSERT (type) ON TABLE public.chats TO app_runtime;
@@ -110,6 +104,7 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.discover_candidate_profile_projection()
 REVOKE ALL PRIVILEGES ON FUNCTION public.discover_target_is_eligible(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.chat_participant_profile_projection(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.trip_participant_profile_projection(uuid) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.record_current_discover_decision(uuid, text) FROM app_runtime;
 
 GRANT EXECUTE ON FUNCTION public.current_authenticated_user_id() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
@@ -123,3 +118,4 @@ GRANT EXECUTE ON FUNCTION public.discover_candidate_profile_projection() TO app_
 GRANT EXECUTE ON FUNCTION public.discover_target_is_eligible(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.chat_participant_profile_projection(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.trip_participant_profile_projection(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.record_current_discover_decision(uuid, text) TO app_runtime;
