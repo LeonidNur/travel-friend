@@ -33,8 +33,8 @@ GRANT EXECUTE ON FUNCTION public.current_authenticated_user_id() TO app_runtime;
 -- Bearer resolution uses the function below.
 GRANT UPDATE ON TABLE public.user_sessions TO app_runtime;
 GRANT SELECT (id) ON TABLE public.user_sessions TO app_runtime;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.discover_interest_decisions TO app_runtime;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.matches TO app_runtime;
+GRANT SELECT (actor_user_id, target_user_id, decision) ON TABLE public.discover_interest_decisions TO app_runtime;
+GRANT SELECT (id, user_a_id, user_b_id, chat_id) ON TABLE public.matches TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.chats TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.chat_participants TO app_runtime;
 GRANT SELECT, INSERT ON TABLE public.messages TO app_runtime;
@@ -52,6 +52,7 @@ GRANT EXECUTE ON FUNCTION public.discover_candidate_profile_projection() TO app_
 GRANT EXECUTE ON FUNCTION public.discover_target_is_eligible(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.chat_participant_profile_projection(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.trip_participant_profile_projection(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.record_current_discover_decision(uuid, text) TO app_runtime;
 
 -- Future objects created by this migration/test owner receive no runtime grant.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM app_runtime;

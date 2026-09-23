@@ -25,8 +25,8 @@ WITH application_tables (table_name) AS (
     ('user_activity_states', 'SELECT'),
     ('travel_intents', 'SELECT'), ('travel_intents', 'INSERT'), ('travel_intents', 'UPDATE'),
     ('user_sessions', 'SELECT'), ('user_sessions', 'UPDATE'),
-    ('discover_interest_decisions', 'SELECT'), ('discover_interest_decisions', 'INSERT'), ('discover_interest_decisions', 'UPDATE'),
-    ('matches', 'SELECT'), ('matches', 'INSERT'), ('matches', 'UPDATE'),
+    ('discover_interest_decisions', 'SELECT'),
+    ('matches', 'SELECT'),
     ('chats', 'SELECT'), ('chats', 'INSERT'), ('chats', 'UPDATE'),
     ('chat_participants', 'SELECT'), ('chat_participants', 'INSERT'), ('chat_participants', 'UPDATE'),
     ('messages', 'SELECT'), ('messages', 'INSERT'),
@@ -94,11 +94,7 @@ WITH application_tables (table_name) AS (
     ('user_sessions', 'SELECT', ARRAY['id']),
     ('user_sessions', 'UPDATE', ARRAY['revoked_at']),
     ('discover_interest_decisions', 'SELECT', ARRAY['actor_user_id', 'target_user_id', 'decision']),
-    ('discover_interest_decisions', 'INSERT', ARRAY['actor_user_id', 'target_user_id', 'decision']),
-    ('discover_interest_decisions', 'UPDATE', ARRAY['id']),
     ('matches', 'SELECT', ARRAY['id', 'user_a_id', 'user_b_id', 'chat_id']),
-    ('matches', 'INSERT', ARRAY['user_a_id', 'user_b_id']),
-    ('matches', 'UPDATE', ARRAY['chat_id']),
     ('chats', 'SELECT', ARRAY['id', 'type', 'last_sequence', 'created_at']),
     ('chats', 'INSERT', ARRAY['type']),
     ('chats', 'UPDATE', ARRAY['last_sequence', 'updated_at']),
@@ -178,6 +174,7 @@ WITH capability_signatures (function_signature) AS (
     ('public.discover_target_is_eligible(uuid)'),
     ('public.chat_participant_profile_projection(uuid)'),
     ('public.trip_participant_profile_projection(uuid)')
+    ,('public.record_current_discover_decision(uuid,text)')
 ), required_capabilities AS (
   SELECT function_signature, to_regprocedure(function_signature) AS function_oid
   FROM capability_signatures
@@ -204,6 +201,7 @@ WITH capability_signatures (function_signature) AS (
     ('public.discover_target_is_eligible(uuid)'),
     ('public.chat_participant_profile_projection(uuid)'),
     ('public.trip_participant_profile_projection(uuid)')
+    ,('public.record_current_discover_decision(uuid,text)')
 ), required_capabilities AS (
   SELECT function_signature, to_regprocedure(function_signature) AS function_oid
   FROM capability_signatures
