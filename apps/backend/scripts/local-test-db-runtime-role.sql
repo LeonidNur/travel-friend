@@ -22,7 +22,6 @@ REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public FROM app_runtime;
 
 GRANT USAGE ON SCHEMA public TO app_runtime;
 
-GRANT SELECT ON TABLE public.users TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.profiles TO app_runtime;
 GRANT SELECT (user_id, onboarding_status) ON TABLE public.user_activity_states TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.travel_intents TO app_runtime;

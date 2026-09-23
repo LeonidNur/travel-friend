@@ -15,7 +15,7 @@ from integration_database import (
 
 
 EXPECTED_PRIVILEGES = {
-    "users": {"select"},
+    "users": set(),
     "telegram_identities": set(),
     "profiles": {"select", "insert", "update"},
     "profile_photos": set(),

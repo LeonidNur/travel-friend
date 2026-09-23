@@ -66,7 +66,11 @@ def test_production_grants_cover_the_audited_runtime_matrix() -> None:
     script = GRANTS_SCRIPT_PATH.read_text()
 
     for table_name in (
+        "users",
+        "telegram_identities",
         "profiles",
+        "profile_photos",
+        "user_settings",
         "user_activity_states",
         "travel_intents",
         "user_sessions",
@@ -75,6 +79,7 @@ def test_production_grants_cover_the_audited_runtime_matrix() -> None:
         "chats",
         "chat_participants",
         "messages",
+        "chat_summaries",
         "trips",
         "trip_participants",
         "trip_stops",

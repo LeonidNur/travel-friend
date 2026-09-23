@@ -12,6 +12,32 @@ import psycopg
 
 
 RUNTIME_ROLE = "app_runtime"
+INTERNAL_DORMANT_TABLES = (
+    "users",
+    "telegram_identities",
+    "user_settings",
+    "profile_photos",
+    "chat_summaries",
+)
+APPLICATION_TABLES = (
+    "users",
+    "telegram_identities",
+    "profiles",
+    "profile_photos",
+    "user_settings",
+    "user_activity_states",
+    "travel_intents",
+    "user_sessions",
+    "discover_interest_decisions",
+    "matches",
+    "chats",
+    "chat_participants",
+    "messages",
+    "chat_summaries",
+    "trips",
+    "trip_participants",
+    "trip_stops",
+)
 REQUIRED_FUNCTIONS = (
     "public.current_authenticated_user_id()",
     "public.resolve_bearer_session(text)",
@@ -252,6 +278,38 @@ def check_runtime_table_privileges(connection: psycopg.Connection) -> None:
     require(not mismatch, f"runtime column privilege surface is not exact: {', '.join(mismatch)}")
 
 
+def check_internal_dormant_tables_are_deny_by_default(connection: psycopg.Connection) -> None:
+    """Reject effective direct ACLs and policies on internal MVP tables."""
+    acl_rows = connection.execute(
+        """
+        WITH operations(privilege_type, supports_column_privileges) AS (
+          VALUES
+            ('SELECT', true), ('INSERT', true), ('UPDATE', true), ('DELETE', false),
+            ('TRUNCATE', false), ('REFERENCES', true), ('TRIGGER', false)
+        )
+        SELECT table_name, privilege_type,
+          has_table_privilege(current_user, 'public.' || quote_ident(table_name), privilege_type)
+          OR CASE WHEN supports_column_privileges THEN
+            has_any_column_privilege(current_user, 'public.' || quote_ident(table_name), privilege_type)
+          ELSE false END AS granted
+        FROM unnest(%s::text[]) AS tables(table_name)
+        CROSS JOIN operations
+        ORDER BY table_name, privilege_type
+        """,
+        (list(INTERNAL_DORMANT_TABLES),),
+    ).fetchall()
+    granted = [f"{table_name} {operation}" for table_name, operation, allowed in acl_rows if allowed]
+    require(not granted, f"internal tables have direct runtime privileges: {', '.join(granted)}")
+
+    policy_rows = connection.execute(
+        "SELECT tablename, policyname FROM pg_policies "
+        "WHERE schemaname='public' AND tablename = ANY(%s::text[]) "
+        "ORDER BY tablename, policyname",
+        (list(INTERNAL_DORMANT_TABLES),),
+    ).fetchall()
+    require(not policy_rows, "internal tables must not have RLS policies")
+
+
 def check_rls_catalog(connection: psycopg.Connection) -> None:
     rls_rows = connection.execute(
         """
@@ -265,12 +323,16 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         WHERE namespace.nspname = 'public'
           AND relation.relname = ANY(%s::text[])
         """,
-        (["profiles", "travel_intents", "user_activity_states", "user_sessions", "discover_interest_decisions", "matches", "chats", "chat_participants", "messages", "trips", "trip_participants", "trip_stops"],),
+        (list(APPLICATION_TABLES),),
     ).fetchall()
     require(
         {name: (enabled, runtime_is_not_owner) for name, enabled, runtime_is_not_owner in rls_rows}
         == {
+            "users": (True, True),
+            "telegram_identities": (True, True),
             "profiles": (True, True),
+            "profile_photos": (True, True),
+            "user_settings": (True, True),
             "travel_intents": (True, True),
             "user_activity_states": (True, True),
             "user_sessions": (True, True),
@@ -279,6 +341,7 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
             "chats": (True, True),
             "chat_participants": (True, True),
             "messages": (True, True),
+            "chat_summaries": (True, True),
             "trips": (True, True),
             "trip_participants": (True, True),
             "trip_stops": (True, True),
@@ -461,6 +524,18 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
         require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.trip_participants)") is False, "trip participants RLS did not fail closed without authenticated context")
         require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.trip_stops)") is False, "trip stops RLS did not fail closed without authenticated context")
 
+    for context in (None, "00000000-0000-0000-0000-000000000001"):
+        with connection.transaction():
+            if context is not None:
+                connection.execute("SELECT set_config('app.user_id', %s, true)", (context,))
+            for table_name in INTERNAL_DORMANT_TABLES:
+                try:
+                    with connection.transaction():
+                        connection.execute(f"SELECT * FROM public.{table_name} WHERE false")
+                except psycopg.errors.InsufficientPrivilege:
+                    continue
+                raise GateFailure(f"internal table unexpectedly allows direct read: {table_name}")
+
 
 def check_mutations_are_denied_and_rolled_back(connection: psycopg.Connection) -> None:
     for statement in (
@@ -492,6 +567,7 @@ def run_gate(database_url: str) -> None:
         check_required_functions(connection)
         check_capability_metadata(connection)
         check_runtime_table_privileges(connection)
+        check_internal_dormant_tables_are_deny_by_default(connection)
         check_rls_catalog(connection)
         check_transaction_context_and_rls(connection)
         check_mutations_are_denied_and_rolled_back(connection)

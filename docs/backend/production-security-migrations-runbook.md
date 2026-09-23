@@ -1,7 +1,7 @@
 # Production runbook: runtime RLS and grants
 
 Этот runbook применяется к hosted Supabase production для текущего security
-контракта migrations, включая `20260901270000_trip_rls.sql`. Источник истины
+контракта migrations, включая `20260901280000_internal_dormant_tables_rls.sql`. Источник истины
 для состава и порядка — `supabase/migrations/`, а не захардкоженный список
 версий в этом документе. Не использовать `migration repair`, ручные записи в
 `supabase_migrations.schema_migrations`, `db reset`, `--include-seed`,
@@ -30,7 +30,7 @@ supabase db push --db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN" --dry-run
 ```
 
 Сверьте dry-run с checkout: он должен включать ожидаемый непрерывный pending
-suffix и `20260901270000_trip_rls.sql`, если Trip RLS ещё не зарегистрирован.
+suffix, включая `20260901280000_internal_dormant_tables_rls.sql`, если final internal/dormant RLS slice ещё не зарегистрирован.
 При history drift остановитесь: не пытайтесь исправить его флагами или ручным
 SQL. После проверки выполните standard apply:
 
@@ -44,10 +44,11 @@ psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PRODUCTION_MIGRATOR_DSN" \
 
 `verify-production-app-runtime-privileges.sql` только читает каталог. Все
 столбцы `is_*` должны быть true, а unexpected effective function privileges —
-отсутствовать. Он проверяет exact runtime table/column grants и обе Trip
-capabilities.
+отсутствовать. Он проверяет exact runtime table/column grants, RLS/non-owner
+inventory всех 17 application tables, пустой policy surface internal/dormant
+tables и обе Trip capabilities.
 
-## Trip RLS production contract
+## Final RLS production contract
 
 После migrations и grants должны выполняться все условия:
 
@@ -64,6 +65,9 @@ capabilities.
 - Chat policies состоят из обычных SELECT surfaces: temporary
   `chats_lock_active_participant` и `chat_participants_lock_active_chat`
   отсутствуют, как и UPDATE privilege на `chats` и `chat_participants`.
+- `users`, `telegram_identities`, `user_settings`, `profile_photos` и
+  `chat_summaries` имеют enabled RLS, не owned `app_runtime`, не имеют policies
+  и не имеют effective direct table/column privileges для `app_runtime`.
 
 ## Deployment gate
 
@@ -77,8 +81,9 @@ uv run --python 3.12 scripts/production-runtime-deployment-gate.py
 ```
 
 Gate fail closed проверяет runtime identity, exact grants, capability metadata,
-RLS enabled/non-owner, exact policies, fail-closed reads без `app.user_id` и
-отсутствие direct mutations (включая все Trip tables). Он не создаёт данных:
+RLS enabled/non-owner и exact policy inventory всех 17 tables, включая пустую
+policy/ACL surface пяти internal/dormant tables, fail-closed reads без
+`app.user_id` и отсутствие direct mutations (включая все Trip tables). Он не создаёт данных:
 negative probes используют `WHERE false` и rollback. Только `passed` разрешает
 следующий ручной шаг смены Render DSN и deployment.
 
