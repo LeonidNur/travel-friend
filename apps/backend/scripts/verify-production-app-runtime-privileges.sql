@@ -27,9 +27,9 @@ WITH application_tables (table_name) AS (
     ('user_sessions', 'SELECT'), ('user_sessions', 'UPDATE'),
     ('discover_interest_decisions', 'SELECT'),
     ('matches', 'SELECT'),
-    ('chats', 'SELECT'), ('chats', 'INSERT'), ('chats', 'UPDATE'),
-    ('chat_participants', 'SELECT'), ('chat_participants', 'INSERT'), ('chat_participants', 'UPDATE'),
-    ('messages', 'SELECT'), ('messages', 'INSERT'),
+    ('chats', 'SELECT'), ('chats', 'UPDATE'),
+    ('chat_participants', 'SELECT'), ('chat_participants', 'UPDATE'),
+    ('messages', 'SELECT'),
     ('trips', 'SELECT'), ('trips', 'INSERT'),
     ('trip_participants', 'SELECT'), ('trip_participants', 'INSERT'),
     ('trip_stops', 'SELECT')
@@ -95,14 +95,14 @@ WITH application_tables (table_name) AS (
     ('user_sessions', 'UPDATE', ARRAY['revoked_at']),
     ('discover_interest_decisions', 'SELECT', ARRAY['actor_user_id', 'target_user_id', 'decision']),
     ('matches', 'SELECT', ARRAY['id', 'user_a_id', 'user_b_id', 'chat_id']),
-    ('chats', 'SELECT', ARRAY['id', 'type', 'last_sequence', 'created_at']),
-    ('chats', 'INSERT', ARRAY['type']),
-    ('chats', 'UPDATE', ARRAY['last_sequence', 'updated_at']),
+    ('chats', 'SELECT', ARRAY['id', 'type', 'created_at']),
+    -- Temporary lock-only Trip compatibility bridge; the Chat RLS policy
+    -- allows row locking but its WITH CHECK rejects an actual UPDATE.
+    ('chats', 'UPDATE', ARRAY['id']),
     ('chat_participants', 'SELECT', ARRAY['chat_id', 'user_id', 'left_at']),
-    ('chat_participants', 'INSERT', ARRAY['chat_id', 'user_id']),
+    -- Temporary lock-only Trip compatibility bridge; remove with Trip RLS.
     ('chat_participants', 'UPDATE', ARRAY['id']),
     ('messages', 'SELECT', ARRAY['id', 'chat_id', 'sequence_number', 'type', 'sender_user_id', 'recipient_user_id', 'content_text', 'created_at']),
-    ('messages', 'INSERT', ARRAY['chat_id', 'sender_user_id', 'recipient_user_id', 'sequence_number', 'type', 'content_text']),
     ('trips', 'SELECT', ARRAY['id', 'chat_id', 'created_by_user_id', 'status', 'membership_version', 'state_version', 'destination_version', 'dates_version', 'budget_version', 'transport_version', 'destination_status', 'dates_status', 'budget_status', 'transport_status', 'date_from', 'date_to', 'budget_min', 'budget_max', 'budget_currency', 'budget_scope', 'started_at', 'completed_at', 'cancelled_at', 'created_at', 'updated_at']),
     ('trips', 'INSERT', ARRAY['chat_id', 'created_by_user_id', 'status']),
     ('trip_participants', 'SELECT', ARRAY['trip_id', 'user_id', 'left_at']),
@@ -175,6 +175,9 @@ WITH capability_signatures (function_signature) AS (
     ('public.chat_participant_profile_projection(uuid)'),
     ('public.trip_participant_profile_projection(uuid)')
     ,('public.record_current_discover_decision(uuid,text)')
+    ,('public.is_current_active_chat_participant(uuid)')
+    ,('public.create_current_group_chat(uuid[])')
+    ,('public.send_current_chat_message(uuid,text)')
 ), required_capabilities AS (
   SELECT function_signature, to_regprocedure(function_signature) AS function_oid
   FROM capability_signatures
@@ -202,6 +205,9 @@ WITH capability_signatures (function_signature) AS (
     ('public.chat_participant_profile_projection(uuid)'),
     ('public.trip_participant_profile_projection(uuid)')
     ,('public.record_current_discover_decision(uuid,text)')
+    ,('public.is_current_active_chat_participant(uuid)')
+    ,('public.create_current_group_chat(uuid[])')
+    ,('public.send_current_chat_message(uuid,text)')
 ), required_capabilities AS (
   SELECT function_signature, to_regprocedure(function_signature) AS function_oid
   FROM capability_signatures

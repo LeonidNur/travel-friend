@@ -27,49 +27,22 @@ def create_group_chat(
     principal: AuthenticatedPrincipal,
     companion_user_ids: list[UUID],
 ) -> dict[str, object]:
-    """Create one Group Chat from the initiator's matched direct Chat companions."""
-    if principal.user_id in companion_user_ids:
-        raise HTTPException(422, "Group members cannot include the initiator")
+    """Create one Group Chat through the database's scoped capability."""
+    del principal
+    try:
+        with connection.transaction():
+            chat = connection.execute(
+                "SELECT * FROM public.create_current_group_chat(%s::uuid[])",
+                (companion_user_ids,),
+            ).fetchone()
+    except psycopg.Error as error:
+        if error.sqlstate == "22023":
+            raise HTTPException(422, error.diag.message_primary) from error
+        raise
 
-    participant_user_ids = [principal.user_id, *companion_user_ids]
-
-    with connection.transaction():
-        chat = connection.execute(
-            "INSERT INTO public.chats (type) VALUES ('group') "
-            "RETURNING id AS chat_id, type, created_at"
-        ).fetchone()
-        if chat is None:
-            raise RuntimeError("Group Chat was not created")
-
-        eligible_rows = connection.execute(
-            "SELECT DISTINCT companion.user_id "
-            "FROM public.chats direct_chat "
-            "JOIN public.chat_participants initiator "
-            "ON initiator.chat_id=direct_chat.id AND initiator.user_id=%s AND initiator.left_at IS NULL "
-            "JOIN public.chat_participants companion "
-            "ON companion.chat_id=direct_chat.id AND companion.user_id<>initiator.user_id "
-            "AND companion.left_at IS NULL "
-            "JOIN public.matches matched_flow ON matched_flow.chat_id=direct_chat.id "
-            "WHERE direct_chat.type='direct' AND companion.user_id=ANY(%s::uuid[])",
-            (principal.user_id, companion_user_ids),
-        ).fetchall()
-        if {row["user_id"] for row in eligible_rows} != set(companion_user_ids):
-            raise HTTPException(
-                422, "Every group member must have a matched direct Chat with the initiator"
-            )
-
-        connection.execute(
-            "INSERT INTO public.chat_participants (chat_id, user_id) "
-            "SELECT %s, participant.user_id FROM unnest(%s::uuid[]) AS participant(user_id)",
-            (chat["chat_id"], participant_user_ids),
-        )
-
-    return {
-        "chat_id": chat["chat_id"],
-        "type": chat["type"],
-        "participant_user_ids": participant_user_ids,
-        "created_at": chat["created_at"],
-    }
+    if chat is None:
+        raise RuntimeError("Group Chat capability returned no result")
+    return dict(chat)
 
 
 @router.post("/groups", response_model=GroupChatCreateResponse, status_code=status.HTTP_201_CREATED)
@@ -227,24 +200,17 @@ def create_chat_message(
     connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
     with connection.transaction():
-        if find_authorized_message_chat(connection, chat_id, principal.user_id, lock=True) is None:
-            raise HTTPException(404, "Chat not found")
+        try:
+            message = connection.execute(
+                "SELECT * FROM public.send_current_chat_message(%s, %s)",
+                (chat_id, payload.content_text),
+            ).fetchone()
+        except psycopg.Error as error:
+            if error.sqlstate == "P0002":
+                raise HTTPException(404, "Chat not found") from error
+            raise
 
-        chat = connection.execute(
-            "UPDATE public.chats SET last_sequence=last_sequence+1, updated_at=now() "
-            "WHERE id=%s RETURNING last_sequence",
-            (chat_id,),
-        ).fetchone()
-        if chat is None:
-            raise RuntimeError("Locked Chat disappeared while creating a message")
-
-        message = connection.execute(
-            "INSERT INTO public.messages "
-            "(chat_id, sender_user_id, recipient_user_id, sequence_number, type, content_text) "
-            "VALUES (%s, %s, NULL, %s, 'user', %s) "
-            "RETURNING id AS message_id, chat_id, sequence_number, type, sender_user_id, "
-            "content_text, created_at",
-            (chat_id, principal.user_id, chat["last_sequence"], payload.content_text),
-        ).fetchone()
+    if message is None:
+        raise RuntimeError("Chat message capability returned no result")
 
     return message_response(message)

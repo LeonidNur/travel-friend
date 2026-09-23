@@ -1,10 +1,10 @@
 -- Production grants for the already-provisioned app_runtime role.
 --
--- Run after migrations through 20260901200000 as the approved Supabase
+-- Run after the approved Chat RLS migration as the approved Supabase
 -- provisioning identity. This script intentionally does not create or alter a
 -- role, modify RLS/policies/ownership/default privileges, or grant to PUBLIC.
--- It only removes PostgreSQL's default PUBLIC EXECUTE from the two internal
--- trigger functions so app_runtime's effective capability surface is exact.
+-- Function PUBLIC hardening belongs to the migrations; this script resets
+-- app_runtime's direct table/function rights to the approved exact surface.
 -- Each REVOKE/GRANT is idempotent and is limited to the current application
 -- object catalog.
 \set ON_ERROR_STOP on
@@ -60,19 +60,21 @@ GRANT SELECT (actor_user_id, target_user_id, decision)
 
 GRANT SELECT (id, user_a_id, user_b_id, chat_id) ON TABLE public.matches TO app_runtime;
 
-GRANT SELECT (id, type, last_sequence, created_at) ON TABLE public.chats TO app_runtime;
-GRANT INSERT (type) ON TABLE public.chats TO app_runtime;
-GRANT UPDATE (last_sequence, updated_at) ON TABLE public.chats TO app_runtime;
+GRANT SELECT (id, type, created_at) ON TABLE public.chats TO app_runtime;
+-- Temporary Trip compatibility bridge: the current Trip creation flow uses
+-- SELECT ... FOR UPDATE on its Chat. The paired RLS policy permits row locking
+-- for an active participant but WITH CHECK (false) prohibits real writes.
+-- Remove this grant with the dedicated Trip RLS slice.
+GRANT UPDATE (id) ON TABLE public.chats TO app_runtime;
 
 GRANT SELECT (chat_id, user_id, left_at) ON TABLE public.chat_participants TO app_runtime;
-GRANT INSERT (chat_id, user_id) ON TABLE public.chat_participants TO app_runtime;
--- Trip creation locks current participants with SELECT ... FOR SHARE.
+-- Temporary Trip compatibility bridge: SELECT ... FOR SHARE requires UPDATE
+-- privilege. The paired RLS policy remains lock-only and rejects mutations.
+-- Remove this grant with the dedicated Trip RLS slice.
 GRANT UPDATE (id) ON TABLE public.chat_participants TO app_runtime;
 
 GRANT SELECT (id, chat_id, sequence_number, type, sender_user_id,
   recipient_user_id, content_text, created_at) ON TABLE public.messages TO app_runtime;
-GRANT INSERT (chat_id, sender_user_id, recipient_user_id, sequence_number, type, content_text)
-  ON TABLE public.messages TO app_runtime;
 
 GRANT SELECT (id, chat_id, created_by_user_id, status, membership_version,
   state_version, destination_version, dates_version, budget_version,
@@ -105,6 +107,9 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.discover_target_is_eligible(uuid) FROM 
 REVOKE ALL PRIVILEGES ON FUNCTION public.chat_participant_profile_projection(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.trip_participant_profile_projection(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.record_current_discover_decision(uuid, text) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.is_current_active_chat_participant(uuid) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.create_current_group_chat(uuid[]) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.send_current_chat_message(uuid, text) FROM app_runtime;
 
 GRANT EXECUTE ON FUNCTION public.current_authenticated_user_id() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
@@ -119,3 +124,6 @@ GRANT EXECUTE ON FUNCTION public.discover_target_is_eligible(uuid) TO app_runtim
 GRANT EXECUTE ON FUNCTION public.chat_participant_profile_projection(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.trip_participant_profile_projection(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.record_current_discover_decision(uuid, text) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.is_current_active_chat_participant(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.create_current_group_chat(uuid[]) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.send_current_chat_message(uuid, text) TO app_runtime;
