@@ -1,43 +1,126 @@
 # Production runbook: runtime RLS and grants
 
-Этот runbook применяется к hosted Supabase production для текущего security
-контракта migrations, включая `20260901280000_internal_dormant_tables_rls.sql`. Источник истины
-для состава и порядка — `supabase/migrations/`, а не захардкоженный список
-версий в этом документе. Не использовать `migration repair`, ручные записи в
+Этот runbook описывает единственный безопасный production cutover security
+контракта: backend `988aeb0` →
+`b25e08dce158b7fe7ea6d17b40d96c3e893330fa` и migrations
+`20260901230000`–`20260901280000`. Источник истины для миграций и их порядка —
+`supabase/migrations/`; не использовать `migration repair`, ручные записи в
 `supabase_migrations.schema_migrations`, `db reset`, `--include-seed`,
 `--include-roles` или `--include-all`.
 
-## Границы
+## Preconditions
 
-Оператор использует три разные учётные записи:
+До начала оператор подтверждает все следующие факты:
 
-- privileged `postgres` DSN только для `supabase db push`, grants и verifier;
-- реальный Session Pooler DSN `app_runtime` только для deployment gate;
-- Render `DATABASE_URL` меняется вручную только после успешного gate.
+- production backend сейчас находится на `988aeb0`;
+- целевой backend — exact commit
+  `b25e08dce158b7fe7ea6d17b40d96c3e893330fa`;
+- production DB применена ровно до `20260901220000`;
+- pending suffix — ровно `20260901230000`–`20260901280000`, без пропусков и
+  дополнительных migration versions;
+- Render Auto-Deploy выключен;
+- текущий Render `DATABASE_URL` уже является Session Pooler DSN роли
+  `app_runtime`;
+- в ходе cutover `DATABASE_URL` не меняется и не возвращается на `postgres`.
+
+Оператор также заранее определяет и подтверждает способ изоляции traffic.
+В репозитории не документированы production Render maintenance feature или CLI
+команда, поэтому этот runbook не изобретает их: конкретный безопасный механизм
+остаётся operator prerequisite.
+
+Используются две разные учётные записи:
+
+- privileged `postgres` DSN — только для migrations, final grants и grants
+  verifier;
+- реальный Session Pooler DSN `app_runtime` — только для runtime deployment
+  gate.
 
 Не передавайте DSN, пароль или service-role key в repository, shell history или
-ticket. `db push`, grants и verification не деплоят backend и не меняют Render.
+ticket. Эти операции не деплоят backend и не изменяют Render configuration.
 
-## Применение
+## Почему требуется maintenance boundary
 
-В trusted terminal временно экспортируйте privileged DSN и сначала проверьте
-список pending migrations:
+Migration `20260901230000` additive, но начиная с `20260901240000` новый DB
+контракт последовательно ломает write paths старого backend `988aeb0`.
+Напротив, `b25e08d` нельзя запускать до появления требуемых capabilities,
+политик и grants. Поэтому до применения suffix `230000`–`280000` весь traffic
+старого backend должен быть остановлен или изолирован. Traffic нельзя
+восстанавливать до успешного health check нового backend.
+
+## Cutover
+
+### 1. Preflight и target commit
+
+В checkout, из которого будет выполняться cutover, проверьте exact target
+commit; вывод `rev-parse` должен совпасть с SHA ниже:
+
+```zsh
+TARGET_BACKEND_SHA='b25e08dce158b7fe7ea6d17b40d96c3e893330fa'
+git cat-file -e "${TARGET_BACKEND_SHA}^{commit}"
+git rev-parse --verify "${TARGET_BACKEND_SHA}^{commit}"
+git show -s --format='%H%n%s' "$TARGET_BACKEND_SHA"
+```
+
+Подтвердите все preconditions, включая current backend `988aeb0`, DB history
+through `20260901220000`, выключенный Auto-Deploy и неизменность уже
+`app_runtime` Session Pooler `DATABASE_URL`.
+
+В trusted terminal запросите privileged DSN без echo; он используется только
+в следующих privileged командах:
 
 ```zsh
 read -rs 'SUPABASE_PRODUCTION_MIGRATOR_DSN?Privileged postgres DSN: '; echo
 export SUPABASE_PRODUCTION_MIGRATOR_DSN
+```
+
+### 2. Quiesce traffic
+
+Остановите или изолируйте traffic старого `988aeb0` выбранным и заранее
+подтверждённым операторским механизмом. До `db push` оператор **явно
+подтверждает**, что traffic quiesced. Не меняйте Render `DATABASE_URL`.
+
+### 3. Privileged dry-run и сверка suffix
+
+```zsh
 supabase db push --db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN" --dry-run
 ```
 
-Сверьте dry-run с checkout: он должен включать ожидаемый непрерывный pending
-suffix, включая `20260901280000_internal_dormant_tables_rls.sql`, если final internal/dormant RLS slice ещё не зарегистрирован.
-При history drift остановитесь: не пытайтесь исправить его флагами или ручным
-SQL. После проверки выполните standard apply:
+Dry-run должен показывать только непрерывный suffix:
+
+```text
+20260901230000
+20260901240000
+20260901250000
+20260901260000
+20260901270000
+20260901280000
+```
+
+При любом history drift, пропуске или дополнительной version остановитесь: не
+исправляйте состояние флагами или ручным SQL.
+
+### STOP: разрешение на необратимую фазу
+
+Непосредственно перед actual `db push` оператор обязан явно подтвердить:
+
+- traffic quiesced;
+- Render Auto-Deploy OFF;
+- current production backend — `988aeb0`, а DB history — through
+  `20260901220000`;
+- dry-run показывает exact suffix `20260901230000`–`20260901280000`;
+- target commit `b25e08dce158b7fe7ea6d17b40d96c3e893330fa` существует и
+  проверен выше.
+
+Если хотя бы один пункт не подтверждён, **не выполняйте `db push`**.
+
+### 4. Apply DB contract, grants и checks
 
 ```zsh
 supabase db push --db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN"
+
 psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PRODUCTION_MIGRATOR_DSN" \
   -f apps/backend/scripts/grant-production-app-runtime-privileges.sql
+
 psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PRODUCTION_MIGRATOR_DSN" \
   -f apps/backend/scripts/verify-production-app-runtime-privileges.sql
 ```
@@ -47,6 +130,41 @@ psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PRODUCTION_MIGRATOR_DSN" \
 отсутствовать. Он проверяет exact runtime table/column grants, RLS/non-owner
 inventory всех 17 application tables, пустой policy surface internal/dormant
 tables и обе Trip capabilities.
+
+Затем запросите runtime DSN отдельно, без echo, и запустите gate только с
+Session Pooler DSN `app_runtime`:
+
+```zsh
+read -rs 'PRODUCTION_RUNTIME_DATABASE_URL?app_runtime Session Pooler DSN: '; echo
+export PRODUCTION_RUNTIME_DATABASE_URL
+(
+  cd apps/backend
+  uv run --python 3.12 scripts/production-runtime-deployment-gate.py
+)
+```
+
+Gate fail closed проверяет runtime identity, exact grants, capability metadata,
+RLS enabled/non-owner и exact policy inventory всех 17 tables, включая пустую
+policy/ACL surface пяти internal/dormant tables, fail-closed reads без
+`app.user_id` и отсутствие direct mutations (включая все Trip tables). Он не
+создаёт данных: negative probes используют `WHERE false` и rollback.
+
+### 5. Deploy, health и traffic restore
+
+Только после успешных verifier и runtime gate вручную deploy exact SHA
+`b25e08dce158b7fe7ea6d17b40d96c3e893330fa` в Render. Auto-Deploy остаётся
+выключенным; `DATABASE_URL` не меняется.
+
+После deploy выполните health check по base URL, который предоставил оператор;
+runbook не задаёт production URL:
+
+```zsh
+PRODUCTION_BASE_URL='https://operator-provided-base-url'
+curl --fail --show-error --silent "$PRODUCTION_BASE_URL/health"
+```
+
+Восстановите traffic только при успешном health check. Затем выполните Telegram
+production E2E/smoke для критичного пользовательского flow.
 
 ## Final RLS production contract
 
@@ -64,32 +182,22 @@ tables и обе Trip capabilities.
   INSERT/UPDATE/DELETE на них;
 - Chat policies состоят из обычных SELECT surfaces: temporary
   `chats_lock_active_participant` и `chat_participants_lock_active_chat`
-  отсутствуют, как и UPDATE privilege на `chats` и `chat_participants`.
+  отсутствуют, как и UPDATE privilege на `chats` и `chat_participants`;
 - `users`, `telegram_identities`, `user_settings`, `profile_photos` и
   `chat_summaries` имеют enabled RLS, не owned `app_runtime`, не имеют policies
   и не имеют effective direct table/column privileges для `app_runtime`.
 
-## Deployment gate
+## Failure handling и rollback boundaries
 
-Только после успешного verifier запустите gate через фактический runtime DSN:
+Если `db push` fails, оставьте traffic изолированным и сначала изучите exact
+migration history. Не пытайтесь лечить его `migration repair`, ручными
+записями migration history, ad-hoc `DROP` migrations или ручным SQL.
 
-```zsh
-read -rs 'PRODUCTION_RUNTIME_DATABASE_URL?app_runtime Session Pooler DSN: '; echo
-export PRODUCTION_RUNTIME_DATABASE_URL
-cd apps/backend
-uv run --python 3.12 scripts/production-runtime-deployment-gate.py
-```
+После любой breaking migration, начиная с `20260901240000`, не возобновляйте
+`988aeb0` без отдельной compatibility validation. После final grants `988aeb0`
+явно **не является valid rollback target**. Failure после final DB contract
+требует forward-fix либо другого явно validated compatible backend.
 
-Gate fail closed проверяет runtime identity, exact grants, capability metadata,
-RLS enabled/non-owner и exact policy inventory всех 17 tables, включая пустую
-policy/ACL surface пяти internal/dormant tables, fail-closed reads без
-`app.user_id` и отсутствие direct mutations (включая все Trip tables). Он не создаёт данных:
-negative probes используют `WHERE false` и rollback. Только `passed` разрешает
-следующий ручной шаг смены Render DSN и deployment.
-
-## Failure handling
-
-При любом failed preflight, dry-run, migration, verifier или gate остановитесь.
-Сохраните output и прочитайте migration history; не выдавайте временных grants,
-не меняйте owners/RLS/policies вручную и не переключайте Render. Remediation или
-rollback требуют отдельного approved change.
+Никогда не восстанавливайте broad runtime grants, не меняйте owners/RLS/policies
+вручную и не переключайте Render `DATABASE_URL` на privileged `postgres`.
+Любая иная remediation или rollback требует отдельного approved change.
