@@ -2,7 +2,7 @@
 
 Наш рабочий процесс построен так, чтобы идея не превращалась сразу в код. Сначала она проходит человеческое обсуждение с ChatGPT: мы уточняем цель, границы задачи, риски и то, что вообще должно измениться в продукте. После этого появляется архитектурное решение, достаточное для текущего масштаба, но без лишней тяжеловесности.
 
-На текущем этапе реализован persisted backend-backed flow `Profile → Discover → Chats → Trips`, включая server-side Telegram Auth, persistence и базовые HTTP contracts. Следующая зона работы — его hardening и самостоятельные slices для Trip lifecycle/write, production backend/RLS, realtime и safety; AI/RAG остаётся отдельным отложенным направлением.
+На текущем этапе реализован persisted backend-backed flow `Profile → Discover → Chats → Trips`, включая server-side Telegram Auth, persistence и базовые HTTP contracts. Production RLS/runtime-role baseline и compatible backend deployment завершены. Следующая зона работы — active hardening, P1 TEAM E2E и самостоятельные slices для Trip lifecycle/write, realtime и safety; AI/RAG остаётся отдельным отложенным направлением.
 
 Следующий шаг — маленькое техническое задание. Оно должно быть достаточно конкретным, чтобы по нему можно было реализовать задачу без догадок, но при этом не превращаться в большой документ ради документа. Затем задача передаётся Codex на реализацию.
 

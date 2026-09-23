@@ -37,6 +37,10 @@
 - ✅ persisted direct и group Chats/Messages
 - ✅ Group Chat MVP: создание из existing matched/direct-chat companions, минимум три участника, фиксированный состав
 - ✅ Trips persistence, server Trip creation API из direct/group Chat, frontend CTA и 409 → `GET /trips` navigation, `trip_stops`, Trips List и Trip Detail
+- ✅ TEAM E2E и systematic authorization / IDOR review
+- ✅ first-login concurrency и Discover requester eligibility
+- ✅ production security baseline: DB до `20260901280000`, RLS на всех 17 application tables, least-privileged `app_runtime`, transaction-local `app.user_id`, grants verifier и runtime deployment gate
+- ✅ совместимый security backend deployed в production; production `/health` и Telegram smoke пройдены
 
 ## Текущий этап
 
@@ -46,9 +50,12 @@
 
 Следующие самостоятельные work items:
 
+- Telegram `initData` security, invariant `completed → DELETE active TravelIntent`, session lifecycle baseline, backend input/domain limits, minimal rate limiting и secrets/env/logging review;
+- P1 из TEAM E2E: realtime incoming messages без refresh, Group Chat invitation/accept lifecycle, Chat → Profile navigation regression до wider testing и controlled multi-user Trip Detail coverage;
 - Trip write/lifecycle: изменение подтверждённого состояния, stop editor, `start/complete/cancel/leave` и правила версий;
-- отдельные hardening work items из [technical hardening backlog](technical-hardening-backlog.md), включая production backend/RLS, messages realtime/read state/pagination и moderation;
 - invitations, изменение состава, leave, roles/admin/permissions, invite links, сложный membership lifecycle Group Chat и расширенный Trip lifecycle — после отдельного решения.
+
+Auto-Deploy backend остаётся Off до отдельной задачи по deployment workflow. После несовместимых DB/grants изменений старый backend не является автоматически допустимым rollback target.
 
 AI/Proposal и provider integrations отложены до подключения второго разработчика. Это не блокер текущего direct-chat MVP и не должно реализовываться в рамках закрытия его persistence flow.
 
@@ -60,10 +67,9 @@ AI/Proposal и provider integrations отложены до подключени�
 
 ## Дальше
 
-1. Согласовать и реализовать следующий один Trip lifecycle/write slice.
-2. Закрыть приоритетные пункты [technical hardening backlog](technical-hardening-backlog.md) до внешнего запуска backend.
-3. Вернуться к realtime chat flow после стабилизации базовых HTTP contracts.
-4. Вернуться к AI только после подключения второго разработчика.
+1. Закрыть активные пункты [technical hardening backlog](technical-hardening-backlog.md) и P1 TEAM E2E.
+2. Согласовать и реализовать следующий один Trip lifecycle/write slice.
+3. Вернуться к AI только после подключения второго разработчика.
 
 ## Примечания
 

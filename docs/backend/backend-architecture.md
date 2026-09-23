@@ -1,10 +1,10 @@
 # Backend architecture
 
-> Статус: target architecture. В `develop` реализованы FastAPI, server-side Telegram Auth, часть persistence и HTTP contracts; отдельный AI Orchestrator, external providers, RLS и realtime ещё не реализованы. AI отложен до подключения второго разработчика.
+> Статус: high-level architecture. В `develop` и production реализованы FastAPI, server-side Telegram Auth, persisted HTTP flow и RLS/runtime-role security boundary. Отдельные AI Orchestrator, external providers и realtime ещё не реализованы; AI отложен до подключения второго разработчика.
 
 ## Назначение документа
 
-Этот документ фиксирует высокоуровневую backend-архитектуру Travel Friend после завершения логической доменной модели. Он не задаёт API-контракты, схему БД, RLS, persistence-слой или realtime-реализацию.
+Этот документ фиксирует высокоуровневую backend-архитектуру Travel Friend после завершения логической доменной модели. Он не задаёт API-контракты, схему БД, точные RLS policies/grants, persistence-слой или realtime-реализацию.
 
 ## Верхнеуровневый контур
 
@@ -154,7 +154,7 @@ PostgreSQL / Supabase — это system of record для:
 - таблицы БД;
 - миграции;
 - API;
-- RLS;
+- точные RLS policies и grants;
 - persistence-слой;
 - realtime.
 

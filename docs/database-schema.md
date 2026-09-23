@@ -1,8 +1,8 @@
 # Database Schema
 
-Этот документ — навигация по фактической physical schema. SQL-источником истины являются migrations в `supabase/migrations/`; этот файл не заменяет их и не описывает RLS.
+Этот документ — навигация по фактической physical schema и security boundary. SQL-источником истины являются migrations в `supabase/migrations/`; этот файл не заменяет их.
 
-## Реализованная schema (`develop`, 2026-09-02)
+## Реализованная schema и RLS (`develop`, 2026-09-23)
 
 Применяемые migrations:
 
@@ -12,8 +12,11 @@
 - `20260901130000_chat_persistence.sql`: `chats`, `chat_participants`, `messages`, `chat_summaries` и `matches.chat_id`;
 - `20260901140000_trip_persistence.sql`: `trips`, `trip_participants`;
 - `20260901150000_trip_stops_persistence.sql`: `trip_stops`.
+- `20260901160000`–`20260901280000`: authenticated DB context, bearer/login/onboarding capabilities и RLS slices для всех current application tables.
 
-В current MVP новая Trip из existing direct или group Chat сразу получает всех активных `trip_participants`. Таблицы `trip_invitations`, membership lifecycle, `proposals`, transport segments, provider/AI, audit/moderation и RLS policies не созданы. Для Group Chat schema использует существующие `chats(type='group')` и `chat_participants`; persisted group title отдельной таблицей или полем не хранится.
+В current MVP новая Trip из existing direct или group Chat сразу получает всех активных `trip_participants`. Таблицы `trip_invitations`, membership lifecycle, `proposals`, transport segments, provider/AI и audit/moderation не созданы. Для Group Chat schema использует существующие `chats(type='group')` и `chat_participants`; persisted group title отдельной таблицей или полем не хранится.
+
+RLS enabled на всех 17 application tables. FastAPI выполняет authenticated business SQL как non-owner `app_runtime` и устанавливает `app.user_id` transaction-local. Direct reads ограничены RLS/column grants; onboarding, Discover → Match → direct Chat, Group Chat, Messages и Trip creation используют узкие owner-owned `SECURITY DEFINER` capabilities. Точный runtime grants/policy surface проверяют production scripts в `apps/backend/scripts/`.
 
 ## Design references
 
