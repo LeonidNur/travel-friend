@@ -121,7 +121,9 @@ Telegram Mini App не отменяет будущую отдельную моб
 - реализованы Profile + TravelIntent API, onboarding, persistence Discover interest/match, direct/group Chats/Messages и Trip slice с `trip_stops`;
 - Group Chat создаётся с минимум тремя участниками: создатель выбирает existing matched/direct-chat companions, а состав фиксирован для MVP;
 - Trip создаётся из direct или group Chat; все активные ChatParticipant сразу становятся TripParticipant; TripInvitation не используется; Mini App вызывает API и при `409` открывает существующую unfinished Trip через `GET /trips`;
-- realtime, Trip write/lifecycle, invitations, сложный membership lifecycle, RLS/production backend deployment и AI/Proposal остаются дальнейшими отдельными задачами;
+- production security baseline закрыт: production DB применена до `20260901280000`, RLS включён на всех 17 application tables, FastAPI работает через least-privileged `app_runtime` с transaction-local `app.user_id`; grants verifier, runtime deployment gate, совместимый backend deploy, `/health` и Telegram smoke прошли;
+- Auto-Deploy backend остаётся выключенным до отдельной задачи по deployment workflow; после несовместимых DB/grants изменений старый backend не считается автоматически допустимым rollback target;
+- realtime, Trip write/lifecycle, invitations, сложный membership lifecycle и AI/Proposal остаются дальнейшими отдельными задачами;
 - AI/Proposal и provider integrations отложены до подключения второго разработчика;
 - ближайший этап — hardening реализованного checkpoint и один согласованный Trip lifecycle/write slice; подробные риски находятся в [technical hardening backlog](docs/technical-hardening-backlog.md).
 
@@ -397,11 +399,10 @@ Backend/domain/data источники:
 
 Ближайший порядок разработки:
 
-1. MVP mega-review backend-backed direct/group Chat flow.
-2. Один следующий Trip write/lifecycle slice.
-3. Production deployment/RLS/runbook backend.
-4. Realtime chat flow после стабилизации HTTP contracts.
-5. AI только после подключения второго разработчика.
+1. Telegram `initData` security, invariant `completed → DELETE active TravelIntent`, session lifecycle baseline, backend input/domain limits, minimal rate limiting и review secrets/env/logging.
+2. Исправить P1 из TEAM E2E: incoming realtime messages требуют refresh; invitation/accept lifecycle Group Chat; регрессия Chat → Profile до wider testing.
+3. Добавить controlled multi-user coverage для Trip Detail.
+4. Затем согласовать один Trip write/lifecycle slice; AI остаётся отложенным до подключения второго разработчика.
 
 ## Долгосрочное видение
 

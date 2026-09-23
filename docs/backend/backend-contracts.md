@@ -6,7 +6,7 @@
 
 API проектируется вокруг пользовательских и domain actions, а не как CRUD поверх каждой ER-сущности. Frontend не может напрямую создавать внутренние сущности `Match`, `ChatParticipant`, `TripParticipant`, `Proposal` и system `Message`. Backend/domain является доверенной точкой применения инвариантов, авторизации и атомарных domain-операций.
 
-## Реализованные HTTP contracts (`develop`, 2026-09-02)
+## Реализованные HTTP contracts (`develop`, 2026-09-23)
 
 Все кроме `GET /health` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
 
@@ -30,6 +30,7 @@ API проектируется вокруг пользовательских и 
 Текущие ограничения реализации:
 
 - `GET /chats/{chatId}`, message cursor pagination, read/unread API и realtime не реализованы.
+- Invariant `completed → DELETE active TravelIntent` ещё не закрыт и остаётся отдельным hardening work item.
 - Group Chat создаётся инициатором с минимум двумя unique eligible companions; eligible означает existing matched direct Chat с инициатором. Инициатор добавляется автоматически, а состав после создания не редактируется в MVP.
 - `POST /chats/{chatId}/trips` разрешает только один незавершённый (`forming`/`active`) Trip на Chat и отвечает `409` при повторе.
 - Trip создаётся из direct или group Chat. Backend в одной transaction читает всех активных ChatParticipant и сразу создаёт столько же `TripParticipant`; `TripInvitation` в этом MVP flow не создаётся и не используется.

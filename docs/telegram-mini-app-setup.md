@@ -24,7 +24,7 @@ TELEGRAM_WEB_APP_URL=https://your-vercel-url.example
 BACKEND_API_ORIGIN=http://127.0.0.1:8000
 ```
 
-`BACKEND_API_ORIGIN` используется Next.js rewrite для `/api/backend/*`. Он должен указывать на доступный backend environment; production значение и deployment/runbook backend пока не зафиксированы.
+`BACKEND_API_ORIGIN` используется Next.js rewrite для `/api/backend/*`. Он должен указывать на доступный backend environment; production значение остаётся environment-specific и не фиксируется в репозитории. Production security backend уже deployed; его cutover/runbook задокументирован в [production security migrations runbook](backend/production-security-migrations-runbook.md).
 
 Храните `TELEGRAM_BOT_TOKEN` и `DATABASE_URL` только в environment backend-процесса, например:
 
@@ -55,4 +55,4 @@ npm run telegram:set-menu
 
 ## Статус deployment
 
-Vercel — текущий публичный контур frontend Mini App и URL для Telegram Menu Button. FastAPI backend, PostgreSQL/Supabase и безопасное production значение `BACKEND_API_ORIGIN` требуют отдельного deployment work item; не следует считать Vercel deployment Mini App готовым production deployment всей системы.
+Vercel — текущий публичный контур frontend Mini App и URL для Telegram Menu Button. Совместимый FastAPI security backend и PostgreSQL/Supabase production contour deployed и прошли `/health`/Telegram smoke; это не означает, что Vercel сам по себе деплоит весь backend stack. Auto-Deploy backend остаётся Off до отдельной задачи по deployment workflow.

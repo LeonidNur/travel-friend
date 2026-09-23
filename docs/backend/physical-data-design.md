@@ -1,6 +1,6 @@
 # Travel Friend — Physical Data Design
 
-> Статус: reviewed design input. Его identity/chat/trip подмножество частично реализовано migrations в `supabase/migrations/` по состоянию на 2026-09-02; остальные разделы не являются описанием поставленной schema.
+> Статус: reviewed design input. Его identity/chat/trip подмножество и current RLS/runtime boundary реализованы migrations в `supabase/migrations/` по состоянию на 2026-09-23; остальные разделы не являются описанием поставленной schema.
 >
 > Источники истины: актуальные ER/domain model и backend contracts.
 >
@@ -10,7 +10,7 @@
 
 Фактические SQL-источники истины — migrations. Уже существуют identity/session, `discover_interest_decisions` + `matches`, direct/group Chats/Messages, `trips`, `trip_participants` и `trip_stops`.
 
-Этот документ сохраняет более широкую future design. В частности, current Discover пока не создаёт `discover_impressions`, `discover_decisions` или `likes`; а Trip из direct или group Chat создаётся без `TripInvitation`: все активные ChatParticipant сразу становятся TripParticipant. Group Chat использует существующие `chats(type='group')` и `chat_participants`, начинается минимум с трёх участников и имеет фиксированный MVP-состав без persisted title. Invitations, сложный group membership lifecycle, Proposal/AI, transport, external offers, audit/moderation и RLS остаются deferred.
+Этот документ сохраняет более широкую future design. В частности, current Discover пока не создаёт `discover_impressions`, `discover_decisions` или `likes`; а Trip из direct или group Chat создаётся без `TripInvitation`: все активные ChatParticipant сразу становятся TripParticipant. Group Chat использует существующие `chats(type='group')` и `chat_participants`, начинается минимум с трёх участников и имеет фиксированный MVP-состав без persisted title. Invitations, сложный group membership lifecycle, Proposal/AI, transport, external offers и audit/moderation остаются deferred. Current RLS/runtime boundary уже реализован и определяется migrations, а не этим design-документом.
 
 ## Общие правила
 
@@ -1619,7 +1619,7 @@ Before completing `/auth/telegram`, decide:
 
 ## E. RLS / database roles
 
-Design after the physical schema and before public persistence deployment.
+Future design extension after the current physical schema and RLS/runtime deployment.
 Frontend must not receive privileged database access.
 
 # 15. Suggested implementation order

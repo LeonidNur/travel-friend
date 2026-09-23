@@ -22,7 +22,7 @@
 
 Это базовый слой инструкций. Пользователь не обязан каждый раз повторять его в prompt.
 
-Текущая продуктовая рамка: persisted backend-backed slice уже покрывает Telegram Auth, onboarding, Profile/TravelIntent, Discover/Match, direct/group Chats/Messages и создание/чтение Trip. Следующий этап — стабилизация этого MVP и самостоятельные slices для Trip lifecycle/write, production backend/RLS, realtime и safety; AI/provider integrations отложены. Current state всегда сверяется с `AGENTS.md`, кодом/tests/migrations и source-of-truth документами, а не со старыми historical records.
+Текущая продуктовая рамка: persisted backend-backed slice уже покрывает Telegram Auth, onboarding, Profile/TravelIntent, Discover/Match, direct/group Chats/Messages и создание/чтение Trip. Production RLS/runtime-role baseline и compatible backend deployment завершены. Следующий этап — active hardening, исправления P1 TEAM E2E и самостоятельные slices для Trip lifecycle/write, realtime и safety; AI/provider integrations отложены. Current state всегда сверяется с `AGENTS.md`, кодом/tests/migrations и source-of-truth документами, а не со старыми historical records.
 
 ## Что пользователь указывает в коротком ТЗ
 

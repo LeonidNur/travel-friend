@@ -1,6 +1,8 @@
-# Production runbook: runtime RLS and grants
+# Production cutover record and runbook: runtime RLS and grants
 
-Этот runbook описывает единственный безопасный production cutover security
+> Статус на 23.09.2026: этот cutover завершён. Production DB применена до `20260901280000`; final grants verifier и runtime deployment gate прошли; совместимый security backend deployed, `/health` и Telegram smoke успешны. Auto-Deploy остаётся Off. Не выполняйте описанные ниже шаги повторно как новый cutover: они сохраняются как точная запись применённого процесса и reference для отдельно одобренных будущих изменений.
+
+Этот runbook описывает выполненный production cutover security
 контракта: backend `988aeb0` →
 `b25e08dce158b7fe7ea6d17b40d96c3e893330fa` и migrations
 `20260901230000`–`20260901280000`. Источник истины для миграций и их порядка —
@@ -8,7 +10,7 @@
 `supabase_migrations.schema_migrations`, `db reset`, `--include-seed`,
 `--include-roles` или `--include-all`.
 
-## Preconditions
+## Historical preconditions
 
 До начала оператор подтверждает все следующие факты:
 
@@ -47,7 +49,7 @@ Migration `20260901230000` additive, но начиная с `20260901240000` н�
 старого backend должен быть остановлен или изолирован. Traffic нельзя
 восстанавливать до успешного health check нового backend.
 
-## Cutover
+## Executed cutover
 
 ### 1. Preflight и target commit
 
@@ -151,7 +153,7 @@ policy/ACL surface пяти internal/dormant tables, fail-closed reads без
 
 ### 5. Deploy, health и traffic restore
 
-Только после успешных verifier и runtime gate вручную deploy exact SHA
+После успешных verifier и runtime gate был вручную deployed exact SHA
 `b25e08dce158b7fe7ea6d17b40d96c3e893330fa` в Render. Auto-Deploy остаётся
 выключенным; `DATABASE_URL` не меняется.
 
