@@ -61,6 +61,15 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "public.trips",
         "public.trip_participants",
         "public.trip_stops",
+        "INTERNAL_DORMANT_TABLES",
+        "APPLICATION_TABLES",
+        '"users"',
+        '"telegram_identities"',
+        '"user_settings"',
+        '"profile_photos"',
+        '"chat_summaries"',
+        "internal tables must not have RLS policies",
+        "internal tables have direct runtime privileges",
         "DELETE FROM public.profiles WHERE false",
         "InsufficientPrivilege",
     ):
@@ -89,6 +98,15 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
 
     assert "chats_lock_active_participant" not in script
     assert "chat_participants_lock_active_chat" not in script
+
+    for table_name in (
+        "users",
+        "telegram_identities",
+        "user_settings",
+        "profile_photos",
+        "chat_summaries",
+    ):
+        assert table_name in script
 
 
 def test_deployment_gate_uses_rollback_only_for_the_negative_write_probe() -> None:

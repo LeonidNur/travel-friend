@@ -242,6 +242,41 @@ LEFT JOIN pg_class AS relations ON relations.relnamespace = namespaces.oid
 LEFT JOIN pg_roles AS roles ON roles.oid = relations.relowner
 ORDER BY tables.table_name;
 
+-- All application tables are RLS protected. The five internal/dormant tables
+-- deliberately have an empty policy surface; their required access is through
+-- separately verified SECURITY DEFINER capabilities.
+WITH application_tables (table_name, expected_policy_count) AS (
+  VALUES
+    ('users', 0), ('telegram_identities', 0), ('profiles', 3),
+    ('profile_photos', 0), ('user_settings', 0), ('user_activity_states', 1),
+    ('travel_intents', 3), ('user_sessions', 2),
+    ('discover_interest_decisions', 1), ('matches', 1), ('chats', 1),
+    ('chat_participants', 1), ('messages', 1), ('chat_summaries', 0),
+    ('trips', 1), ('trip_participants', 1), ('trip_stops', 1)
+), relations AS (
+  SELECT tables.table_name, tables.expected_policy_count, class.oid, class.relrowsecurity,
+    roles.rolname <> 'app_runtime' AS is_not_owned_by_app_runtime
+  FROM application_tables AS tables
+  LEFT JOIN pg_namespace AS namespaces ON namespaces.nspname = 'public'
+  LEFT JOIN pg_class AS class ON class.relnamespace = namespaces.oid
+    AND class.relname = tables.table_name AND class.relkind IN ('r', 'p')
+  LEFT JOIN pg_roles AS roles ON roles.oid = class.relowner
+)
+SELECT
+  relations.table_name,
+  COALESCE(relations.relrowsecurity, false) AS rls_enabled,
+  COALESCE(relations.is_not_owned_by_app_runtime, false) AS is_not_owned_by_app_runtime,
+  count(policies.oid)::integer AS actual_policy_count,
+  relations.expected_policy_count,
+  COALESCE(relations.relrowsecurity, false) AS is_rls_enabled,
+  COALESCE(relations.is_not_owned_by_app_runtime, false) AS is_not_owned,
+  count(policies.oid)::integer = relations.expected_policy_count AS is_expected_policy_count
+FROM relations
+LEFT JOIN pg_policy AS policies ON policies.polrelid = relations.oid
+GROUP BY relations.table_name, relations.relrowsecurity,
+  relations.is_not_owned_by_app_runtime, relations.expected_policy_count
+ORDER BY relations.table_name;
+
 SELECT
   NOT roles.rolbypassrls AS is_nobypassrls,
   NOT roles.rolsuper AS is_nosuperuser,
