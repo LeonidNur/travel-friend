@@ -23,6 +23,7 @@ REQUIRED_CAPABILITIES = {
     "public.bootstrap_telegram_login(\n  bigint, text, text, text, text, text, timestamptz, timestamptz\n)",
     "public.discover_eligible_travel_intents()",
     "public.archive_current_active_travel_intent()",
+    "public.complete_current_onboarding()",
     "public.discover_candidate_profile_projection()",
     "public.discover_target_is_eligible(uuid)",
     "public.chat_participant_profile_projection(uuid)",
@@ -77,9 +78,10 @@ def test_production_grants_cover_the_audited_runtime_matrix() -> None:
     assert "GRANT SELECT (id) ON TABLE public.user_sessions TO app_runtime;" in script
     assert "GRANT UPDATE (revoked_at) ON TABLE public.user_sessions TO app_runtime;" in script
     assert (
-        "GRANT SELECT (user_id, onboarding_status, updated_at) ON TABLE public.user_activity_states "
+        "GRANT SELECT (user_id, onboarding_status) ON TABLE public.user_activity_states "
         "TO app_runtime;"
     ) in script
+    assert "GRANT UPDATE (onboarding_status, updated_at) ON TABLE public.user_activity_states" not in script
     assert "GRANT UPDATE (id) ON TABLE public.chat_participants TO app_runtime;" in script
     assert "GRANT SELECT ON TABLE public.user_sessions TO app_runtime;" not in script
     assert "GRANT UPDATE ON TABLE public.user_sessions TO app_runtime;" not in script

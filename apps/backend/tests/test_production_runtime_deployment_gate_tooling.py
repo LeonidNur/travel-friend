@@ -41,6 +41,7 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "pg_get_expr(policy.polwithcheck, policy.polrelid)",
         "has_function_privilege",
         "current_authenticated_user_id",
+        "complete_current_onboarding",
         "set_config('app.user_id', %s, true)",
         "public.profiles",
         "public.travel_intents",

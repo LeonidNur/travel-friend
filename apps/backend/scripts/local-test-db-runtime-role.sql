@@ -24,7 +24,7 @@ GRANT USAGE ON SCHEMA public TO app_runtime;
 
 GRANT SELECT ON TABLE public.users TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.profiles TO app_runtime;
-GRANT SELECT, UPDATE ON TABLE public.user_activity_states TO app_runtime;
+GRANT SELECT (user_id, onboarding_status) ON TABLE public.user_activity_states TO app_runtime;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.travel_intents TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.current_authenticated_user_id() TO app_runtime;
 -- UPDATE supports logout.
@@ -47,6 +47,7 @@ GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
 ) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_eligible_travel_intents() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.archive_current_active_travel_intent() TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.complete_current_onboarding() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_candidate_profile_projection() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_target_is_eligible(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.chat_participant_profile_projection(uuid) TO app_runtime;

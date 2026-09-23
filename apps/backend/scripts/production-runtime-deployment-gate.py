@@ -18,6 +18,7 @@ REQUIRED_FUNCTIONS = (
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamp with time zone,timestamp with time zone)",
     "public.discover_eligible_travel_intents()",
     "public.archive_current_active_travel_intent()",
+    "public.complete_current_onboarding()",
     "public.discover_candidate_profile_projection()",
     "public.discover_target_is_eligible(uuid)",
     "public.chat_participant_profile_projection(uuid)",

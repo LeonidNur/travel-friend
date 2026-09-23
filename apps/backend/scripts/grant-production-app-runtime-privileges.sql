@@ -42,8 +42,7 @@ GRANT UPDATE (display_name, birth_date, gender, city, bio, travel_style,
   interests, budget_level, comfort_level, updated_at)
   ON TABLE public.profiles TO app_runtime;
 
-GRANT SELECT (user_id, onboarding_status, updated_at) ON TABLE public.user_activity_states TO app_runtime;
-GRANT UPDATE (onboarding_status, updated_at) ON TABLE public.user_activity_states TO app_runtime;
+GRANT SELECT (user_id, onboarding_status) ON TABLE public.user_activity_states TO app_runtime;
 
 GRANT SELECT (id, user_id, destination_label, date_from, date_to, status,
   created_at, updated_at, archived_at) ON TABLE public.travel_intents TO app_runtime;
@@ -106,6 +105,7 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.bootstrap_telegram_login(
 ) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.discover_eligible_travel_intents() FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.archive_current_active_travel_intent() FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.complete_current_onboarding() FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.discover_candidate_profile_projection() FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.discover_target_is_eligible(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.chat_participant_profile_projection(uuid) FROM app_runtime;
@@ -118,6 +118,7 @@ GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
 ) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_eligible_travel_intents() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.archive_current_active_travel_intent() TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.complete_current_onboarding() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_candidate_profile_projection() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_target_is_eligible(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.chat_participant_profile_projection(uuid) TO app_runtime;
