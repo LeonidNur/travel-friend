@@ -110,13 +110,14 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         WHERE namespace.nspname = 'public'
           AND relation.relname = ANY(%s::text[])
         """,
-        (["profiles", "travel_intents", "user_sessions"],),
+        (["profiles", "travel_intents", "user_activity_states", "user_sessions"],),
     ).fetchall()
     require(
         {name: (enabled, runtime_is_not_owner) for name, enabled, runtime_is_not_owner in rls_rows}
         == {
             "profiles": (True, True),
             "travel_intents": (True, True),
+            "user_activity_states": (True, True),
             "user_sessions": (True, True),
         },
         "RLS must be enabled and app_runtime must not own protected runtime tables",
@@ -146,6 +147,8 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
             ('travel_intents_update_own_active', 'travel_intents', 'w',
               '((user_id = current_authenticated_user_id()) AND (status = ''active''::text))',
               '((user_id = current_authenticated_user_id()) AND (status = ANY (ARRAY[''active''::text, ''archived''::text])))'),
+            ('user_activity_states_select_own', 'user_activity_states', 'r',
+              '(user_id = current_authenticated_user_id())', NULL::text),
             ('user_sessions_select_own', 'user_sessions', 'r',
               '(user_id = current_authenticated_user_id())', NULL::text),
             ('user_sessions_update_own', 'user_sessions', 'w',
@@ -186,6 +189,18 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         ],
         "user_sessions has an unexpected RLS policy surface",
     )
+    activity_state_policy_surface = connection.execute(
+        """
+        SELECT policyname, cmd
+        FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'user_activity_states'
+        ORDER BY policyname
+        """
+    ).fetchall()
+    require(
+        activity_state_policy_surface == [("user_activity_states_select_own", "SELECT")],
+        "user_activity_states has an unexpected RLS policy surface",
+    )
 
 
 def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
@@ -204,6 +219,15 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
             (probe_user_id,),
         )
         require(isinstance(permitted_read, bool), "runtime profile read did not execute")
+        permitted_activity_state_read = scalar(
+            connection,
+            "SELECT EXISTS (SELECT 1 FROM public.user_activity_states WHERE user_id = %s)",
+            (probe_user_id,),
+        )
+        require(
+            isinstance(permitted_activity_state_read, bool),
+            "runtime activity-state read did not execute",
+        )
         permitted_session_read = scalar(
             connection,
             "SELECT EXISTS (SELECT 1 FROM public.user_sessions)",
@@ -222,6 +246,10 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
         require(
             scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.travel_intents)") is False,
             "travel_intents RLS did not fail closed without authenticated context",
+        )
+        require(
+            scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.user_activity_states)") is False,
+            "user_activity_states RLS did not fail closed without authenticated context",
         )
         require(
             scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.user_sessions)") is False,

@@ -45,6 +45,7 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "set_config('app.user_id', %s, true)",
         "public.profiles",
         "public.travel_intents",
+        "public.user_activity_states",
         "public.user_sessions",
         "DELETE FROM public.profiles WHERE false",
         "InsufficientPrivilege",
@@ -58,6 +59,7 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "travel_intents_select_own_active",
         "travel_intents_insert_own_active",
         "travel_intents_update_own_active",
+        "user_activity_states_select_own",
         "user_sessions_select_own",
         "user_sessions_update_own",
     ):
