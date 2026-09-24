@@ -259,6 +259,22 @@ def test_empty_or_whitespace_only_message_is_rejected(client: TestClient, databa
         assert connection.execute("SELECT last_sequence FROM public.chats WHERE id=%s", (chat_id,)).fetchone() == (0,)
 
 
+def test_message_http_boundary_accepts_four_thousand_characters_and_rejects_four_thousand_one(
+    client: TestClient, database_url: str
+) -> None:
+    first, _, match = create_reciprocal_match(client)
+    chat_id = chat_id_for_match(database_url, match["match_id"])
+
+    accepted = send_message(client, first["access_token"], chat_id, f"  {'x' * 4000}  ")
+    rejected = send_message(client, first["access_token"], chat_id, "x" * 4001)
+
+    assert accepted.status_code == 201
+    assert accepted.json()["content_text"] == "x" * 4000
+    assert rejected.status_code == 422
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute("SELECT last_sequence FROM public.chats WHERE id=%s", (chat_id,)).fetchone() == (1,)
+
+
 def test_non_participant_cannot_send_message(client: TestClient, database_url: str) -> None:
     _, _, match = create_reciprocal_match(client)
     outsider = create_discover_eligible_user(client, 3)

@@ -103,6 +103,20 @@ def test_owner_only_rls_fails_closed_and_denies_cross_user_writes(
         ).fetchone() == ("B",)
 
 
+@pytest.mark.parametrize("destination", ("", "   "))
+def test_travel_intents_durable_constraint_rejects_blank_destination(
+    database_url: str, destination: str
+) -> None:
+    with psycopg.connect(database_url) as connection:
+        user_id = connection.execute("INSERT INTO public.users DEFAULT VALUES RETURNING id").fetchone()[0]
+        with pytest.raises(psycopg.errors.CheckViolation):
+            with connection.transaction():
+                connection.execute(
+                    "INSERT INTO public.travel_intents (user_id, destination_label, status) VALUES (%s, %s, 'active')",
+                    (user_id, destination),
+                )
+
+
 def test_archive_capability_is_owner_scoped_fail_closed_and_idempotent(
     database_url: str, runtime_database_url: str
 ) -> None:

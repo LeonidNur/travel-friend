@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 class TravelIntentPutRequest(BaseModel):
@@ -16,6 +16,16 @@ class TravelIntentPutRequest(BaseModel):
     destination: str
     date_from: date | None = None
     date_to: date | None = None
+
+    @field_validator("destination")
+    @classmethod
+    def normalize_destination(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if not normalized_value:
+            raise ValueError("destination must not be blank")
+        if len(normalized_value) > 200:
+            raise ValueError("destination must not exceed 200 characters")
+        return normalized_value
 
     @model_validator(mode="after")
     def date_range_is_valid(self) -> TravelIntentPutRequest:

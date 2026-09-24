@@ -316,3 +316,35 @@ def test_send_capability_uses_actor_and_serializes_sequences(
             "SELECT sequence_number FROM public.messages WHERE chat_id=%s ORDER BY sequence_number", (chat_id,)
         ).fetchall() == [(1,), (2,), (3,)]
         assert owner.execute("SELECT last_sequence FROM public.chats WHERE id=%s", (chat_id,)).fetchone() == (3,)
+
+
+def test_group_capability_rejects_more_than_twenty_companions_before_creating_a_chat(
+    database_url: str, runtime_database_url: str
+) -> None:
+    actor = create_user(database_url)
+    companions = [create_user(database_url) for _ in range(21)]
+
+    with psycopg.connect(runtime_database_url) as runtime:
+        with pytest.raises(psycopg.errors.InvalidParameterValue, match="at most twenty companions"):
+            with runtime.transaction():
+                set_authenticated_user(runtime, actor)
+                call_group_capability(runtime, companions)
+
+    with psycopg.connect(database_url) as owner:
+        assert owner.execute("SELECT count(*) FROM public.chats WHERE type='group'").fetchone() == (0,)
+
+
+def test_send_capability_rejects_message_over_four_thousand_characters(
+    database_url: str, runtime_database_url: str
+) -> None:
+    actor, companion = create_user(database_url), create_user(database_url)
+    chat_id = create_direct_chat(database_url, actor, companion)
+
+    with psycopg.connect(runtime_database_url) as runtime:
+        with pytest.raises(psycopg.errors.InvalidParameterValue, match="content_text must not exceed 4000 characters"):
+            with runtime.transaction():
+                set_authenticated_user(runtime, actor)
+                call_send_capability(runtime, chat_id, "x" * 4001)
+
+    with psycopg.connect(database_url) as owner:
+        assert owner.execute("SELECT count(*) FROM public.messages WHERE chat_id=%s", (chat_id,)).fetchone() == (0,)

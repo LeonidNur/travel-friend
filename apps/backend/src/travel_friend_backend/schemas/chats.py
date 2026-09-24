@@ -55,7 +55,7 @@ class GroupChatCreateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    user_ids: list[UUID] = Field(min_length=2)
+    user_ids: list[UUID] = Field(min_length=2, max_length=20)
 
     @field_validator("user_ids")
     @classmethod
@@ -87,6 +87,8 @@ class ChatMessageCreateRequest(BaseModel):
         trimmed_value = value.strip()
         if not trimmed_value:
             raise ValueError("content_text must not be blank")
+        if len(trimmed_value) > 4000:
+            raise ValueError("content_text must not exceed 4000 characters")
         return trimmed_value
 
 

@@ -119,6 +119,20 @@ def test_profiles_owner_crud_is_scoped_and_context_fails_closed(
             ).fetchall() == [(user_c_id,)]
 
 
+@pytest.mark.parametrize("display_name", ("", "   "))
+def test_profiles_durable_constraint_rejects_blank_display_name(
+    database_url: str, display_name: str
+) -> None:
+    with psycopg.connect(database_url) as connection:
+        user_id = connection.execute("INSERT INTO public.users DEFAULT VALUES RETURNING id").fetchone()[0]
+        with pytest.raises(psycopg.errors.CheckViolation):
+            with connection.transaction():
+                connection.execute(
+                    "INSERT INTO public.profiles (user_id, display_name) VALUES (%s, %s)",
+                    (user_id, display_name),
+                )
+
+
 def test_profile_capabilities_are_owner_owned_and_private(database_url: str) -> None:
     with psycopg.connect(database_url) as connection:
         for signature in CAPABILITIES:
