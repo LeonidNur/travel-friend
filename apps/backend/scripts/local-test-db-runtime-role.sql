@@ -43,6 +43,9 @@ GRANT SELECT (trip_id, user_id, left_at) ON TABLE public.trip_participants TO ap
 GRANT SELECT ON TABLE public.trip_stops TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
+  bigint, text, text, text, text, text
+) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
   bigint, text, text, text, text, text, timestamptz, timestamptz
 ) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_eligible_travel_intents() TO app_runtime;

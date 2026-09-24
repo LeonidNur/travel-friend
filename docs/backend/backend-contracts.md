@@ -16,6 +16,15 @@ API проектируется вокруг пользовательских и 
 - `auth_date` принимается при возрасте не более 600 секунд включительно; допустимое опережение часов — не более 30 секунд включительно.
 - MVP допускает повторное использование одного валидного `initData` в этом окне: каждый вход может создать независимую сессию. Replay cache, nonce и single-use semantics пока не вводятся.
 
+### Session Lifecycle baseline
+
+- Каждая успешная Telegram-аутентификация создаёт независимую opaque Bearer session. В БД хранится только SHA-256 hash токена, не raw token.
+- Canonical capability `bootstrap_telegram_login(bigint, text, text, text, text, text)` определяет `created_at` по времени PostgreSQL и `expires_at` как `created_at + interval '30 days'`. Это absolute expiration: idle timeout отсутствует.
+- Временно сохранён legacy overload с `created_at`/`expires_at` аргументами для DB-first deployment compatibility со старым backend. Он делегирует canonical capability и полностью игнорирует переданные timestamps; это не постоянный API. Его удаление — отдельный TODO после deployment hardening.
+- Bearer разрешается только при совпадении hash, `revoked_at IS NULL`, `expires_at > now()` в БД и `users.deleted_at IS NULL`.
+- `POST /auth/logout` отзывает только session предъявленного Bearer и возвращает `204` только после успешного durable DB commit. Уже отозванный Bearer не проходит authentication, поэтому повторный logout отвечает `401`.
+- Не реализованы cleanup expired sessions, account deletion API, block/disable, revoke-all, active-session cap, rotation/refresh и idle expiration.
+
 | Method | Path | Назначение |
 | --- | --- | --- |
 | `GET` | `/health` | health check |

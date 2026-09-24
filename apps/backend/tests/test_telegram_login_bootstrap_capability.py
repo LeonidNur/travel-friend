@@ -21,9 +21,10 @@ from integration_database import (
 from travel_friend_backend.auth.service import login
 
 
-FUNCTION_SIGNATURE = (
+LEGACY_FUNCTION_SIGNATURE = (
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamp with time zone,timestamp with time zone)"
 )
+CANONICAL_FUNCTION_SIGNATURE = "public.bootstrap_telegram_login(bigint,text,text,text,text,text)"
 
 
 @pytest.fixture
@@ -68,6 +69,61 @@ def bootstrap(
         row = result.fetchone()
     assert row is not None
     return row
+
+
+def canonical_bootstrap(
+    database_url: str, telegram_user_id: int, token_hash: str, *, username: str | None = "ada"
+) -> dict[str, Any]:
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        row = connection.execute(
+            "SELECT * FROM public.bootstrap_telegram_login(%s, %s, %s, %s, %s, %s)",
+            (telegram_user_id, username, "Ada", "Lovelace", "en", token_hash),
+        ).fetchone()
+    assert row is not None
+    return row
+
+
+def test_canonical_capability_owns_a_30_day_session_lifetime(
+    database_url: str, runtime_database_url: str
+) -> None:
+    token_hash = hashlib.sha256(b"canonical-lifetime").hexdigest()
+    row = canonical_bootstrap(runtime_database_url, 700_000, token_hash)
+
+    assert row["expires_at"] is not None
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute(
+            "SELECT expires_at - created_at FROM public.user_sessions WHERE token_hash = %s",
+            (token_hash,),
+        ).fetchone() == (timedelta(days=30),)
+
+
+def test_legacy_timestamps_are_ignored_and_match_canonical_lifetime(
+    database_url: str, runtime_database_url: str
+) -> None:
+    legacy_hash = hashlib.sha256(b"legacy-lifetime").hexdigest()
+    canonical_hash = hashlib.sha256(b"canonical-comparison").hexdigest()
+    requested_created_at = datetime(2000, 1, 1, tzinfo=UTC)
+    requested_expires_at = datetime(2100, 1, 1, tzinfo=UTC)
+
+    with psycopg.connect(runtime_database_url) as connection:
+        connection.execute(
+            "SELECT * FROM public.bootstrap_telegram_login(%s, %s, %s, %s, %s, %s, %s, %s)",
+            (700_010, "legacy", "Ada", "Lovelace", "en", legacy_hash, requested_created_at, requested_expires_at),
+        ).fetchone()
+    canonical_bootstrap(runtime_database_url, 700_011, canonical_hash)
+
+    with psycopg.connect(database_url) as connection:
+        sessions = connection.execute(
+            "SELECT token_hash, created_at, expires_at FROM public.user_sessions "
+            "WHERE token_hash IN (%s, %s) ORDER BY token_hash",
+            (legacy_hash, canonical_hash),
+        ).fetchall()
+
+    assert len(sessions) == 2
+    assert all(expires_at - created_at == timedelta(days=30) for _, created_at, expires_at in sessions)
+    legacy_session = next(session for session in sessions if session[0] == legacy_hash)
+    assert legacy_session[1] != requested_created_at
+    assert legacy_session[2] != requested_expires_at
 
 
 def test_capability_returns_minimal_bootstrap_state_and_creates_defaults(
@@ -161,22 +217,31 @@ def test_capability_accepts_sha256_hash_not_raw_token(runtime_database_url: str)
                 )
 
 
-def test_capability_is_owner_owned_hardened_and_runtime_cannot_alter_it(
+def test_capability_overloads_are_owner_owned_hardened_and_runtime_cannot_alter_them(
     database_url: str, runtime_database_url: str
 ) -> None:
     with psycopg.connect(database_url) as owner_connection:
-        assert owner_connection.execute(
-            "SELECT has_function_privilege('public', %s, 'EXECUTE')", (FUNCTION_SIGNATURE,)
-        ).fetchone() == (False,)
-        assert owner_connection.execute(
-            "SELECT has_function_privilege(%s, %s, 'EXECUTE')", (APP_RUNTIME_ROLE, FUNCTION_SIGNATURE)
-        ).fetchone() == (True,)
-        assert owner_connection.execute(
-            "SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid=%s::regprocedure",
-            (FUNCTION_SIGNATURE,),
-        ).fetchone() != (APP_RUNTIME_ROLE,)
-        definition = owner_connection.execute(
-            "SELECT pg_get_functiondef(%s::regprocedure)", (FUNCTION_SIGNATURE,)
+        for signature in (CANONICAL_FUNCTION_SIGNATURE, LEGACY_FUNCTION_SIGNATURE):
+            assert owner_connection.execute(
+                "SELECT has_function_privilege('public', %s, 'EXECUTE')", (signature,)
+            ).fetchone() == (False,)
+            assert owner_connection.execute(
+                "SELECT has_function_privilege(%s, %s, 'EXECUTE')", (APP_RUNTIME_ROLE, signature)
+            ).fetchone() == (True,)
+            assert owner_connection.execute(
+                "SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid=%s::regprocedure",
+                (signature,),
+            ).fetchone() != (APP_RUNTIME_ROLE,)
+            definition = owner_connection.execute(
+                "SELECT pg_get_functiondef(%s::regprocedure)", (signature,)
+            ).fetchone()[0]
+            assert "SECURITY DEFINER" in definition
+            assert "SET search_path TO 'pg_catalog'" in definition
+            assert "EXECUTE" not in definition
+            assert "format(" not in definition
+
+        canonical_definition = owner_connection.execute(
+            "SELECT pg_get_functiondef(%s::regprocedure)", (CANONICAL_FUNCTION_SIGNATURE,)
         ).fetchone()[0]
         for expected in (
             "SECURITY DEFINER",
@@ -185,12 +250,11 @@ def test_capability_is_owner_owned_hardened_and_runtime_cannot_alter_it(
             "public.telegram_identities",
             "public.user_sessions",
         ):
-            assert expected in definition
-        assert "format(" not in definition
-        assert "EXECUTE" not in definition
+            assert expected in canonical_definition
 
     with psycopg.connect(runtime_database_url) as runtime_connection:
         for statement in (
+            "ALTER FUNCTION public.bootstrap_telegram_login(bigint,text,text,text,text,text) RENAME TO forbidden_canonical",
             "ALTER FUNCTION public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamptz,timestamptz) RENAME TO forbidden",
             "DROP FUNCTION public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamptz,timestamptz)",
         ):
@@ -215,7 +279,9 @@ def test_runtime_cannot_use_revoked_login_bootstrap_table_privileges(runtime_dat
 def test_login_service_only_calls_the_bootstrap_capability() -> None:
     source = inspect.getsource(login)
 
-    assert "public.bootstrap_telegram_login" in source
+    assert "public.bootstrap_telegram_login(%s,%s,%s,%s,%s,%s)" in source
+    assert "SESSION_TTL" not in source
+    assert "datetime.now" not in source
     for direct_table_name in (
         "users",
         "telegram_identities",

@@ -159,6 +159,7 @@ WITH capability_signatures (function_signature) AS (
   VALUES
     ('public.current_authenticated_user_id()'),
     ('public.resolve_bearer_session(text)'),
+    ('public.bootstrap_telegram_login(bigint,text,text,text,text,text)'),
     ('public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamp with time zone,timestamp with time zone)'),
     ('public.discover_eligible_travel_intents()'),
     ('public.archive_current_active_travel_intent()'),
@@ -191,6 +192,7 @@ WITH capability_signatures (function_signature) AS (
   VALUES
     ('public.current_authenticated_user_id()'),
     ('public.resolve_bearer_session(text)'),
+    ('public.bootstrap_telegram_login(bigint,text,text,text,text,text)'),
     ('public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamp with time zone,timestamp with time zone)'),
     ('public.discover_eligible_travel_intents()'),
     ('public.archive_current_active_travel_intent()'),
