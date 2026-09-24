@@ -20,6 +20,7 @@ VERIFY_SCRIPT_PATH = SCRIPTS_DIRECTORY / "verify-production-app-runtime-privileg
 REQUIRED_CAPABILITIES = {
     "public.current_authenticated_user_id()",
     "public.resolve_bearer_session(text)",
+    "public.bootstrap_telegram_login(\n  bigint, text, text, text, text, text\n)",
     "public.bootstrap_telegram_login(\n  bigint, text, text, text, text, text, timestamptz, timestamptz\n)",
     "public.discover_eligible_travel_intents()",
     "public.archive_current_active_travel_intent()",

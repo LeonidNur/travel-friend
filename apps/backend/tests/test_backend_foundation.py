@@ -18,7 +18,6 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from travel_friend_backend import db
-from travel_friend_backend import dependencies
 from travel_friend_backend.auth import service
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.config import BackendSettings
@@ -86,14 +85,16 @@ def test_database_dependency_reads_the_application_database_url(monkeypatch) -> 
     dependency.close()
 
 
-def test_logout_does_not_bypass_the_authenticated_unit_of_work() -> None:
+def test_logout_commit_failure_is_not_reported_as_success(monkeypatch) -> None:
     principal = AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
 
     class CommitFailingConnection:
         def execute(self, *_: object, **__: object) -> None:
             return None
 
-        def commit(self) -> None:
+        @contextmanager
+        def transaction(self):
+            yield self
             raise psycopg.OperationalError("commit failed")
 
     app = create_app(
@@ -103,14 +104,19 @@ def test_logout_does_not_bypass_the_authenticated_unit_of_work() -> None:
         )
     )
     app.dependency_overrides[auth_dependency] = lambda: principal
-    app.dependency_overrides[dependencies.get_authenticated_database_connection] = (
-        lambda: CommitFailingConnection()
-    )
+
+    @contextmanager
+    def open_connection(_: str):
+        yield CommitFailingConnection()
+
+    import travel_friend_backend.main as main
+
+    monkeypatch.setattr(main, "database_connection", open_connection, raising=False)
 
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.post("/auth/logout")
 
-    assert response.status_code == 204
+    assert response.status_code == 500
 
 
 def test_current_user_returns_a_typed_authenticated_principal(monkeypatch) -> None:

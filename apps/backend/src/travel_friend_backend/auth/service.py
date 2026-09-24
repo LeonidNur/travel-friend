@@ -3,16 +3,12 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import Header, HTTPException, Request
 
 from travel_friend_backend.db import database_connection
-
-SESSION_TTL = timedelta(days=30)
-
 
 @dataclass(frozen=True, slots=True)
 class AuthenticatedPrincipal:
@@ -27,13 +23,11 @@ def token_hash(token: str) -> str:
 
 
 def login(database_url: str, identity: object) -> dict[str, object]:
-    now = datetime.now(UTC)
     raw_token = secrets.token_urlsafe(48)
     with database_connection(database_url) as conn:
         with conn.cursor() as cur:
-            expires = now + SESSION_TTL
             cur.execute(
-                "SELECT * FROM public.bootstrap_telegram_login(%s,%s,%s,%s,%s,%s,%s,%s)",
+                "SELECT * FROM public.bootstrap_telegram_login(%s,%s,%s,%s,%s,%s)",
                 (
                     identity.telegram_user_id,
                     identity.username,
@@ -41,8 +35,6 @@ def login(database_url: str, identity: object) -> dict[str, object]:
                     identity.last_name,
                     identity.language_code,
                     token_hash(raw_token),
-                    now,
-                    expires,
                 ),
             )
             row = cur.fetchone()
@@ -51,7 +43,7 @@ def login(database_url: str, identity: object) -> dict[str, object]:
     return {
         "access_token": raw_token,
         "token_type": "bearer",
-        "expires_at": expires,
+        "expires_at": row["expires_at"],
         "user": {"id": str(row["user_id"])},
         "onboarding": {"status": row["onboarding_status"]},
         "profile_exists": row["profile_exists"],
