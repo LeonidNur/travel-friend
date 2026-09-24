@@ -10,6 +10,8 @@ API проектируется вокруг пользовательских и 
 
 Все кроме `GET /health` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
 
+Для всех HTTP requests FastAPI backend применяет global raw request-body limit `256 KiB` (`262144` bytes), независимо от лимитов upstream proxy (Next.js, Vercel, Render и т.п.). При превышении backend возвращает `413` с JSON `{"detail":"Request body exceeds the 256 KiB limit"}` до JSON parsing FastAPI и Pydantic validation. Это ограничение не заменяет и не меняет field/domain limits endpoint-ов.
+
 ### Telegram `initData` auth baseline
 
 - Backend выполняет каноническую HMAC-проверку подписи raw `initData` до использования Telegram user data.

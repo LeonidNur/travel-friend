@@ -13,6 +13,7 @@ from travel_friend_backend.auth.service import (
     login,
 )
 from travel_friend_backend.db import authenticated_transaction, database_connection
+from travel_friend_backend.request_body_limit import RequestBodyLimitMiddleware
 from travel_friend_backend.routers.chats import router as chats_router
 from travel_friend_backend.routers.discover import router as discover_router
 from travel_friend_backend.routers.me import router as me_router
@@ -26,6 +27,7 @@ class TelegramAuthRequest(BaseModel):
 def create_app(settings: BackendSettings | None = None) -> FastAPI:
     backend_settings = settings or get_backend_settings()
     app = FastAPI(title="Travel Friend Backend")
+    app.add_middleware(RequestBodyLimitMiddleware)
     app.state.backend_settings = backend_settings
     app.state.telegram_init_data_verifier = TelegramInitDataVerifier(
         bot_token=backend_settings.telegram_bot_token,
