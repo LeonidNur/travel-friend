@@ -598,6 +598,34 @@ def test_delete_current_user_travel_intent_archives_and_is_idempotent(
             assert archived["updated_at"] >= archived["archived_at"]
 
 
+def test_completed_user_cannot_archive_the_active_travel_intent(
+    client: TestClient, database_url: str
+) -> None:
+    login_response = login(client)
+    token = login_response.json()["access_token"]
+    user_id = login_response.json()["user"]["id"]
+    assert client.patch(
+        "/me/profile", headers=auth_headers(token), json={"display_name": "Ada"}
+    ).status_code == 200
+    assert client.put(
+        "/me/travel-intent", headers=auth_headers(token), json={"destination": "Lisbon"}
+    ).status_code == 200
+    assert client.patch(
+        "/me/onboarding", headers=auth_headers(token), json={"status": "completed"}
+    ).status_code == 200
+
+    response = client.delete("/me/travel-intent", headers=auth_headers(token))
+
+    assert response.status_code == 409
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute(
+            "SELECT status FROM public.travel_intents WHERE user_id=%s", (user_id,)
+        ).fetchone() == ("active",)
+        assert connection.execute(
+            "SELECT onboarding_status FROM public.user_activity_states WHERE user_id=%s", (user_id,)
+        ).fetchone() == ("completed",)
+
+
 def test_patch_current_user_profile_creates_profile(client: TestClient, database_url: str) -> None:
     login_response = login(client)
     user_id = login_response.json()["user"]["id"]

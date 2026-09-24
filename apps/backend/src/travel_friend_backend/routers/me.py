@@ -121,7 +121,15 @@ def delete_current_user_travel_intent(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> None:
-    connection.execute("SELECT public.archive_current_active_travel_intent()", ())
+    try:
+        connection.execute("SELECT public.archive_current_active_travel_intent()", ())
+    except psycopg.Error as error:
+        if (
+            error.sqlstate == "P0001"
+            and error.diag.message_primary == "completed onboarding requires an active travel intent"
+        ):
+            raise HTTPException(409, "Completed onboarding requires an active TravelIntent") from error
+        raise
 
 
 @router.patch("/onboarding", response_model=OnboardingResponse)

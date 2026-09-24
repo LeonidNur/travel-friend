@@ -106,7 +106,7 @@ def test_owner_only_rls_fails_closed_and_denies_cross_user_writes(
 def test_archive_capability_is_owner_scoped_fail_closed_and_idempotent(
     database_url: str, runtime_database_url: str
 ) -> None:
-    user_a_id = create_user(database_url, destination="A")
+    user_a_id = create_user(database_url, destination="A", eligible=False)
     user_b_id = create_user(database_url, destination="B")
 
     with psycopg.connect(runtime_database_url) as connection:
@@ -128,6 +128,40 @@ def test_archive_capability_is_owner_scoped_fail_closed_and_idempotent(
         assert connection.execute(
             "SELECT status FROM public.travel_intents WHERE user_id=%s", (user_b_id,)
         ).fetchone() == ("active",)
+
+
+def test_archive_capability_allows_incomplete_user_but_rejects_completed_user(
+    database_url: str, runtime_database_url: str
+) -> None:
+    completed_user_id = create_user(database_url, destination="completed")
+    incomplete_user_id = create_user(database_url, destination="incomplete", eligible=False)
+
+    with psycopg.connect(runtime_database_url) as connection:
+        with connection.transaction():
+            set_authenticated_user(connection, completed_user_id)
+            with pytest.raises(
+                psycopg.errors.RaiseException,
+                match="completed onboarding requires an active travel intent",
+            ):
+                connection.execute("SELECT public.archive_current_active_travel_intent()")
+
+        with connection.transaction():
+            set_authenticated_user(connection, incomplete_user_id)
+            assert connection.execute("SELECT public.archive_current_active_travel_intent()").fetchone() == (True,)
+
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute(
+            "SELECT onboarding_status FROM public.user_activity_states WHERE user_id=%s", (completed_user_id,)
+        ).fetchone() == ("completed",)
+        assert connection.execute(
+            "SELECT status FROM public.travel_intents WHERE user_id=%s", (completed_user_id,)
+        ).fetchone() == ("active",)
+        assert connection.execute(
+            "SELECT onboarding_status FROM public.user_activity_states WHERE user_id=%s", (incomplete_user_id,)
+        ).fetchone() == ("in_progress",)
+        assert connection.execute(
+            "SELECT status FROM public.travel_intents WHERE user_id=%s", (incomplete_user_id,)
+        ).fetchone() == ("archived",)
 
 
 def test_discover_capability_returns_all_active_other_intents_without_discover_eligibility(
@@ -222,7 +256,9 @@ def test_rls_and_capability_catalog_security_and_bootstrap_without_context(
             "SECURITY DEFINER",
             "SET search_path TO 'pg_catalog'",
             "public.current_authenticated_user_id()",
+            "public.user_activity_states",
             "public.travel_intents",
+            "FOR UPDATE",
         ):
             assert expected in archive_definition
         assert "format(" not in archive_definition

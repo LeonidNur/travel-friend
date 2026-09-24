@@ -350,11 +350,17 @@ def test_decision_rejects_target_without_active_travel_intent(client: TestClient
     assert response.json() == {"detail": "Discover target not found"}
 
 
-def test_existing_decision_remains_idempotent_after_target_loses_eligibility(client: TestClient) -> None:
+def test_existing_decision_remains_idempotent_after_target_loses_eligibility(
+    client: TestClient, database_url: str
+) -> None:
     actor = create_discover_eligible_user(client, 1)
     target = create_discover_eligible_user(client, 2)
     assert decide(client, actor["access_token"], target["user"]["id"], "rejected").status_code == 200
-    assert client.delete("/me/travel-intent", headers=auth_headers(target["access_token"])).status_code == 204
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.travel_intents SET status='archived', archived_at=now() WHERE user_id=%s",
+            (target["user"]["id"],),
+        )
 
     repeated = decide(client, actor["access_token"], target["user"]["id"], "rejected")
 

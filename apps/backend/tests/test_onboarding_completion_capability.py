@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from uuid import uuid4
 
 import psycopg
@@ -180,3 +182,54 @@ def test_bootstrap_still_default_initializes_not_started(
 
     with psycopg.connect(database_url) as connection:
         assert onboarding_status(connection, user_id) == "not_started"
+
+
+def test_concurrent_completion_and_archive_cannot_complete_without_an_active_intent(
+    database_url: str, runtime_database_url: str
+) -> None:
+    with psycopg.connect(database_url) as owner_connection:
+        user_id = create_bootstrapped_user(owner_connection)
+        owner_connection.execute(
+            "UPDATE public.user_activity_states SET onboarding_status='in_progress' WHERE user_id=%s",
+            (user_id,),
+        )
+        add_completion_prerequisites(owner_connection, user_id)
+        owner_connection.commit()
+
+        ready_to_contend = Barrier(3)
+
+        def call_capability(capability: str) -> str | None:
+            with psycopg.connect(runtime_database_url) as connection:
+                with connection.transaction():
+                    set_authenticated_user(connection, user_id)
+                    ready_to_contend.wait()
+                    try:
+                        result = connection.execute(f"SELECT {capability}").fetchone()[0]
+                    except psycopg.Error as error:
+                        return error.diag.message_primary
+                    return str(result) if result is not None else None
+
+        executor = ThreadPoolExecutor(max_workers=2)
+        with owner_connection.transaction():
+            owner_connection.execute(
+                "SELECT 1 FROM public.user_activity_states WHERE user_id=%s FOR UPDATE", (user_id,)
+            )
+            completion = executor.submit(call_capability, CAPABILITY)
+            archive = executor.submit(call_capability, "public.archive_current_active_travel_intent()")
+            ready_to_contend.wait()
+
+        completion_result = completion.result()
+        archive_result = archive.result()
+        executor.shutdown()
+
+        active_intent = owner_connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM public.travel_intents WHERE user_id=%s AND status='active')",
+            (user_id,),
+        ).fetchone()[0]
+        final_status = onboarding_status(owner_connection, user_id)
+
+    assert (final_status, active_intent) in {("completed", True), ("in_progress", False)}
+    assert {completion_result, archive_result} in [
+        {"completed", "completed onboarding requires an active travel intent"},
+        {None, "True"},
+    ]
