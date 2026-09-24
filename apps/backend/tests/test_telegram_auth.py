@@ -181,9 +181,18 @@ def test_expired_and_revoked_sessions_are_rejected(client: TestClient, database_
     assert client.get("/auth/test-current", headers={"Authorization": f"Bearer {active_token}"}).status_code == 401
 
 
-def test_logout_revokes_only_current_session_and_user_can_have_many_sessions(client: TestClient, database_url: str) -> None:
-    first_token = login(client).json()["access_token"]
-    second_token = login(client).json()["access_token"]
+def test_reusing_same_valid_init_data_creates_independent_sessions_and_logout_revokes_only_current_one(
+    client: TestClient, database_url: str
+) -> None:
+    raw_init_data = sign_init_data(telegram_user())
+    first_response = client.post("/auth/telegram", json={"init_data": raw_init_data})
+    second_response = client.post("/auth/telegram", json={"init_data": raw_init_data})
+
+    assert first_response.status_code == second_response.status_code == 200
+    first_token = first_response.json()["access_token"]
+    second_token = second_response.json()["access_token"]
+
+    assert first_token != second_token
     assert client.post("/auth/logout", headers={"Authorization": f"Bearer {first_token}"}).status_code == 204
     assert client.get("/auth/test-current", headers={"Authorization": f"Bearer {first_token}"}).status_code == 401
     assert client.get("/auth/test-current", headers={"Authorization": f"Bearer {second_token}"}).status_code == 200
