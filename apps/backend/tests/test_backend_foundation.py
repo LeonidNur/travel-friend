@@ -9,6 +9,7 @@ os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token-for-transaction-lifecycl
 os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-transaction-lifecycle")
 
 from contextlib import contextmanager
+from datetime import date, timedelta
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -24,6 +25,7 @@ from travel_friend_backend.config import BackendSettings
 from travel_friend_backend.main import create_app
 from travel_friend_backend.routers import me
 from travel_friend_backend.schemas.onboarding import OnboardingPatchRequest
+from travel_friend_backend.schemas.chats import ChatMessageCreateRequest, GroupChatCreateRequest
 from travel_friend_backend.schemas.profile import ProfilePatchRequest
 from travel_friend_backend.schemas.travel_intent import TravelIntentPutRequest
 
@@ -284,6 +286,55 @@ def test_profile_patch_rejects_null_display_name() -> None:
         ProfilePatchRequest(display_name=None)
 
 
+@pytest.mark.parametrize(
+    ("field", "accepted_value", "rejected_value"),
+    [
+        ("display_name", "x" * 100, "x" * 101),
+        ("city", "x" * 100, "x" * 101),
+        ("bio", "x" * 1000, "x" * 1001),
+    ],
+)
+def test_profile_text_fields_trim_before_enforcing_unicode_character_limits(
+    field: str, accepted_value: str, rejected_value: str
+) -> None:
+    assert getattr(ProfilePatchRequest.model_validate({field: f"  {accepted_value}  "}), field) == accepted_value
+    with pytest.raises(ValidationError):
+        ProfilePatchRequest.model_validate({field: f"  {rejected_value}  "})
+
+
+@pytest.mark.parametrize("display_name", ("", " \t\n "))
+def test_profile_rejects_blank_display_name(display_name: str) -> None:
+    with pytest.raises(ValidationError, match="display_name must not be blank"):
+        ProfilePatchRequest(display_name=display_name)
+
+
+def test_profile_normalizes_blank_city_to_null() -> None:
+    assert ProfilePatchRequest(city=" \t ").city is None
+
+
+@pytest.mark.parametrize("collection_field", ("travel_style", "interests"))
+def test_profile_collections_normalize_and_enforce_element_and_count_limits(collection_field: str) -> None:
+    accepted = [f"item {index}" for index in range(20)]
+    payload = {collection_field: [f" {value} " for value in accepted]}
+    assert getattr(ProfilePatchRequest.model_validate(payload), collection_field) == accepted
+    for invalid_values in (
+        [f"item {index}" for index in range(21)],
+        [None],
+        [" \t "],
+        ["x" * 101],
+        ["same", " same "],
+    ):
+        with pytest.raises(ValidationError):
+            ProfilePatchRequest.model_validate({collection_field: invalid_values})
+
+
+def test_profile_birth_date_accepts_today_and_rejects_future_dates() -> None:
+    today = date.today()
+    assert ProfilePatchRequest(birth_date=today).birth_date == today
+    with pytest.raises(ValidationError, match="birth_date must not be in the future"):
+        ProfilePatchRequest(birth_date=today + timedelta(days=1))
+
+
 def test_current_user_travel_intent_queries_only_the_authenticated_active_intent() -> None:
     principal = service.AuthenticatedPrincipal(user_id=uuid4(), session_id=uuid4())
     intent = {"user_id": principal.user_id, "destination": "Lisbon", "status": "active"}
@@ -371,3 +422,21 @@ def test_travel_intent_request_rejects_invalid_ranges_and_server_owned_fields(
 ) -> None:
     with pytest.raises(ValidationError):
         TravelIntentPutRequest.model_validate(payload)
+
+
+def test_travel_intent_normalizes_destination_and_enforces_character_limit() -> None:
+    assert TravelIntentPutRequest(destination=f"  {'x' * 200}  ").destination == "x" * 200
+    for destination in (" \t\n ", f"  {'x' * 201}  "):
+        with pytest.raises(ValidationError):
+            TravelIntentPutRequest(destination=destination)
+
+
+def test_chat_write_schemas_enforce_message_and_group_limits() -> None:
+    assert ChatMessageCreateRequest(content_text=f"  {'x' * 4000}  ").content_text == "x" * 4000
+    with pytest.raises(ValidationError):
+        ChatMessageCreateRequest(content_text=f"  {'x' * 4001}  ")
+
+    companions = [uuid4() for _ in range(20)]
+    assert GroupChatCreateRequest(user_ids=companions).user_ids == companions
+    with pytest.raises(ValidationError):
+        GroupChatCreateRequest(user_ids=[uuid4() for _ in range(21)])

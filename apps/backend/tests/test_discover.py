@@ -160,7 +160,7 @@ def test_discover_candidates_excludes_current_user(client: TestClient) -> None:
     assert client.patch(
         "/me/profile",
         headers=auth_headers(candidate["access_token"]),
-        json={"travel_style": ["city-break", None], "interests": ["food", None]},
+        json={"travel_style": ["city-break"], "interests": ["food"]},
     ).status_code == 200
 
     response = client.get("/discover/candidates", headers=auth_headers(actor["access_token"]))
