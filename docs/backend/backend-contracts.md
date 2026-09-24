@@ -10,6 +10,12 @@ API проектируется вокруг пользовательских и 
 
 Все кроме `GET /health` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
 
+### Telegram `initData` auth baseline
+
+- Backend выполняет каноническую HMAC-проверку подписи raw `initData` до использования Telegram user data.
+- `auth_date` принимается при возрасте не более 600 секунд включительно; допустимое опережение часов — не более 30 секунд включительно.
+- MVP допускает повторное использование одного валидного `initData` в этом окне: каждый вход может создать независимую сессию. Replay cache, nonce и single-use semantics пока не вводятся.
+
 | Method | Path | Назначение |
 | --- | --- | --- |
 | `GET` | `/health` | health check |

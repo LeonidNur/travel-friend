@@ -161,6 +161,21 @@ def test_default_policy_rejects_init_data_older_than_ten_minutes() -> None:
         verifier.verify(raw_init_data)
 
 
+def test_default_policy_accepts_init_data_exactly_ten_minutes_old() -> None:
+    verifier = TelegramInitDataVerifier(
+        bot_token=TEST_BOT_TOKEN,
+        clock=lambda: NOW,
+    )
+    raw_init_data = sign_init_data(
+        {
+            "auth_date": str(NOW - 600),
+            "user": json.dumps(TEST_USER, separators=(",", ":")),
+        }
+    )
+
+    assert verifier.verify(raw_init_data).auth_date == NOW - 600
+
+
 @pytest.mark.parametrize("auth_date", [None, "not-an-integer"])
 def test_rejects_invalid_auth_date_after_valid_signature(
     verifier: TelegramInitDataVerifier, auth_date: str | None
@@ -185,6 +200,19 @@ def test_rejects_auth_date_beyond_future_clock_skew(
 
     with pytest.raises(MalformedTelegramInitDataError):
         verifier.verify(raw_init_data)
+
+
+def test_accepts_auth_date_at_future_clock_skew_boundary(
+    verifier: TelegramInitDataVerifier,
+) -> None:
+    raw_init_data = sign_init_data(
+        {
+            "auth_date": str(NOW + 30),
+            "user": json.dumps(TEST_USER, separators=(",", ":")),
+        }
+    )
+
+    assert verifier.verify(raw_init_data).auth_date == NOW + 30
 
 
 @pytest.mark.parametrize(
