@@ -10,6 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.dependencies import get_authenticated_database_connection
+from travel_friend_backend.rate_limit import (
+    GROUP_CREATION_POLICY,
+    MESSAGE_CREATION_POLICY,
+    authenticated_rate_limit,
+)
 from travel_friend_backend.schemas.chats import (
     ChatListItemResponse,
     ChatMessageCreateRequest,
@@ -45,7 +50,12 @@ def create_group_chat(
     return dict(chat)
 
 
-@router.post("/groups", response_model=GroupChatCreateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/groups",
+    response_model=GroupChatCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(authenticated_rate_limit(GROUP_CREATION_POLICY))],
+)
 def create_group_chat_route(
     payload: GroupChatCreateRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
@@ -192,6 +202,7 @@ def get_chat_messages(
     "/{chat_id}/messages",
     response_model=ChatMessageResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(authenticated_rate_limit(MESSAGE_CREATION_POLICY))],
 )
 def create_chat_message(
     chat_id: UUID,

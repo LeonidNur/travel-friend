@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.dependencies import get_authenticated_database_connection
+from travel_friend_backend.rate_limit import TRIP_CREATION_POLICY, authenticated_rate_limit
 from travel_friend_backend.schemas.trips import (
     TripCreateResponse,
     TripDetailResponse,
@@ -112,6 +113,7 @@ def create_trip_for_chat(
     "/{chat_id}/trips",
     response_model=TripCreateResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(authenticated_rate_limit(TRIP_CREATION_POLICY))],
 )
 def create_trip(
     chat_id: UUID,
