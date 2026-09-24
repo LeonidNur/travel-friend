@@ -14,6 +14,11 @@ from travel_friend_backend.auth.service import (
 )
 from travel_friend_backend.db import authenticated_transaction, database_connection
 from travel_friend_backend.request_body_limit import RequestBodyLimitMiddleware
+from travel_friend_backend.rate_limit import (
+    TELEGRAM_LOGIN_POLICY,
+    FixedWindowRateLimiter,
+    enforce_rate_limit,
+)
 from travel_friend_backend.routers.chats import router as chats_router
 from travel_friend_backend.routers.discover import router as discover_router
 from travel_friend_backend.routers.me import router as me_router
@@ -29,6 +34,7 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     app = FastAPI(title="Travel Friend Backend")
     app.add_middleware(RequestBodyLimitMiddleware)
     app.state.backend_settings = backend_settings
+    app.state.rate_limiter = FixedWindowRateLimiter()
     app.state.telegram_init_data_verifier = TelegramInitDataVerifier(
         bot_token=backend_settings.telegram_bot_token,
         max_age_seconds=600,
@@ -51,6 +57,11 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
             raise HTTPException(401, "Invalid Telegram authentication")
         try:
             verified = app.state.telegram_init_data_verifier.verify(payload.init_data)
+            enforce_rate_limit(
+                app.state.rate_limiter,
+                TELEGRAM_LOGIN_POLICY,
+                str(verified.identity.telegram_user_id),
+            )
             return login(backend_settings.database_url, verified.identity)
         except HTTPException:
             raise

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.dependencies import get_authenticated_database_connection
+from travel_friend_backend.rate_limit import DISCOVER_DECISION_POLICY, authenticated_rate_limit
 from travel_friend_backend.schemas.discover import (
     DiscoverCandidateResponse,
     DiscoverDecisionRequest,
@@ -76,7 +77,11 @@ def get_discover_candidates(
     ]
 
 
-@router.put("/decisions/{target_user_id}", response_model=DiscoverDecisionResponse)
+@router.put(
+    "/decisions/{target_user_id}",
+    response_model=DiscoverDecisionResponse,
+    dependencies=[Depends(authenticated_rate_limit(DISCOVER_DECISION_POLICY))],
+)
 def save_discover_decision(
     target_user_id: UUID,
     payload: DiscoverDecisionRequest,

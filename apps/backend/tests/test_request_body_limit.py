@@ -230,7 +230,11 @@ def test_valid_telegram_auth_request_reaches_verifier_and_login(monkeypatch) -> 
     class Verifier:
         def verify(self, init_data: str) -> object:
             verified_values.append(init_data)
-            return type("Verified", (), {"identity": object()})()
+            return type(
+                "Verified",
+                (),
+                {"identity": type("Identity", (), {"telegram_user_id": 123})()},
+            )()
 
     app.state.telegram_init_data_verifier = Verifier()
     monkeypatch.setattr("travel_friend_backend.main.login", lambda *_: {"access_token": "token"})

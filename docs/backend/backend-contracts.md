@@ -12,6 +12,14 @@ API проектируется вокруг пользовательских и 
 
 Для всех HTTP requests FastAPI backend применяет global raw request-body limit `256 KiB` (`262144` bytes), независимо от лимитов upstream proxy (Next.js, Vercel, Render и т.п.). При превышении backend возвращает `413` с JSON `{"detail":"Request body exceeds the 256 KiB limit"}` до JSON parsing FastAPI и Pydantic validation. Это ограничение не заменяет и не меняет field/domain limits endpoint-ов.
 
+### Minimal in-process rate limiting
+
+MVP применяет только небольшой per-process fixed-window limiter к следующим write operations: `POST /auth/telegram` — `12 / 10 minutes` по verified Telegram user ID; `PUT /discover/decisions/{targetUserId}` — `90 / minute`; `POST /chats/{chatId}/messages` — `40 / minute`; `POST /chats/groups` и `POST /chats/{chatId}/trips` — по `5 / 10 minutes` каждый. Все authenticated policies keyed by backend-authenticated user ID; buckets Group и Trip независимы.
+
+Для Telegram сначала выполняется cryptographic verification raw `init_data`, затем limiter, и только затем DB login/session bootstrap; invalid `init_data` bucket не создаёт. Для authenticated writes limiter запускается после resolution active Bearer session и до business DB transaction/capability. GET endpoints, `/health`, profile/travel-intent/onboarding mutations и logout не throttled.
+
+При превышении возвращается `429` с `{"detail":"Too many requests. Please retry later."}` и `Retry-After` как положительным целым числом секунд до reset текущего fixed window. `RateLimit-*` headers не добавляются. Хранилище — только memory одного app process: restart/deploy сбрасывает counters, а workers/instances намеренно считают независимо. Cleanup incremental: один consume проверяет максимум 32 buckets и постепенно удаляет expired entries; при idle stale buckets остаются до последующих consume. На process отслеживается не более 10 000 buckets. Если cap заполнен после bounded cleanup, новая identity получает тот же `429` с `Retry-After: 1`; existing buckets не evict-ятся и не reset-ятся. IP/pre-auth limiter и обработка `X-Forwarded-For` отсутствуют, пока не подтверждена trusted proxy boundary.
+
 ### Telegram `initData` auth baseline
 
 - Backend выполняет каноническую HMAC-проверку подписи raw `initData` до использования Telegram user data.
