@@ -22,7 +22,7 @@ API проектируется вокруг пользовательских и 
 | `POST` | `/auth/telegram` | verify raw `init_data`, login/create identity and session, вернуть bootstrap flags |
 | `POST` | `/auth/logout` | revoke только текущую session, `204` |
 | `GET` / `PATCH` | `/me/profile` | получить/изменить профиль текущего пользователя |
-| `GET` / `PUT` / `DELETE` | `/me/travel-intent` | active TravelIntent; `DELETE` архивирует его, `204` |
+| `GET` / `PUT` / `DELETE` | `/me/travel-intent` | active TravelIntent; `DELETE`: `204` или `409` для completed user с active intent |
 | `PATCH` | `/me/onboarding` | переход только в `in_progress` или `completed`; completed нельзя понизить |
 | `GET` | `/discover/candidates` | eligible candidates без решений текущего пользователя |
 | `PUT` | `/discover/decisions/{targetUserId}` | финальное `interested` / `rejected`; reciprocal interest создаёт Match и direct Chat |
@@ -36,7 +36,8 @@ API проектируется вокруг пользовательских и 
 Текущие ограничения реализации:
 
 - `GET /chats/{chatId}`, message cursor pagination, read/unread API и realtime не реализованы.
-- Invariant `completed → DELETE active TravelIntent` ещё не закрыт и остаётся отдельным hardening work item.
+- Completed onboarding требует Profile и active TravelIntent. `DELETE /me/travel-intent` возвращает `409`, если completed user пытается архивировать active intent; оба состояния остаются неизменными.
+- TODO/RISK: существующий audit finding для `PATCH /me/onboarding` в `in_progress` не исправляется этим work item.
 - Group Chat создаётся инициатором с минимум двумя unique eligible companions; eligible означает existing matched direct Chat с инициатором. Инициатор добавляется автоматически, а состав после создания не редактируется в MVP.
 - `POST /chats/{chatId}/trips` разрешает только один незавершённый (`forming`/`active`) Trip на Chat и отвечает `409` при повторе.
 - Trip создаётся из direct или group Chat. Backend в одной transaction читает всех активных ChatParticipant и сразу создаёт столько же `TripParticipant`; `TripInvitation` в этом MVP flow не создаётся и не используется.
@@ -87,7 +88,7 @@ Frontend передаёт raw context, но не является доверен
 
 `DELETE /me/travel-intent`
 
-`TravelIntent` отделён от `Profile`. `DELETE` означает отсутствие активного intent. Будущая physical deletion или archive strategy этим документом не определяется.
+`TravelIntent` отделён от `Profile`. `DELETE` архивирует active intent: для onboarding в `not_started` или `in_progress` операция остаётся идемпотентной и отвечает `204`. Если onboarding уже `completed` и active intent существует, операция отвечает `409 Conflict`; active intent и onboarding state не меняются. Legacy/corrupt состояние `completed` без active intent остаётся идемпотентным no-op и не repair-ится этим flow.
 
 ## Discover, Like и Match
 
