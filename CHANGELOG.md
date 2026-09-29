@@ -1,5 +1,10 @@
 # Журнал изменений
 
+## 2026-09-29
+
+- Закрыт P0 security baseline persisted MVP: server-side Telegram `initData`, invariant completed onboarding и active TravelIntent, lifecycle opaque sessions, backend input/domain limits и minimal in-process rate limiting.
+- Усилена repository-controlled secrets/env/logging hygiene: nested local env-файлы игнорируются, frontend env template не содержит Telegram token, а runtime deployment gate не выводит детали ошибки подключения.
+
 ## 2026-09-16
 
 - Синхронизированы entry-point документы с persisted backend-backed MVP checkpoint; добавлена явная иерархия current source-of-truth и historical records.

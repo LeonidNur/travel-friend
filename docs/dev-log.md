@@ -1,5 +1,24 @@
 # Дневник разработки
 
+## 2026-09-29 — P0 security baseline и provider-side verification
+
+### Что сделали
+
+- Закрыли P0 security baseline реализованного MVP: server-side Telegram `initData`, invariant `completed → active TravelIntent`, canonical lifecycle opaque sessions, backend input/domain limits, minimal in-process rate limiting и secrets/logging hygiene.
+- Усилили repository-controlled boundary: local env-файлы игнорируются на всех уровнях repository, frontend template не содержит Telegram token, а runtime deployment gate не раскрывает детали connection errors.
+
+### Что проверили
+
+- Production `/health` и Telegram authentication smoke успешны.
+- Vercel остаётся только frontend boundary: project env содержит только `BACKEND_API_ORIGIN`, Shared env отсутствуют, system env включены; просмотр request logs не выявил дополнительного application logging.
+- Render остаётся backend boundary: `DATABASE_URL` использует runtime role `app_runtime`, `TELEGRAM_BOT_TOKEN` находится только на backend; branch — `develop`, Root Directory — `apps/backend`, Auto-Deploy — Off. Build command — `uv sync --frozen`, start command — `uv run uvicorn travel_friend_backend.main:app --host 0.0.0.0 --port $PORT`.
+- В Supabase существует отдельная runtime role `app_runtime`; сохраняется least-privilege architecture. GitHub Actions secrets и variables отсутствуют.
+
+### Что осталось
+
+- P1 TEAM E2E, controlled multi-user coverage для Trip Detail и следующий отдельный Trip lifecycle/write slice остаются следующими work items.
+- Подробный [technical hardening backlog](technical-hardening-backlog.md) намеренно не обновлялся этим changeset.
+
 ## 2026-09-16 — Entry-point documentation sync
 
 ### Что сделали

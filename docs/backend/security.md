@@ -173,6 +173,20 @@ AI может использовать результаты provider-ов тол
 - секреты не попадают в AI prompt-контекст;
 - доступ к секретам ограничивается по принципу least privilege.
 
+### Current logging и provider boundaries
+
+В runtime и operator tooling нельзя записывать в logs raw `initData`, session
+tokens, Authorization headers, DSN, passwords или provider secrets. Ошибки
+deployment gate не должны раскрывать connection details.
+
+Provider-side verification на 2026-09-29 подтвердила разделение boundaries без
+фиксации secret values: Vercel остаётся frontend-контуром и содержит только
+`BACKEND_API_ORIGIN` как project env (Shared env отсутствуют); Render остаётся
+backend-контуром с `TELEGRAM_BOT_TOKEN` и runtime `DATABASE_URL` роли
+`app_runtime`; GitHub Actions secrets и variables отсутствуют. В Render backend
+deploys from `develop`, Root Directory — `apps/backend`, Auto-Deploy — Off.
+Supabase сохраняет отдельную least-privileged role `app_runtime` для runtime.
+
 ### Операторская ротация production credentials
 
 Эта процедура не выполняет ротацию автоматически и не должна получать значения

@@ -6,7 +6,7 @@
 
 API проектируется вокруг пользовательских и domain actions, а не как CRUD поверх каждой ER-сущности. Frontend не может напрямую создавать внутренние сущности `Match`, `ChatParticipant`, `TripParticipant`, `Proposal` и system `Message`. Backend/domain является доверенной точкой применения инвариантов, авторизации и атомарных domain-операций.
 
-## Реализованные HTTP contracts (`develop`, 2026-09-23)
+## Реализованные HTTP contracts (`develop`, 2026-09-29)
 
 Все кроме `GET /health` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
 

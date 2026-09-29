@@ -1610,12 +1610,13 @@ Choose them during integrations implementation by comparing capabilities, covera
 
 ## D. Auth session storage
 
-Before completing `/auth/telegram`, decide:
-
-- JWT vs opaque session;
-- session storage if required;
-- final Telegram initData TTL;
-- replay policy.
+Current MVP уже использует opaque Bearer sessions в PostgreSQL: хранится только
+SHA-256 hash token, а canonical capability задаёт `created_at` по времени БД и
+absolute `expires_at` через 30 days. `initData` проверяется backend-ом с окном
+freshness 600 seconds; повторное использование валидного payload внутри этого
+окна допустимо и может создать независимую session. JWT, replay cache, nonce и
+single-use semantics не вводятся этим baseline. Точный current contract — в
+`backend-contracts.md`; migrations остаются SQL-источником истины.
 
 ## E. RLS / database roles
 
