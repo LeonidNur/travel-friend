@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import runpy
 from pathlib import Path
+
+import pytest
 
 
 GATE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "production-runtime-deployment-gate.py"
@@ -116,3 +119,26 @@ def test_deployment_gate_uses_rollback_only_for_the_negative_write_probe() -> No
     assert "raise RollbackProbe" in script
     assert "except RollbackProbe:" in script
     assert "WHERE false" in script
+
+
+def test_deployment_gate_failure_output_excludes_exception_text(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    gate = runpy.run_path(str(GATE_PATH))
+    sensitive_exception_text = "credential-sentinel-must-not-reach-stderr"
+
+    def fail_gate(_: str) -> None:
+        raise RuntimeError(sensitive_exception_text)
+
+    monkeypatch.setenv("PRODUCTION_RUNTIME_DATABASE_URL", "postgresql://runtime@example.test/app")
+    monkeypatch.setitem(gate["main"].__globals__, "run_gate", fail_gate)
+
+    with pytest.raises(SystemExit) as exit_info:
+        gate["main"]()
+
+    assert exit_info.value.code == 1
+    error_output = capsys.readouterr().err
+    assert "Production runtime deployment gate failed" in error_output
+    assert "RuntimeError" in error_output
+    assert sensitive_exception_text not in error_output
