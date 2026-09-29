@@ -580,7 +580,11 @@ def main() -> None:
         require(bool(database_url), "PRODUCTION_RUNTIME_DATABASE_URL is required")
         run_gate(database_url)
     except Exception as error:
-        print(f"Production runtime deployment gate failed: {error}", file=sys.stderr)
+        print(
+            f"Production runtime deployment gate failed ({type(error).__name__}); "
+            "inspect the gate in a trusted operator environment.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     print("Production runtime deployment gate passed.")

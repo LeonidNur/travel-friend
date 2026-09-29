@@ -173,6 +173,39 @@ AI может использовать результаты provider-ов тол
 - секреты не попадают в AI prompt-контекст;
 - доступ к секретам ограничивается по принципу least privilege.
 
+### Операторская ротация production credentials
+
+Эта процедура не выполняет ротацию автоматически и не должна получать значения
+credential в репозиторий, тикет или shell history.
+
+#### Telegram bot token
+
+1. В BotFather выполните штатную rotation через `/token` и получите новый
+   credential. С этого момента считайте предыдущий token недействительным: не
+   полагайтесь на одновременную валидность двух token.
+2. Без задержки обновите только `TELEGRAM_BOT_TOKEN` в secret/env
+   backend-сервиса Render;
+   не добавляйте его в Vercel, Mini App или client-prefixed env.
+3. Выполните controlled restart/redeploy backend и проверьте `/health`, затем
+   пройдите Telegram authentication smoke в production.
+4. Убедитесь, что предыдущий credential больше не используется ни одним
+   runtime, операторским процессом или CI integration.
+5. Удалите предыдущее значение из operator secret store, локальных operator env и
+   CI/provider stores, где он мог храниться.
+
+#### Production `app_runtime` database credential
+
+1. В trusted Supabase/privileged operator environment смените пароль только
+   роли `app_runtime`; production runtime не должен использовать owner или
+   provisioning credential.
+2. Соберите новый Session Pooler DSN этой роли и обновите `DATABASE_URL` только
+   в secret/env backend-сервиса Render.
+3. Выполните controlled restart/redeploy backend, запустите runtime deployment
+   gate с новым `app_runtime` DSN и затем проверьте `/health` и Telegram
+   authentication smoke.
+4. Удалите предыдущий DSN/password из operator secret store, локальных
+   operator env и CI/provider stores, где он мог храниться.
+
 ## Общие принципы безопасности
 
 - Сервер доверяет только raw `initData`, проверенному на backend.
