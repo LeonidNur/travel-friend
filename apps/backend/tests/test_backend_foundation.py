@@ -312,6 +312,20 @@ def test_profile_normalizes_blank_city_to_null() -> None:
     assert ProfilePatchRequest(city=" \t ").city is None
 
 
+@pytest.mark.parametrize("field", ("gender", "budget_level", "comfort_level"))
+def test_profile_optional_text_fields_normalize_and_enforce_unicode_character_limits(field: str) -> None:
+    assert getattr(ProfilePatchRequest.model_validate({field: " \t "}), field) is None
+
+    normalized_value = "🙂" * 100
+    assert (
+        getattr(ProfilePatchRequest.model_validate({field: f"  {normalized_value}  "}), field)
+        == normalized_value
+    )
+
+    with pytest.raises(ValidationError):
+        ProfilePatchRequest.model_validate({field: f"  {'🙂' * 101}  "})
+
+
 @pytest.mark.parametrize("collection_field", ("travel_style", "interests"))
 def test_profile_collections_normalize_and_enforce_element_and_count_limits(collection_field: str) -> None:
     accepted = [f"item {index}" for index in range(20)]

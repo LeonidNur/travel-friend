@@ -54,6 +54,18 @@ class ProfilePatchRequest(BaseModel):
             raise ValueError("city must not exceed 100 characters")
         return normalized_value
 
+    @field_validator("gender", "budget_level", "comfort_level")
+    @classmethod
+    def normalize_optional_profile_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized_value = value.strip()
+        if not normalized_value:
+            return None
+        if len(normalized_value) > 100:
+            raise ValueError("optional profile text must not exceed 100 characters")
+        return normalized_value
+
     @field_validator("bio")
     @classmethod
     def normalize_bio(cls, value: str | None) -> str | None:

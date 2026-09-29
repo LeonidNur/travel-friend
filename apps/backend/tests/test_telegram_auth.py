@@ -682,6 +682,45 @@ def test_patch_current_user_profile_updates_only_supplied_fields(client: TestCli
     assert empty_response.json() == response.json()
 
 
+def test_patch_current_user_profile_normalizes_optional_text_fields_and_rejects_oversized_values(
+    client: TestClient, database_url: str
+) -> None:
+    token = login(client).json()["access_token"]
+    normalized_values = {
+        "gender": "female",
+        "budget_level": "medium",
+        "comfort_level": "high",
+    }
+
+    created = client.patch(
+        "/me/profile",
+        headers=auth_headers(token),
+        json={
+            "display_name": "Ada",
+            **{field: f"  {value}  " for field, value in normalized_values.items()},
+        },
+    )
+
+    assert created.status_code == 200
+    assert {field: created.json()[field] for field in normalized_values} == normalized_values
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        assert connection.execute(
+            "SELECT gender, budget_level, comfort_level FROM public.profiles"
+        ).fetchone() == normalized_values
+
+    rejected = client.patch(
+        "/me/profile",
+        headers=auth_headers(token),
+        json={"gender": "x" * 101},
+    )
+
+    assert rejected.status_code == 422
+    with psycopg.connect(database_url, row_factory=psycopg.rows.dict_row) as connection:
+        assert connection.execute(
+            "SELECT gender, budget_level, comfort_level FROM public.profiles"
+        ).fetchone() == normalized_values
+
+
 def test_current_user_profile_cannot_read_or_change_another_users_profile(
     client: TestClient, database_url: str
 ) -> None:
