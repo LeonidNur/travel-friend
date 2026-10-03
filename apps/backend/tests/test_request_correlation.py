@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from contextlib import contextmanager
 from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
@@ -19,6 +20,18 @@ from travel_friend_backend.config import BackendSettings
 from travel_friend_backend.main import create_app
 from travel_friend_backend.rate_limit import TELEGRAM_LOGIN_POLICY
 from travel_friend_backend.request_correlation import RequestCorrelationMiddleware
+
+
+@contextmanager
+def capture_application_logs(caplog: pytest.LogCaptureFixture):
+    """Capture the configured application namespace without root propagation."""
+    application_logger = logging.getLogger("travel_friend_backend")
+    application_logger.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.INFO, logger="travel_friend_backend"):
+            yield
+    finally:
+        application_logger.removeHandler(caplog.handler)
 
 
 def make_app():
@@ -120,7 +133,7 @@ def test_unexpected_exception_returns_generic_500_with_request_id_and_traceback_
     def unexpected_failure() -> None:
         raise RuntimeError(secret_diagnostic)
 
-    with caplog.at_level(logging.INFO, logger="travel_friend_backend.request_correlation"):
+    with capture_application_logs(caplog):
         with TestClient(app, raise_server_exceptions=False) as client:
             response = client.get("/test/unexpected", headers={"X-Request-ID": inbound_request_id})
 
@@ -146,7 +159,7 @@ def test_completion_log_uses_only_safe_request_metadata(caplog: pytest.LogCaptur
     cookie_secret = "session=cookie-secret"
     init_data_secret = "telegram-init-data-secret"
 
-    with caplog.at_level(logging.INFO, logger="travel_friend_backend.request_correlation"):
+    with capture_application_logs(caplog):
         with TestClient(app) as client:
             response = client.post(
                 f"/auth/telegram?token={query_secret}",
@@ -200,7 +213,7 @@ def test_completion_log_preserves_started_response_status_on_late_failure(
     }
     middleware = RequestCorrelationMiddleware(failing_app)
 
-    with caplog.at_level(logging.INFO, logger="travel_friend_backend.request_correlation"):
+    with capture_application_logs(caplog):
         with pytest.raises(RuntimeError, match="late failure"):
             asyncio.run(middleware(scope, receive, send))
 

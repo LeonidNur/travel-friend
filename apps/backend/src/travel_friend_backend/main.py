@@ -14,6 +14,7 @@ from travel_friend_backend.auth.service import (
 )
 from travel_friend_backend import readiness
 from travel_friend_backend.db import authenticated_transaction, database_connection
+from travel_friend_backend.logging_config import configure_application_logging
 from travel_friend_backend.request_body_limit import RequestBodyLimitMiddleware
 from travel_friend_backend.request_correlation import RequestCorrelationMiddleware
 from travel_friend_backend.rate_limit import (
@@ -32,6 +33,7 @@ class TelegramAuthRequest(BaseModel):
 
 
 def create_app(settings: BackendSettings | None = None) -> FastAPI:
+    configure_application_logging()
     backend_settings = settings or get_backend_settings()
     app = FastAPI(title="Travel Friend Backend")
     app.add_middleware(RequestBodyLimitMiddleware)
