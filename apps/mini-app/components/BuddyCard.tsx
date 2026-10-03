@@ -2,9 +2,9 @@ import { getDiscoverLevelLabels, type DiscoverCardCandidate } from '@/lib/discov
 
 interface BuddyCardProps {
   buddy: DiscoverCardCandidate;
-  onDismiss: () => void;
-  onInterested: () => void;
-  disabled: boolean;
+  onDismiss?: () => void;
+  onInterested?: () => void;
+  disabled?: boolean;
 }
 
 function formatDateRange(dateFrom: string | null, dateTo: string | null): string | null {
@@ -76,7 +76,7 @@ export function BuddyCard({ buddy, onDismiss, onInterested, disabled }: BuddyCar
         </div>
       </div> : null}
 
-      <div className="buddy-card__footer">
+      {onDismiss && onInterested ? <div className="buddy-card__footer">
         <div className="buddy-card__actions">
           <button type="button" className="profile-button profile-button--secondary" onClick={onDismiss} disabled={disabled}>
             Не подходит
@@ -85,7 +85,7 @@ export function BuddyCard({ buddy, onDismiss, onInterested, disabled }: BuddyCar
             Подходит
           </button>
         </div>
-      </div>
+      </div> : null}
     </article>
   );
 }
