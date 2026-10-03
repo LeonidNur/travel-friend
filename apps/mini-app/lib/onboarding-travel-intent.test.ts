@@ -59,6 +59,19 @@ test('requires destination and validates optional dates and their order', () => 
   );
 });
 
+test('validates destination length by Unicode code points for both onboarding and Profile reuse', () => {
+  const maximumDestination = '😀'.repeat(200);
+  const overlongDestination = '😀'.repeat(201);
+
+  assert.equal(maximumDestination.length, 400);
+  assert.equal(Array.from(maximumDestination).length, 200);
+  assert.equal(validateOnboardingTravelIntent({ destination: maximumDestination, dateFrom: '', dateTo: '' }).isValid, true);
+  assert.equal(
+    validateOnboardingTravelIntent({ destination: overlongDestination, dateFrom: '', dateTo: '' }).errors.destination,
+    'Направление не должно быть длиннее 200 символов'
+  );
+});
+
 test('maps a draft to a PUT payload with nullable optional dates', () => {
   assert.deepEqual(
     toTravelIntentPutRequest({ destination: '  Тбилиси ', dateFrom: '', dateTo: '  ' }),

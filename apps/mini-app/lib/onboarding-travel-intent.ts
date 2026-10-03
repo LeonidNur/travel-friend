@@ -7,7 +7,7 @@ export type OnboardingTravelIntentDraft = Readonly<{
 }>;
 
 export type OnboardingTravelIntentValidationErrors = Readonly<{
-  destination?: 'Укажите направление';
+  destination?: 'Укажите направление' | 'Направление не должно быть длиннее 200 символов';
   dateFrom?: 'Укажите корректную дату';
   dateTo?: 'Укажите корректную дату' | 'Дата окончания не может быть раньше даты начала';
 }>;
@@ -58,6 +58,7 @@ export function validateOnboardingTravelIntent(
   const dateTo = draft.dateTo.trim();
   const errors: OnboardingTravelIntentValidationErrors = {
     ...(draft.destination.trim().length === 0 ? { destination: 'Укажите направление' as const } : {}),
+    ...(Array.from(draft.destination.trim()).length > 200 ? { destination: 'Направление не должно быть длиннее 200 символов' as const } : {}),
     ...(dateFrom.length > 0 && !isValidDate(dateFrom) ? { dateFrom: 'Укажите корректную дату' as const } : {}),
     ...(dateTo.length > 0 && !isValidDate(dateTo) ? { dateTo: 'Укажите корректную дату' as const } : {}),
     ...(dateFrom.length > 0 && dateTo.length > 0 && isValidDate(dateFrom) && isValidDate(dateTo) && dateTo < dateFrom

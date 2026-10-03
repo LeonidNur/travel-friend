@@ -13,7 +13,9 @@ import {
   type ServerProfileState
 } from '@/lib/current-user-profile-hydration';
 import {
+  getTravelIntentHydrationToken,
   hydrateServerTravelIntent,
+  requireActiveTravelIntent,
   type ServerTravelIntentState
 } from '@/lib/current-user-travel-intent-hydration';
 import {
@@ -32,6 +34,7 @@ type CurrentUserProfileContextValue = {
   reloadServerProfile: () => void;
   serverTravelIntent: ServerTravelIntentState;
   setServerTravelIntent: (travelIntent: TravelIntentResponse) => void;
+  reloadServerTravelIntent: () => void;
 };
 
 const CurrentUserProfileContext = createContext<CurrentUserProfileContextValue | undefined>(undefined);
@@ -82,12 +85,17 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
   }, [authSession, authStatus, hydrationState]);
 
   useEffect(() => {
-    if (authStatus !== 'onboarding_required' || authSession === null) {
+    const accessToken = getTravelIntentHydrationToken({
+      authStatus,
+      accessToken: authSession?.accessToken ?? null,
+      hydratedAccessToken: travelIntentHydrationState?.accessToken ?? null
+    });
+
+    if (accessToken === null) {
       return;
     }
 
     let isCurrent = true;
-    const accessToken = authSession.accessToken;
 
     void hydrateServerTravelIntent({
       getTravelIntent: backendApiClient.getTravelIntent,
@@ -101,7 +109,7 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     return () => {
       isCurrent = false;
     };
-  }, [authSession, authStatus]);
+  }, [authSession, authStatus, travelIntentHydrationState]);
 
   const saveProfile = useCallback((nextProfile: UserProfile) => {
     setProfileSession((currentSession) => saveCurrentUserProfile(currentSession, nextProfile));
@@ -132,6 +140,12 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     });
   }, [authSession]);
 
+  const reloadServerTravelIntent = useCallback(() => {
+    if (authSession !== null) {
+      setTravelIntentHydrationState(null);
+    }
+  }, [authSession]);
+
   const value = useMemo(() => {
     const serverProfile =
       (authStatus === 'authenticated' || authStatus === 'onboarding_required') &&
@@ -140,10 +154,12 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
         ? hydrationState.state
         : { status: 'loading' as const };
     const serverTravelIntent =
-      authStatus === 'onboarding_required' &&
+      (authStatus === 'authenticated' || authStatus === 'onboarding_required') &&
       authSession !== null &&
       travelIntentHydrationState?.accessToken === authSession.accessToken
-        ? travelIntentHydrationState.state
+        ? authStatus === 'authenticated'
+          ? requireActiveTravelIntent(travelIntentHydrationState.state)
+          : travelIntentHydrationState.state
         : { status: 'loading' as const };
 
     return {
@@ -152,6 +168,7 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
       serverProfile,
       setServerProfile,
       reloadServerProfile,
+      reloadServerTravelIntent,
       serverTravelIntent,
       setServerTravelIntent
     };
@@ -161,6 +178,7 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     hydrationState,
     profile,
     reloadServerProfile,
+    reloadServerTravelIntent,
     saveProfile,
     setServerProfile,
     setServerTravelIntent,

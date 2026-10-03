@@ -8,7 +8,7 @@ const travelIntentHydrationModule: typeof TravelIntentHydrationModule = await im
   new URL('./current-user-travel-intent-hydration.ts', import.meta.url).href
 );
 
-const { hydrateServerTravelIntent } = travelIntentHydrationModule;
+const { getTravelIntentHydrationToken, hydrateServerTravelIntent, requireActiveTravelIntent } = travelIntentHydrationModule;
 
 const travelIntent: TravelIntentResponse = {
   id: 'intent-id',
@@ -49,4 +49,42 @@ test('represents a TravelIntent request error separately from resource data', as
   });
 
   assert.deepEqual(result, { status: 'error' });
+});
+
+test('keeps a completed user TravelIntent as an active resource', () => {
+  assert.deepEqual(requireActiveTravelIntent({ status: 'loaded', travelIntent }), {
+    status: 'loaded',
+    travelIntent
+  });
+});
+
+test('treats a missing completed user TravelIntent as an invariant error', () => {
+  assert.deepEqual(requireActiveTravelIntent({ status: 'loaded', travelIntent: null }), {
+    status: 'invariant_error'
+  });
+});
+
+test('hydrates an authenticated TravelIntent and retries after a recoverable failure', async () => {
+  const firstRequestToken = getTravelIntentHydrationToken({
+    authStatus: 'authenticated', accessToken: 'runtime-token', hydratedAccessToken: null
+  });
+  assert.equal(firstRequestToken, 'runtime-token');
+
+  let requestCount = 0;
+  const getTravelIntent = async () => {
+    requestCount += 1;
+    if (requestCount === 1) throw new Error('network error');
+    return travelIntent;
+  };
+  assert.deepEqual(await hydrateServerTravelIntent({ getTravelIntent, token: firstRequestToken }), { status: 'error' });
+  assert.equal(getTravelIntentHydrationToken({
+    authStatus: 'authenticated', accessToken: 'runtime-token', hydratedAccessToken: 'runtime-token'
+  }), null);
+
+  const retryToken = getTravelIntentHydrationToken({
+    authStatus: 'authenticated', accessToken: 'runtime-token', hydratedAccessToken: null
+  });
+  assert.equal(retryToken, 'runtime-token');
+  assert.deepEqual(await hydrateServerTravelIntent({ getTravelIntent, token: retryToken }), { status: 'loaded', travelIntent });
+  assert.equal(requestCount, 2);
 });
