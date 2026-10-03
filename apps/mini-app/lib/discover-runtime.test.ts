@@ -96,7 +96,7 @@ test('advances the current candidate only after a successful decision response',
 
   assert.equal(getCurrentDiscoverCandidate(submittingState)?.display_name, 'Алина');
 
-  const nextState = discoverReducer(submittingState, { type: 'decision_succeeded' });
+  const nextState = discoverReducer(submittingState, { type: 'decision_succeeded', matchFeedback: null });
   assert.equal(getCurrentDiscoverCandidate(nextState)?.display_name, 'Илья');
 });
 
@@ -118,15 +118,74 @@ test('prevents duplicate decision submits while a request is pending', () => {
   assert.equal(discoverReducer(submittingState, { type: 'decision_started' }), submittingState);
 });
 
-test('a match_created decision response advances the flow without adding match state', () => {
+test('a rejected decision advances without Match feedback', () => {
   const loadedState = discoverReducer(createInitialDiscoverState(), { type: 'load_succeeded', candidates });
   const nextState = discoverReducer(
     discoverReducer(loadedState, { type: 'decision_started' }),
-    { type: 'decision_succeeded' }
+    { type: 'decision_succeeded', matchFeedback: null }
   );
 
   assert.equal(getCurrentDiscoverCandidate(nextState)?.user_id, candidates[1].user_id);
-  assert.equal('matchCreated' in nextState, false);
+  assert.equal(nextState.matchFeedback, null);
+});
+
+test('a one-way interested decision advances without Match feedback', () => {
+  const loadedState = discoverReducer(createInitialDiscoverState(), { type: 'load_succeeded', candidates });
+  const nextState = discoverReducer(
+    discoverReducer(loadedState, { type: 'decision_started' }),
+    { type: 'decision_succeeded', matchFeedback: null }
+  );
+
+  assert.equal(getCurrentDiscoverCandidate(nextState)?.user_id, candidates[1].user_id);
+  assert.equal(nextState.matchFeedback, null);
+});
+
+test('a non-null match_id advances and stores minimal Match feedback for the candidate', () => {
+  const loadedState = discoverReducer(createInitialDiscoverState(), { type: 'load_succeeded', candidates });
+  const nextState = discoverReducer(
+    discoverReducer(loadedState, { type: 'decision_started' }),
+    {
+      type: 'decision_succeeded',
+      matchFeedback: { matchId: 'f2de4efa-7c9e-4e9a-a8d7-1b0b8bd6ecaf', displayName: 'Алина' }
+    }
+  );
+
+  assert.equal(getCurrentDiscoverCandidate(nextState)?.user_id, candidates[1].user_id);
+  assert.deepEqual(nextState.matchFeedback, {
+    matchId: 'f2de4efa-7c9e-4e9a-a8d7-1b0b8bd6ecaf',
+    displayName: 'Алина'
+  });
+});
+
+test('an existing Match response with match_created false still stores Match feedback', () => {
+  const loadedState = discoverReducer(createInitialDiscoverState(), { type: 'load_succeeded', candidates });
+  const existingMatchResponse = { match_created: false, match_id: 'existing-match-id' };
+  const nextState = discoverReducer(
+    discoverReducer(loadedState, { type: 'decision_started' }),
+    {
+      type: 'decision_succeeded',
+      matchFeedback: existingMatchResponse.match_id === null
+        ? null
+        : { matchId: existingMatchResponse.match_id, displayName: 'Алина' }
+    }
+  );
+
+  assert.deepEqual(nextState.matchFeedback, { matchId: 'existing-match-id', displayName: 'Алина' });
+});
+
+test('keeps Match feedback until dismissed and replaces it when another Match is returned', () => {
+  const initialState = {
+    ...createInitialDiscoverState(),
+    loading: false,
+    matchFeedback: { matchId: 'first-match-id', displayName: 'Алина' }
+  };
+  const nextState = discoverReducer(initialState, {
+    type: 'decision_succeeded',
+    matchFeedback: { matchId: 'second-match-id', displayName: 'Илья' }
+  });
+
+  assert.deepEqual(nextState.matchFeedback, { matchId: 'second-match-id', displayName: 'Илья' });
+  assert.equal(discoverReducer(nextState, { type: 'match_feedback_dismissed' }).matchFeedback, null);
 });
 
 test('keeps real Discover independent from local decisions and removes demo presentation', async () => {
@@ -138,4 +197,7 @@ test('keeps real Discover independent from local decisions and removes demo pres
   assert.equal(pageSource.includes('Осталось анкет'), false);
   assert.equal(pageSource.includes('Просмотрено'), false);
   assert.equal(pageSource.includes('текущем сеансе'), false);
+  assert.equal(pageSource.includes('У вас мэтч с {state.matchFeedback.displayName}. Можно начать общение.'), true);
+  assert.equal(pageSource.includes('href="/chats"'), true);
+  assert.equal(pageSource.includes('Открыть чаты'), true);
 });
