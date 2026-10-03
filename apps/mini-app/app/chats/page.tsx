@@ -20,6 +20,7 @@ export default function ChatsPage() {
   const [chats, setChats] = useState<ChatResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isGroupFormOpen, setIsGroupFormOpen] = useState(false);
   const [selectedCompanionIds, setSelectedCompanionIds] = useState<string[]>([]);
@@ -31,7 +32,6 @@ export default function ChatsPage() {
     }
 
     let isCurrent = true;
-
     void backendApiClient.getChats(session.accessToken).then(
       (nextChats) => {
         if (isCurrent) {
@@ -50,10 +50,15 @@ export default function ChatsPage() {
     return () => {
       isCurrent = false;
     };
-  }, [session]);
+  }, [reloadKey, session]);
 
   const screenState = getChatsScreenState({ isLoading, error, chats });
   const companions = getAvailableGroupChatCompanions(chats);
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError(null);
+    setReloadKey((key) => key + 1);
+  };
 
   const toggleCompanion = (userId: string) => {
     setSelectedCompanionIds((currentIds) =>
@@ -147,6 +152,9 @@ export default function ChatsPage() {
         <article className="surface-card surface-card--compact empty-state-card" role="alert">
           <p className="section-kicker">Не удалось загрузить чаты</p>
           <p className="surface-card__copy">{error}</p>
+          <button className="profile-button profile-button--secondary" type="button" onClick={handleRetry}>
+            Повторить
+          </button>
         </article>
       ) : null}
 

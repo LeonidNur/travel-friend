@@ -1,6 +1,7 @@
 import type { ChatMessageResponse, ChatResponse } from './backend-api-client';
 
 export type ChatsScreenState = 'empty' | 'error' | 'loading' | 'success';
+export type ChatMessageHistoryState = 'empty' | 'success';
 
 type ChatsScreenInput = Readonly<{
   isLoading: boolean;
@@ -46,6 +47,10 @@ export function getChatsScreenState({ isLoading, error, chats }: ChatsScreenInpu
 
 export function findChatById(chats: readonly ChatResponse[], chatId: string): ChatResponse | undefined {
   return chats.find((chat) => chat.chat_id === chatId);
+}
+
+export function getChatMessageHistoryState(messages: readonly unknown[]): ChatMessageHistoryState {
+  return messages.length === 0 ? 'empty' : 'success';
 }
 
 export function getMessageAuthorLabel(

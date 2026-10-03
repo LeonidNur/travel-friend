@@ -5,6 +5,7 @@ import type { ChatMessageResponse, ChatResponse } from './backend-api-client';
 import {
   appendServerMessage,
   findChatById,
+  getChatMessageHistoryState,
   getMessageAuthorLabel,
   getChatsScreenState,
   mapChatMessages,
@@ -85,6 +86,11 @@ test('maps ordered message history as own, companion, and system messages', () =
       ['third', 'participant', true]
     ]
   );
+});
+
+test('distinguishes a successfully loaded empty message history', () => {
+  assert.equal(getChatMessageHistoryState([]), 'empty');
+  assert.equal(getChatMessageHistoryState(messages), 'success');
 });
 
 test('finds a group Chat and resolves message authors from persisted participant data', () => {

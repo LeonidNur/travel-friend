@@ -19,6 +19,7 @@ export default function TripsPage() {
   const [trips, setTrips] = useState<TripListItemResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (session === null) {
@@ -26,7 +27,6 @@ export default function TripsPage() {
     }
 
     let isCurrent = true;
-
     void backendApiClient.getTrips(session.accessToken).then(
       (nextTrips) => {
         if (isCurrent) {
@@ -45,9 +45,14 @@ export default function TripsPage() {
     return () => {
       isCurrent = false;
     };
-  }, [session]);
+  }, [reloadKey, session]);
 
   const screenState = getTripListScreenState({ isLoading, error, trips });
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError(null);
+    setReloadKey((key) => key + 1);
+  };
 
   return (
     <section className="page">
@@ -65,6 +70,9 @@ export default function TripsPage() {
         <article className="surface-card surface-card--compact empty-state-card" role="alert">
           <p className="section-kicker">Не удалось загрузить поездки</p>
           <p className="surface-card__copy">{error}</p>
+          <button className="profile-button profile-button--secondary" type="button" onClick={handleRetry}>
+            Повторить
+          </button>
         </article>
       ) : null}
 

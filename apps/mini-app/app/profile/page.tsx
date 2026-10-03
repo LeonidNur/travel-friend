@@ -35,12 +35,12 @@ function DetailList({ items }: { items: readonly DetailItem[] }) {
   return <dl className="detail-list">{items.map((item) => <div className="detail-list__item" key={item.label}><dt className="detail-list__label">{item.label}</dt><dd className="detail-list__value">{item.value}</dd></div>)}</dl>;
 }
 
-function ProfileMessage({ title, message }: Readonly<{ title: string; message: string }>) {
-  return <section className="page"><article className="surface-card"><p className="section-kicker">Профиль</p><h1 className="hero-card__title">{title}</h1><p className="surface-card__copy">{message}</p></article></section>;
+function ProfileMessage({ title, message, onRetry }: Readonly<{ title: string; message: string; onRetry?: () => void }>) {
+  return <section className="page"><article className="surface-card"><p className="section-kicker">Профиль</p><h1 className="hero-card__title">{title}</h1><p className="surface-card__copy">{message}</p>{onRetry ? <button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button> : null}</article></section>;
 }
 
 export default function ProfilePage() {
-  const { serverProfile, setServerProfile } = useCurrentUserProfile();
+  const { serverProfile, setServerProfile, reloadServerProfile } = useCurrentUserProfile();
   const { session } = useTelegramAuthSession();
   const [draftProfile, setDraftProfile] = useState<ProfileEditingDraft | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -54,7 +54,7 @@ export default function ProfilePage() {
   }, [isEditing]);
 
   if (serverProfile.status === 'loading') return <ProfileMessage title="Загружаем профиль" message="Получаем ваши данные путешественника." />;
-  if (serverProfile.status === 'error') return <ProfileMessage title="Не удалось загрузить профиль" message="Проверьте подключение и откройте приложение ещё раз." />;
+  if (serverProfile.status === 'error') return <ProfileMessage title="Не удалось загрузить профиль" message="Проверьте подключение и попробуйте ещё раз." onRetry={reloadServerProfile} />;
   if (serverProfile.profile === null) return <ProfileMessage title="Профиль пока не создан" message="Завершите настройку профиля, чтобы увидеть его здесь." />;
 
   const profile = serverProfile.profile;

@@ -1,4 +1,5 @@
 const BACKEND_API_PREFIX = '/api/backend';
+const READ_REQUEST_TIMEOUT_MS = 10_000;
 
 export type OnboardingStatus = 'not_started' | 'in_progress' | 'completed';
 
@@ -308,18 +309,30 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
       headers['Content-Type'] = 'application/json';
     }
 
-    const response = await fetchImplementation(`${BACKEND_API_PREFIX}${path}`, {
-      method: options.method,
-      headers,
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) })
-    });
-    const body = await parseResponseBody(response);
+    const timeoutController = options.method === 'GET' ? new AbortController() : null;
+    const timeoutId = timeoutController === null
+      ? undefined
+      : setTimeout(() => timeoutController.abort(), READ_REQUEST_TIMEOUT_MS);
 
-    if (!response.ok) {
-      throw new ApiError(response.status, body);
+    try {
+      const response = await fetchImplementation(`${BACKEND_API_PREFIX}${path}`, {
+        method: options.method,
+        headers,
+        ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+        ...(timeoutController === null ? {} : { signal: timeoutController.signal })
+      });
+      const body = await parseResponseBody(response);
+
+      if (!response.ok) {
+        throw new ApiError(response.status, body);
+      }
+
+      return body as T;
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
     }
-
-    return body as T;
   }
 
   return {

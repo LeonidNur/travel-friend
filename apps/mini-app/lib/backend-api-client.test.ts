@@ -22,6 +22,16 @@ function createFetchStub(response: Response) {
   return { calls, fetchStub };
 }
 
+function assertReadRequest(call: FetchCall | undefined, input: string) {
+  assert.equal(call?.input, input);
+  assert.equal(call?.init?.method, 'GET');
+  assert.deepEqual(call?.init?.headers, {
+    Accept: 'application/json',
+    Authorization: 'Bearer session-token'
+  });
+  assert.ok(call?.init?.signal instanceof AbortSignal);
+}
+
 test('uses the same-origin backend prefix and serializes a Telegram auth request', async () => {
   const { calls, fetchStub } = createFetchStub(
     new Response(
@@ -96,18 +106,7 @@ test('maps GET /chats through the authenticated backend client', async () => {
   const response = await client.getChats('session-token');
 
   assert.deepEqual(response, chats);
-  assert.deepEqual(calls, [
-    {
-      input: '/api/backend/chats',
-      init: {
-        headers: {
-          Accept: 'application/json',
-          Authorization: 'Bearer session-token'
-        },
-        method: 'GET'
-      }
-    }
-  ]);
+  assertReadRequest(calls[0], '/api/backend/chats');
 });
 
 test('maps a group Chat from GET /chats through the authenticated backend client', async () => {
@@ -126,16 +125,7 @@ test('maps a group Chat from GET /chats through the authenticated backend client
   const client = createBackendApiClient(fetchStub);
 
   assert.deepEqual(await client.getChats('session-token'), [groupChat]);
-  assert.deepEqual(calls[0], {
-    input: '/api/backend/chats',
-    init: {
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer session-token'
-      },
-      method: 'GET'
-    }
-  });
+  assertReadRequest(calls[0], '/api/backend/chats');
 });
 
 test('maps POST /chats/groups through the authenticated backend client', async () => {
@@ -184,13 +174,7 @@ test('maps GET /trips through the authenticated backend client', async () => {
   const client = createBackendApiClient(fetchStub);
 
   assert.deepEqual(await client.getTrips('session-token'), trips);
-  assert.deepEqual(calls, [{
-    input: '/api/backend/trips',
-    init: {
-      headers: { Accept: 'application/json', Authorization: 'Bearer session-token' },
-      method: 'GET'
-    }
-  }]);
+  assertReadRequest(calls[0], '/api/backend/trips');
 });
 
 test('maps POST /chats/{chat_id}/trips through the authenticated backend client', async () => {
@@ -253,13 +237,7 @@ test('maps GET /trips/{trip_id} through the authenticated backend client', async
   const client = createBackendApiClient(fetchStub);
 
   assert.deepEqual(await client.getTrip('session-token', 'trip-uuid'), tripDetail);
-  assert.deepEqual(calls, [{
-    input: '/api/backend/trips/trip-uuid',
-    init: {
-      headers: { Accept: 'application/json', Authorization: 'Bearer session-token' },
-      method: 'GET'
-    }
-  }]);
+  assertReadRequest(calls[0], '/api/backend/trips/trip-uuid');
 });
 
 test('loads Discover candidates with the runtime Bearer token', async () => {
@@ -279,13 +257,7 @@ test('loads Discover candidates with the runtime Bearer token', async () => {
   const client = createBackendApiClient(fetchStub);
 
   assert.deepEqual(await client.getDiscoverCandidates('session-token'), candidates);
-  assert.deepEqual(calls[0], {
-    input: '/api/backend/discover/candidates',
-    init: {
-      headers: { Accept: 'application/json', Authorization: 'Bearer session-token' },
-      method: 'GET'
-    }
-  });
+  assertReadRequest(calls[0], '/api/backend/discover/candidates');
 });
 
 test('sends both interested and rejected Discover decisions to the selected candidate', async () => {
@@ -341,16 +313,58 @@ test('loads a chat message history through the authenticated backend client', as
 
   await client.getChatMessages('session-token', 'chat-uuid');
 
-  assert.deepEqual(calls[0], {
-    input: '/api/backend/chats/chat-uuid/messages',
-    init: {
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer session-token'
-      },
-      method: 'GET'
+  assertReadRequest(calls[0], '/api/backend/chats/chat-uuid/messages');
+});
+
+test('aborts a read request when its timeout expires', async () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let timeoutCallback: (() => void) | null = null;
+
+  globalThis.setTimeout = ((callback: () => void) => {
+    timeoutCallback = callback;
+    return 1 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
+
+  try {
+    const client = createBackendApiClient(((input, init) => new Promise((_, reject) => {
+      assert.equal(input, '/api/backend/chats');
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      timeoutCallback?.();
+    })) as typeof fetch);
+
+    await assert.rejects(() => client.getChats('session-token'), { name: 'AbortError' });
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
+test('keeps mutable requests free of read timeout signals', async () => {
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify({ status: 'completed' })));
+  const client = createBackendApiClient(fetchStub);
+
+  await client.patchOnboarding('session-token', { status: 'completed' });
+
+  assert.equal(calls[0]?.init?.signal, undefined);
+});
+
+test('allows a fresh read request after a recoverable failure', async () => {
+  let requestCount = 0;
+  const client = createBackendApiClient((async () => {
+    requestCount += 1;
+
+    if (requestCount === 1) {
+      throw new Error('network error');
     }
-  });
+
+    return new Response(JSON.stringify([]));
+  }) as typeof fetch);
+
+  await assert.rejects(() => client.getChats('session-token'));
+  assert.deepEqual(await client.getChats('session-token'), []);
+  assert.equal(requestCount, 2);
 });
 
 test('returns parsed JSON from an authenticated request', async () => {
