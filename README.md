@@ -123,10 +123,11 @@ Telegram Mini App не отменяет будущую отдельную моб
 - Trip создаётся из direct или group Chat; все активные ChatParticipant сразу становятся TripParticipant; TripInvitation не используется; Mini App вызывает API и при `409` открывает существующую unfinished Trip через `GET /trips`;
 - production security baseline закрыт: production DB применена до `20260901280000`, RLS включён на всех 17 application tables, FastAPI работает через least-privileged `app_runtime` с transaction-local `app.user_id`; grants verifier, runtime deployment gate, совместимый backend deploy, `/health` и Telegram smoke прошли;
 - закрыт P0 security baseline реализованного MVP: server-side Telegram `initData`, completed-onboarding invariant, session lifecycle, backend input limits, minimal rate limiting и secrets/logging hygiene;
+- закрыт P0.5 reliability/observability: request correlation, GET/read timeout с user-initiated Retry из recoverable error states, explicit loading/empty/error states, Chat → persisted participant Profile, controlled multi-user Trip Detail regression coverage, reciprocal Match feedback, active TravelIntent edit, readiness и correlated backend logging;
 - Auto-Deploy backend остаётся выключенным до отдельной задачи по deployment workflow; после несовместимых DB/grants изменений старый backend не считается автоматически допустимым rollback target;
 - realtime, Trip write/lifecycle, invitations, сложный membership lifecycle и AI/Proposal остаются дальнейшими отдельными задачами;
 - AI/Proposal и provider integrations отложены до подключения второго разработчика;
-- ближайший технический этап — дальнейший [Technical Hardening Backlog](docs/technical-hardening-backlog.md), начиная с P0.5 reliability/observability; P1 TEAM E2E и один согласованный Trip lifecycle/write slice остаются последующими work items.
+- ближайший технический этап — deployment / CI reproducibility из [Technical Hardening Backlog](docs/technical-hardening-backlog.md), начиная с №15 Production deployment workflow; external test возможен только после необходимых deployment/control gates.
 
 ## Идея проекта
 
@@ -400,9 +401,9 @@ Backend/domain/data источники:
 
 Ближайший порядок разработки:
 
-1. Продолжить [Technical Hardening Backlog](docs/technical-hardening-backlog.md), начиная с P0.5 reliability/observability.
-2. Затем исправить P1 из TEAM E2E и добавить controlled multi-user coverage для Trip Detail.
-3. После этого согласовать один Trip write/lifecycle slice; AI остаётся отложенным до подключения второго разработчика.
+1. Продолжить [Technical Hardening Backlog](docs/technical-hardening-backlog.md) с deployment / CI reproducibility, начиная с №15 Production deployment workflow.
+2. Пройти необходимые deployment/control gates перед решением об external test.
+3. После этого согласовать один Trip write/lifecycle slice; AI остаётся отложенным до подключения второго разработчика и отдельного Pre-AI FinOps gate.
 
 ## Долгосрочное видение
 

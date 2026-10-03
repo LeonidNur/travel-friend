@@ -1,6 +1,6 @@
 # Workflow использования Codex skills
 
-Этот документ фиксирует не продуктовую функциональность, а способ работы Codex в Travel Friend. Он нужен, чтобы задачи решались предсказуемо: с понятным набором инструкций, правильным выбором skills, контролем скоупа и одинаковым форматом итогового отчёта. Текущий MVP уже имеет persisted backend-backed flow, production RLS/runtime-role и P0 security baseline; ближайшая работа — дальнейший Technical Hardening Backlog, начиная с P0.5 reliability/observability. P1 TEAM E2E и отдельные новые slices остаются последующими work items. Frontend view models не считаются автоматически готовой Supabase-схемой.
+Этот документ фиксирует не продуктовую функциональность, а способ работы Codex в Travel Friend. Он нужен, чтобы задачи решались предсказуемо: с понятным набором инструкций, правильным выбором skills, контролем скоупа и одинаковым форматом итогового отчёта. Текущий MVP уже имеет persisted backend-backed flow, production RLS/runtime-role, P0 security baseline и P0.5 reliability/observability; ближайшая работа — deployment / CI reproducibility Technical Hardening Backlog, начиная с №15 Production deployment workflow. External test требует отдельных deployment/control gates. P1 TEAM E2E и отдельные новые slices остаются последующими work items. Frontend view models не считаются автоматически готовой Supabase-схемой.
 
 ## Зачем проекту Codex skills
 

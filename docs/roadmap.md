@@ -42,6 +42,7 @@
 - ✅ production security baseline: DB до `20260901280000`, RLS на всех 17 application tables, least-privileged `app_runtime`, transaction-local `app.user_id`, grants verifier и runtime deployment gate
 - ✅ совместимый security backend deployed в production; production `/health` и Telegram smoke пройдены
 - ✅ P0 security baseline: Telegram `initData`, completed-onboarding invariant, session lifecycle, backend input/domain limits, minimal rate limiting и secrets/env/logging hygiene
+- ✅ P0.5 reliability/observability: request correlation, frontend read states, Chat → Profile navigation, controlled multi-user Trip Detail coverage, reciprocal Match feedback, active TravelIntent edit, readiness и correlated backend logging
 
 ## Текущий этап
 
@@ -49,11 +50,11 @@
 
 Реализованный backend-backed vertical slice: `Telegram Auth → onboarding → Profile → TravelIntent → Discover → reciprocal Match → direct/group Chat → Messages → Trip creation → Trip List/Detail`. Group Chat создаётся из existing matched/direct-chat companions с фиксированным MVP-составом; Trips List/Detail читают persistence.
 
-Ближайший технический этап — дальнейшие пункты [technical hardening backlog](technical-hardening-backlog.md), начиная с P0.5 reliability/observability. Детальный порядок hardening остаётся в backlog и не дублируется здесь.
+Ближайший технический этап — deployment / CI reproducibility из [technical hardening backlog](technical-hardening-backlog.md), начиная с №15 Production deployment workflow. External test остаётся после необходимых deployment и control gates; детальный порядок hardening остаётся в backlog и не дублируется здесь.
 
 Последующие самостоятельные work items:
 
-- P1 из TEAM E2E: realtime incoming messages без refresh, Group Chat invitation/accept lifecycle, Chat → Profile navigation regression до wider testing и controlled multi-user Trip Detail coverage;
+- P1 из TEAM E2E: realtime incoming messages без refresh и Group Chat invitation/accept lifecycle;
 - Trip write/lifecycle: изменение подтверждённого состояния, stop editor, `start/complete/cancel/leave` и правила версий;
 - invitations, изменение состава, leave, roles/admin/permissions, invite links, сложный membership lifecycle Group Chat и расширенный Trip lifecycle — после отдельного решения.
 
@@ -69,9 +70,9 @@ AI/Proposal и provider integrations отложены до подключени�
 
 ## Дальше
 
-1. Продолжить Technical Hardening Backlog, начиная с P0.5 reliability/observability.
-2. Затем закрыть P1 из TEAM E2E и controlled multi-user coverage для Trip Detail.
-3. После этого согласовать и реализовать следующий один Trip lifecycle/write slice; к AI вернуться только после подключения второго разработчика.
+1. Продолжить Technical Hardening Backlog с deployment / CI reproducibility, начиная с №15 Production deployment workflow.
+2. Затем пройти required deployment/control gates перед решением об external test.
+3. После этого согласовать и реализовать следующий один Trip lifecycle/write slice; к AI вернуться только после подключения второго разработчика и отдельного Pre-AI FinOps gate.
 
 ## Примечания
 

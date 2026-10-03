@@ -1,5 +1,24 @@
 # Дневник разработки
 
+## 2026-10-03 — P0.5 reliability/observability completion и cost-safety gates
+
+### Что сделали
+
+- Закрыли P0.5 №7–14.1: request/correlation ID, GET/read timeout, user-initiated Retry из recoverable error states и explicit read states, Chat → Profile navigation, controlled multi-user Trip Detail coverage, reciprocal Match feedback, active TravelIntent view/edit, readiness и minimal error monitoring.
+- Backend выдаёт `X-Request-ID`; correlated application logging связывает request completion и unexpected backend errors в Render Service Logs. Внешний error-monitoring provider на этом этапе намеренно не подключали.
+- `/ready` проверяет database readiness, а `/health` остаётся liveness endpoint.
+- Закрыли №14.1 как FinOps audit/plan без production code: External Test Cost Guardrails выделен в обязательный самостоятельный gate.
+
+### Что проверили
+
+- В `develop` сверены commits и добавленные targeted backend tests для request correlation, readiness, application logging и controlled multi-user Trip Detail, а также frontend tests для read reliability, reciprocal feedback, participant profile navigation и active TravelIntent edit.
+- Постоянная документация синхронизирована с текущим кодом, tests и migrations; external test parameters из audit recommendations не приняты как решения.
+
+### Что осталось
+
+- Следующий этап — deployment / CI reproducibility, начиная с №15 Production deployment workflow.
+- External test возможен только после deployment/control gates; Pre-AI FinOps gate обязателен до любого включения AI.
+
 ## 2026-09-29 — P0 security baseline и provider-side verification
 
 ### Что сделали
