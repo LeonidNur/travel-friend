@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useReducer, useRef } from 'react';
+import Link from 'next/link';
 
 import { BuddyCard } from '@/components/BuddyCard';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
@@ -52,8 +53,17 @@ export default function HomePage() {
     dispatch({ type: 'decision_started' });
 
     try {
-      await backendApiClient.putDiscoverDecision(session.accessToken, activeCandidate.user_id, { decision });
-      dispatch({ type: 'decision_succeeded' });
+      const decisionResponse = await backendApiClient.putDiscoverDecision(
+        session.accessToken,
+        activeCandidate.user_id,
+        { decision }
+      );
+      dispatch({
+        type: 'decision_succeeded',
+        matchFeedback: decisionResponse.match_id === null
+          ? null
+          : { matchId: decisionResponse.match_id, displayName: activeCandidate.display_name }
+      });
     } catch {
       dispatch({ type: 'decision_failed' });
     } finally {
@@ -66,6 +76,26 @@ export default function HomePage() {
       <article className="hero-card">
         <h1 className="hero-card__title">Найдите попутчика</h1>
       </article>
+
+      {state.matchFeedback ? (
+        <section className="discover-list" aria-live="polite">
+          <article className="surface-card surface-card--compact">
+            <p className="surface-card__copy">
+              У вас мэтч с {state.matchFeedback.displayName}. Можно начать общение.
+            </p>
+            <Link className="profile-button profile-button--primary" href="/chats">
+              Открыть чаты
+            </Link>
+            <button
+              type="button"
+              className="profile-button profile-button--secondary"
+              onClick={() => dispatch({ type: 'match_feedback_dismissed' })}
+            >
+              Закрыть
+            </button>
+          </article>
+        </section>
+      ) : null}
 
       {state.loading ? (
         <section className="discover-list" aria-live="polite">

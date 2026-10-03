@@ -22,6 +22,11 @@ export type DiscoverCardCandidate = Readonly<{
   }>;
 }>;
 
+export type DiscoverMatchFeedback = Readonly<{
+  matchId: string;
+  displayName: string;
+}>;
+
 export type DiscoverState = Readonly<{
   candidates: DiscoverCandidateResponse[];
   currentIndex: number;
@@ -29,6 +34,7 @@ export type DiscoverState = Readonly<{
   loadError: boolean;
   submitting: boolean;
   decisionError: boolean;
+  matchFeedback: DiscoverMatchFeedback | null;
 }>;
 
 export type DiscoverAction =
@@ -36,8 +42,9 @@ export type DiscoverAction =
   | Readonly<{ type: 'load_succeeded'; candidates: DiscoverCandidateResponse[] }>
   | Readonly<{ type: 'load_failed' }>
   | Readonly<{ type: 'decision_started' }>
-  | Readonly<{ type: 'decision_succeeded' }>
-  | Readonly<{ type: 'decision_failed' }>;
+  | Readonly<{ type: 'decision_succeeded'; matchFeedback: DiscoverMatchFeedback | null }>
+  | Readonly<{ type: 'decision_failed' }>
+  | Readonly<{ type: 'match_feedback_dismissed' }>;
 
 export function toDiscoverCardCandidate(candidate: DiscoverCandidateResponse): DiscoverCardCandidate {
   return {
@@ -78,7 +85,8 @@ export function createInitialDiscoverState(): DiscoverState {
     loading: true,
     loadError: false,
     submitting: false,
-    decisionError: false
+    decisionError: false,
+    matchFeedback: null
   };
 }
 
@@ -97,7 +105,8 @@ export function discoverReducer(state: DiscoverState, action: DiscoverAction): D
         currentIndex: 0,
         loading: false,
         loadError: false,
-        decisionError: false
+        decisionError: false,
+        matchFeedback: null
       };
     case 'load_failed':
       return { ...state, loading: false, loadError: true };
@@ -108,9 +117,12 @@ export function discoverReducer(state: DiscoverState, action: DiscoverAction): D
         ...state,
         currentIndex: state.currentIndex + 1,
         submitting: false,
-        decisionError: false
+        decisionError: false,
+        matchFeedback: action.matchFeedback ?? state.matchFeedback
       };
     case 'decision_failed':
       return { ...state, submitting: false, decisionError: true };
+    case 'match_feedback_dismissed':
+      return { ...state, matchFeedback: null };
   }
 }
