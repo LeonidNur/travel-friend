@@ -8,7 +8,9 @@ API проектируется вокруг пользовательских и 
 
 ## Реализованные HTTP contracts (`develop`, 2026-09-29)
 
-Все кроме `GET /health` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
+Все кроме `GET /health` и `GET /ready` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
+
+`GET /health` — unauthenticated process liveness: всегда возвращает `200 {"status":"ok"}` и не обращается к PostgreSQL. `GET /ready` — unauthenticated DB-backed readiness: открывает новое соединение через runtime `DATABASE_URL` и выполняет только `SELECT 1`; success — `200 {"status":"ready"}`, недоступность DB dependency — `503 {"detail":"Service unavailable"}` без diagnostics. Probe ограничен fixed `connect_timeout` 3 seconds и PostgreSQL `statement_timeout` 2000 ms; он не проверяет schema, migrations, RLS/capabilities, Telegram или business flows.
 
 Для всех HTTP requests FastAPI backend применяет global raw request-body limit `256 KiB` (`262144` bytes), независимо от лимитов upstream proxy (Next.js, Vercel, Render и т.п.). При превышении backend возвращает `413` с JSON `{"detail":"Request body exceeds the 256 KiB limit"}` до JSON parsing FastAPI и Pydantic validation. Это ограничение не заменяет и не меняет field/domain limits endpoint-ов.
 
@@ -37,7 +39,8 @@ MVP применяет только небольшой per-process fixed-window 
 
 | Method | Path | Назначение |
 | --- | --- | --- |
-| `GET` | `/health` | health check |
+| `GET` | `/health` | process liveness, без DB probe |
+| `GET` | `/ready` | DB-backed readiness (`SELECT 1`) |
 | `POST` | `/auth/telegram` | verify raw `init_data`, login/create identity and session, вернуть bootstrap flags |
 | `POST` | `/auth/logout` | revoke только текущую session, `204` |
 | `GET` / `PATCH` | `/me/profile` | получить/изменить профиль текущего пользователя |
