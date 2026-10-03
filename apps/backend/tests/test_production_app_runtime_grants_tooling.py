@@ -28,6 +28,7 @@ REQUIRED_CAPABILITIES = {
     "public.discover_candidate_profile_projection()",
     "public.discover_target_is_eligible(uuid)",
     "public.chat_participant_profile_projection(uuid)",
+    "public.chat_participant_public_profile(uuid,uuid)",
     "public.trip_participant_profile_projection(uuid)",
     "public.record_current_discover_decision(uuid, text)",
     "public.is_current_active_chat_participant(uuid)",

@@ -22,9 +22,30 @@ from travel_friend_backend.schemas.chats import (
     GroupChatCreateRequest,
     GroupChatCreateResponse,
 )
+from travel_friend_backend.schemas.discover import DiscoverCandidateResponse
 
 
 router = APIRouter(prefix="/chats", tags=["chats"])
+
+
+def public_profile_response(row: dict[str, object]) -> dict[str, object]:
+    """Map the scoped SQL capability to the canonical Discover public profile."""
+    return {
+        "user_id": row["user_id"],
+        "display_name": row["display_name"],
+        "age": row["age"],
+        "city": row["city"],
+        "bio": row["bio"],
+        "travel_style": [value for value in row["travel_style"] if value is not None],
+        "interests": [value for value in row["interests"] if value is not None],
+        "budget_level": row["budget_level"],
+        "comfort_level": row["comfort_level"],
+        "travel_intent": {
+            "destination": row["destination"],
+            "date_from": row["date_from"],
+            "date_to": row["date_to"],
+        },
+    }
 
 
 def create_group_chat(
@@ -132,6 +153,27 @@ def get_chats(
             continue
         chat_items.append(group_chat_list_item(connection, row["chat_id"], row["created_at"]))
     return chat_items
+
+
+@router.get(
+    "/{chat_id}/participants/{user_id}/profile",
+    response_model=DiscoverCandidateResponse,
+)
+def get_chat_participant_profile(
+    chat_id: UUID,
+    user_id: UUID,
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
+) -> dict[str, object]:
+    """Read the canonical profile only for another active Chat participant."""
+    del principal
+    row = connection.execute(
+        "SELECT * FROM public.chat_participant_public_profile(%s, %s)",
+        (chat_id, user_id),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Chat participant profile not found")
+    return public_profile_response(row)
 
 
 def find_authorized_chat(

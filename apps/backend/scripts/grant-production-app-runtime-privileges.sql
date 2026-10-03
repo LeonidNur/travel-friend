@@ -97,6 +97,7 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.complete_current_onboarding() FROM app_
 REVOKE ALL PRIVILEGES ON FUNCTION public.discover_candidate_profile_projection() FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.discover_target_is_eligible(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.chat_participant_profile_projection(uuid) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.chat_participant_public_profile(uuid,uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.trip_participant_profile_projection(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.record_current_discover_decision(uuid, text) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.is_current_active_chat_participant(uuid) FROM app_runtime;
@@ -119,6 +120,7 @@ GRANT EXECUTE ON FUNCTION public.complete_current_onboarding() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_candidate_profile_projection() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.discover_target_is_eligible(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.chat_participant_profile_projection(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.chat_participant_public_profile(uuid,uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.trip_participant_profile_projection(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.record_current_discover_decision(uuid, text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.is_current_active_chat_participant(uuid) TO app_runtime;

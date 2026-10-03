@@ -20,6 +20,10 @@ import {
 } from '@/lib/chat-runtime';
 import { createChatTrip, getCreateTripButtonState } from '@/lib/chat-trip-runtime';
 import { getAvatarInitials } from '@/lib/travel-preferences';
+import {
+  getChatParticipantProfilePath,
+  getGroupParticipantProfilePath
+} from '@/lib/chat-participant-profile-runtime';
 
 type ChatRoomState = 'error' | 'loaded' | 'loading' | 'not_found';
 
@@ -184,7 +188,6 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
           <span className="profile-status">Чат</span>
         </div>
         <p className="section-kicker">{isGroupChat ? 'Группа' : 'Диалог'}</p>
-        {/* TODO: enable this link after public profiles support backend UUID user ids. */}
         <div className="profile-hero">
           <div className="profile-hero__avatar" aria-hidden="true">
             {getAvatarInitials(chatTitle)}
@@ -192,6 +195,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
           <div className="profile-hero__content">
             <h2 className="hero-card__title profile-hero__title">{chatTitle}</h2>
             {companion !== null ? <p className="profile-hero__city">{companion.city ?? 'Город не указан'}</p> : null}
+            {companion !== null ? <Link href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>Открыть профиль</Link> : null}
           </div>
         </div>
       </article>
@@ -208,17 +212,21 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
             const participantName = participant.display_name ?? 'Имя не указано';
 
             return (
-              <div className="chat-room__participant" key={participant.user_id}>
+              <Link
+                className="chat-room__participant"
+                href={getGroupParticipantProfilePath(chat.chat_id, participant.user_id, session?.userId ?? '')}
+                key={participant.user_id}
+              >
                 <div className="chat-room__participant-avatar" aria-hidden="true">
                   {getAvatarInitials(participantName)}
                 </div>
                 <div className="chat-room__participant-copy">
                   <p className="chat-room__participant-name">{participantName}</p>
                 </div>
-              </div>
+              </Link>
             );
           }) : companion === null ? null : (
-            <div className="chat-room__participant">
+            <Link className="chat-room__participant" href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>
               <div className="chat-room__participant-avatar" aria-hidden="true">
                 {getAvatarInitials(companion.display_name)}
               </div>
@@ -229,7 +237,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
                 </p>
                 <p className="chat-room__participant-meta">{companion.city ?? 'Город не указан'}</p>
               </div>
-            </div>
+            </Link>
           )}
         </div>
       </article>

@@ -316,6 +316,19 @@ test('loads a chat message history through the authenticated backend client', as
   assertReadRequest(calls[0], '/api/backend/chats/chat-uuid/messages');
 });
 
+test('loads a persisted chat participant profile through the authenticated backend client', async () => {
+  const profile = {
+    user_id: 'participant-uuid', display_name: 'Алина', age: 29, city: 'Москва', bio: null,
+    travel_style: [], interests: [], budget_level: null, comfort_level: null,
+    travel_intent: { destination: 'Тбилиси', date_from: null, date_to: null }
+  };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(profile)));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(await client.getChatParticipantProfile('session-token', 'chat-uuid', 'participant-uuid'), profile);
+  assertReadRequest(calls[0], '/api/backend/chats/chat-uuid/participants/participant-uuid/profile');
+});
+
 test('aborts a read request when its timeout expires', async () => {
   const originalSetTimeout = globalThis.setTimeout;
   const originalClearTimeout = globalThis.clearTimeout;

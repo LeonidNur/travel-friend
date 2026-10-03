@@ -210,6 +210,8 @@ export type DiscoverCandidateResponse = Readonly<{
   travel_intent: DiscoverTravelIntentResponse;
 }>;
 
+export type ChatParticipantProfileResponse = DiscoverCandidateResponse;
+
 export type DiscoverDecision = 'interested' | 'rejected';
 
 export type DiscoverDecisionRequest = Readonly<{
@@ -254,6 +256,11 @@ export type BackendApiClient = Readonly<{
   getTrips: (token: string) => Promise<TripListItemResponse[]>;
   getTrip: (token: string, tripId: string) => Promise<TripDetailResponse>;
   getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
+  getChatParticipantProfile: (
+    token: string,
+    chatId: string,
+    userId: string
+  ) => Promise<ChatParticipantProfileResponse>;
   createChatMessage: (
     token: string,
     chatId: string,
@@ -362,6 +369,11 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
     getTrip: (token, tripId) => request<TripDetailResponse>(`/trips/${tripId}`, { method: 'GET', token }),
     getChatMessages: (token, chatId) =>
       request<ChatMessageResponse[]>(`/chats/${chatId}/messages`, { method: 'GET', token }),
+    getChatParticipantProfile: (token, chatId, userId) =>
+      request<ChatParticipantProfileResponse>(
+        `/chats/${chatId}/participants/${userId}/profile`,
+        { method: 'GET', token }
+      ),
     createChatMessage: (token, chatId, payload) =>
       request<ChatMessageResponse>(`/chats/${chatId}/messages`, { method: 'POST', token, body: payload }),
     getDiscoverCandidates: (token) =>

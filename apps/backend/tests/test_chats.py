@@ -34,6 +34,13 @@ def create_group(client: TestClient, token: str, user_ids: list[str]):
     return client.post("/chats/groups", headers=auth_headers(token), json={"user_ids": user_ids})
 
 
+def chat_id_for_match(database_url: str, match_id: str) -> str:
+    with psycopg.connect(database_url) as connection:
+        return str(connection.execute(
+            "SELECT chat_id FROM public.matches WHERE id=%s", (match_id,)
+        ).fetchone()[0])
+
+
 def test_chats_requires_authentication(client: TestClient) -> None:
     assert client.get("/chats").status_code == 401
 
@@ -72,6 +79,98 @@ def test_chats_returns_only_authenticated_users_direct_chat_with_companion_data(
     assert payload[0]["chat_id"] == str(own_chat_id)
     assert "created_at" in payload[0]
     assert all(item["companion"]["user_id"] != third["user"]["id"] for item in payload)
+
+
+def test_active_direct_participant_reads_the_companion_canonical_public_profile(
+    client: TestClient, database_url: str
+) -> None:
+    requester, companion, match = create_reciprocal_match(client)
+    chat_id = chat_id_for_match(database_url, match["match_id"])
+    assert client.patch(
+        "/me/profile",
+        headers=auth_headers(companion["access_token"]),
+        json={
+            "birth_date": "1990-09-01", "city": "Kazan", "bio": "Likes food",
+            "travel_style": ["slow"], "interests": ["food"],
+            "budget_level": "2", "comfort_level": "3",
+        },
+    ).status_code == 200
+
+    response = client.get(
+        f"/chats/{chat_id}/participants/{companion['user']['id']}/profile",
+        headers=auth_headers(requester["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user_id": companion["user"]["id"], "display_name": "Candidate 2", "age": 36,
+        "city": "Kazan", "bio": "Likes food", "travel_style": ["slow"],
+        "interests": ["food"], "budget_level": "2", "comfort_level": "3",
+        "travel_intent": {"destination": "Tbilisi", "date_from": None, "date_to": None},
+    }
+
+
+def test_active_group_participant_reads_another_active_member_canonical_public_profile(
+    client: TestClient,
+) -> None:
+    initiator, first_member, second_member = create_group_eligible_users(client)
+    group = create_group(
+        client, initiator["access_token"],
+        [first_member["user"]["id"], second_member["user"]["id"]],
+    ).json()
+
+    response = client.get(
+        f"/chats/{group['chat_id']}/participants/{second_member['user']['id']}/profile",
+        headers=auth_headers(first_member["access_token"]),
+    )
+
+    assert response.status_code == 200
+    assert set(response.json()) == {
+        "user_id", "display_name", "age", "city", "bio", "travel_style", "interests",
+        "budget_level", "comfort_level", "travel_intent",
+    }
+
+
+def test_chat_participant_profile_hides_all_missing_or_unauthorized_relationships(
+    client: TestClient, database_url: str
+) -> None:
+    requester, companion, match = create_reciprocal_match(client)
+    chat_id = chat_id_for_match(database_url, match["match_id"])
+    outsider = create_discover_eligible_user(client, 3)
+    unknown_user_id = "00000000-0000-0000-0000-000000000001"
+    unknown_chat_id = "00000000-0000-0000-0000-000000000002"
+    cases = [
+        (outsider["access_token"], chat_id, companion["user"]["id"]),
+        (requester["access_token"], chat_id, requester["user"]["id"]),
+        (requester["access_token"], chat_id, unknown_user_id),
+        (requester["access_token"], unknown_chat_id, companion["user"]["id"]),
+    ]
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.chat_participants SET left_at=now() WHERE chat_id=%s AND user_id=%s",
+            (chat_id, requester["user"]["id"]),
+        )
+        connection.commit()
+    cases.append((requester["access_token"], chat_id, companion["user"]["id"]))
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "UPDATE public.chat_participants SET left_at=NULL WHERE chat_id=%s AND user_id=%s",
+            (chat_id, requester["user"]["id"]),
+        )
+        connection.execute(
+            "UPDATE public.chat_participants SET left_at=now() WHERE chat_id=%s AND user_id=%s",
+            (chat_id, companion["user"]["id"]),
+        )
+        connection.commit()
+    cases.append((requester["access_token"], chat_id, companion["user"]["id"]))
+
+    for token, requested_chat_id, target_user_id in cases:
+        response = client.get(
+            f"/chats/{requested_chat_id}/participants/{target_user_id}/profile",
+            headers=auth_headers(token),
+        )
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Chat participant profile not found"}
 
 
 def test_chats_returns_group_chat_to_every_current_participant(client: TestClient) -> None:
