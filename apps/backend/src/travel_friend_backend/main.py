@@ -12,6 +12,7 @@ from travel_friend_backend.auth.service import (
     auth_dependency,
     login,
 )
+from travel_friend_backend import readiness
 from travel_friend_backend.db import authenticated_transaction, database_connection
 from travel_friend_backend.request_body_limit import RequestBodyLimitMiddleware
 from travel_friend_backend.request_correlation import RequestCorrelationMiddleware
@@ -50,6 +51,12 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     @app.get("/health")
     def get_health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/ready")
+    def get_ready() -> dict[str, str]:
+        if not readiness.probe_database(backend_settings.database_url):
+            raise HTTPException(503, "Service unavailable")
+        return {"status": "ready"}
 
     @app.post("/auth/telegram")
     def telegram_auth(payload: TelegramAuthRequest) -> dict[str, object]:

@@ -12,11 +12,19 @@ export TELEGRAM_BOT_TOKEN='your-telegram-bot-token'
 uv run --python 3.12 uvicorn travel_friend_backend.main:app --reload
 ```
 
-Проверка health endpoint:
+Проверка liveness и readiness endpoints:
 
 ```bash
 curl http://127.0.0.1:8000/health
+curl --fail --show-error --silent http://127.0.0.1:8000/ready
 ```
+
+`/health` проверяет только liveness процесса и не подключается к DB. `/ready`
+проверяет минимальную runtime dependency: новое соединение через `DATABASE_URL` и
+`SELECT 1`; при DB failure возвращает generic `503`. После backend deploy
+оператор проверяет `/ready` перед восстановлением или подтверждением готовности
+traffic. В репозитории нет platform health-check configuration, поэтому этот
+контракт не утверждает, что Render автоматически использует `/ready`.
 
 Проверка тестов verifier:
 
