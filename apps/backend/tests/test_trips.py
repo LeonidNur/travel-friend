@@ -293,6 +293,99 @@ def test_trip_detail_returns_persisted_snapshot_ordered_stops_and_trip_participa
     ], key=lambda participant: participant["user_id"])
 
 
+def test_group_trip_detail_is_consistent_for_all_active_chat_participants(
+    client: TestClient, database_url: str
+) -> None:
+    creator, second_participant, third_participant, group_chat = create_group_chat_with_three_participants(client)
+    outsider = create_discover_eligible_user(client, 4)
+    chat_id = UUID(group_chat["chat_id"])
+
+    created_trip = create_trip(client, second_participant["access_token"], chat_id)
+
+    assert created_trip.status_code == 201
+    trip_id = created_trip.json()["trip_id"]
+    with psycopg.connect(database_url) as connection:
+        snapshot_participants = connection.execute(
+            "SELECT user_id FROM public.trip_participants "
+            "WHERE trip_id=%s AND left_at IS NULL ORDER BY user_id",
+            (UUID(trip_id),),
+        ).fetchall()
+        connection.execute(
+            "INSERT INTO public.trip_stops (trip_id, position, place_label) VALUES "
+            "(%s, 2, 'Kyoto'), (%s, 1, 'Tokyo')",
+            (UUID(trip_id), UUID(trip_id)),
+        )
+
+    expected_participants = sorted(
+        [
+            {"user_id": creator["user"]["id"], "display_name": "Candidate 1", "age": None, "city": "Moscow"},
+            {
+                "user_id": second_participant["user"]["id"],
+                "display_name": "Candidate 2",
+                "age": None,
+                "city": "Moscow",
+            },
+            {
+                "user_id": third_participant["user"]["id"],
+                "display_name": "Candidate 3",
+                "age": None,
+                "city": "Moscow",
+            },
+        ],
+        key=lambda participant: participant["user_id"],
+    )
+    assert snapshot_participants == sorted(
+        [
+            (UUID(creator["user"]["id"]),),
+            (UUID(second_participant["user"]["id"]),),
+            (UUID(third_participant["user"]["id"]),),
+        ]
+    )
+
+    participant_responses = [
+        get_trip(client, participant["access_token"], trip_id)
+        for participant in (creator, second_participant, third_participant)
+    ]
+
+    assert [response.status_code for response in participant_responses] == [200, 200, 200]
+    detail_bodies = [response.json() for response in participant_responses]
+    assert detail_bodies[1:] == [detail_bodies[0], detail_bodies[0]]
+    assert detail_bodies[0]["trip"] == {
+        "trip_id": trip_id,
+        "chat_id": str(chat_id),
+        "created_by_user_id": second_participant["user"]["id"],
+        "status": "forming",
+        "membership_version": 1,
+        "state_version": 1,
+        "destination_version": 0,
+        "dates_version": 0,
+        "budget_version": 0,
+        "transport_version": 0,
+        "destination_status": "empty",
+        "dates_status": "empty",
+        "budget_status": "empty",
+        "transport_status": "empty",
+        "date_from": None,
+        "date_to": None,
+        "budget_min": None,
+        "budget_max": None,
+        "budget_currency": None,
+        "budget_scope": None,
+        "started_at": None,
+        "completed_at": None,
+        "cancelled_at": None,
+        "created_at": detail_bodies[0]["trip"]["created_at"],
+        "updated_at": detail_bodies[0]["trip"]["updated_at"],
+    }
+    assert [stop["place_label"] for stop in detail_bodies[0]["route_stops"]] == ["Tokyo", "Kyoto"]
+    assert detail_bodies[0]["participants"] == expected_participants
+
+    outsider_response = get_trip(client, outsider["access_token"], trip_id)
+
+    assert outsider_response.status_code == 404
+    assert outsider_response.json() == {"detail": "Trip not found"}
+
+
 def test_trip_detail_returns_uniform_404_for_foreign_and_missing_trip(
     client: TestClient, database_url: str
 ) -> None:
