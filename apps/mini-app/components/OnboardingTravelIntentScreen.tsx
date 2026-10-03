@@ -23,7 +23,7 @@ export function OnboardingTravelIntentScreen({ onBack }: Readonly<{ onBack: () =
     return <TravelIntentMessage title="Загружаем план поездки" message="Проверяем сохранённые данные." />;
   }
 
-  if (serverTravelIntent.status === 'error') {
+  if (serverTravelIntent.status === 'error' || serverTravelIntent.status === 'invariant_error') {
     return <TravelIntentMessage title="Не удалось загрузить план поездки" message="Попробуйте открыть приложение ещё раз." />;
   }
 

@@ -1,13 +1,19 @@
 'use client';
 
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 
 import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { ChipSelector, LevelSelector } from '@/components/ProfileSelectors';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
-import { createBackendApiClient, type ProfileResponse } from '@/lib/backend-api-client';
+import { createBackendApiClient, type ProfileResponse, type TravelIntentResponse } from '@/lib/backend-api-client';
 import { calculateAgeFromBirthDate } from '@/lib/current-user-profile-hydration';
 import { createProfileEditingDraft, saveProfileEditing, type ProfileEditingDraft } from '@/lib/profile-editing';
+import {
+  createProfileTravelIntentDraft,
+  saveProfileTravelIntent,
+  type ProfileTravelIntentDraft,
+  type ProfileTravelIntentValidationErrors
+} from '@/lib/profile-travel-intent';
 import {
   BUDGET_OPTIONS, COMFORT_OPTIONS, INTEREST_OPTIONS, TRAVEL_STYLE_OPTIONS, getAvatarInitials,
   fromCanonicalProfileLevel, getBudgetLabel, getComfortLabel, toggleMultiValue
@@ -40,7 +46,14 @@ function ProfileMessage({ title, message, onRetry }: Readonly<{ title: string; m
 }
 
 export default function ProfilePage() {
-  const { serverProfile, setServerProfile, reloadServerProfile } = useCurrentUserProfile();
+  const {
+    serverProfile,
+    setServerProfile,
+    reloadServerProfile,
+    serverTravelIntent,
+    setServerTravelIntent,
+    reloadServerTravelIntent
+  } = useCurrentUserProfile();
   const { session } = useTelegramAuthSession();
   const [draftProfile, setDraftProfile] = useState<ProfileEditingDraft | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -96,6 +109,83 @@ export default function ProfilePage() {
         {apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}<div className="profile-actions"><button type="button" className="profile-button profile-button--primary" onClick={handleSave} disabled={isSaving}>{isSaving ? 'Сохраняем…' : 'Save'}</button><button type="button" className="profile-button profile-button--secondary" onClick={handleCancel} disabled={isSaving}>Cancel</button></div>
       </div></article> : null}
       <section className="card-grid" aria-label="Профиль пользователя"><article className="surface-card"><p className="surface-card__title">О себе</p><p className="surface-card__copy">{profile.bio ?? 'Пользователь пока не добавил описание.'}</p></article><article className="surface-card"><p className="surface-card__title">Интересы</p><div className="chip-row" aria-label="Интересы путешествий">{interests.length > 0 ? interests.map((interest) => <span className="chip" key={interest}>{interest}</span>) : <span className="surface-card__note">Не указаны</span>}</div></article><article className="surface-card"><p className="surface-card__title">Travel preferences</p><DetailList items={createDetailItems(profile)} /></article></section>
+      <ProfileTravelIntent
+        state={serverTravelIntent}
+        token={session?.accessToken ?? null}
+        onSaved={setServerTravelIntent}
+        onRetry={reloadServerTravelIntent}
+      />
     </section>
   );
+}
+
+function ProfileTravelIntent({
+  state,
+  token,
+  onSaved,
+  onRetry
+}: Readonly<{
+  state: ReturnType<typeof useCurrentUserProfile>['serverTravelIntent'];
+  token: string | null;
+  onSaved: (travelIntent: TravelIntentResponse) => void;
+  onRetry: () => void;
+}>) {
+  const [draft, setDraft] = useState<ProfileTravelIntentDraft | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ProfileTravelIntentValidationErrors>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  if (state.status === 'loading') {
+    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Текущий план поездки</p><p className="surface-card__note">Загружаем план поездки…</p></article>;
+  }
+
+  if (state.status === 'error' || state.status === 'invariant_error') {
+    const message = state.status === 'invariant_error'
+      ? 'Не удалось подтвердить активный план поездки. Попробуйте загрузить данные ещё раз.'
+      : 'Не удалось загрузить план поездки. Проверьте подключение и попробуйте ещё раз.';
+    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Текущий план поездки</p><p className="surface-card__copy">{message}</p><button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button></article>;
+  }
+
+  if (state.travelIntent === null) {
+    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Текущий план поездки</p><p className="surface-card__copy">Не удалось подтвердить активный план поездки. Попробуйте загрузить данные ещё раз.</p><button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button></article>;
+  }
+
+  const travelIntent = state.travelIntent;
+  const activeDraft = draft ?? createProfileTravelIntentDraft(travelIntent);
+  const updateDraft = (nextDraft: ProfileTravelIntentDraft) => {
+    setDraft(nextDraft);
+    setApiError(null);
+  };
+  const handleCancel = () => {
+    setDraft(createProfileTravelIntentDraft(travelIntent));
+    setValidationErrors({});
+    setApiError(null);
+    setIsEditing(false);
+  };
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (token === null || isSaving) {
+      if (token === null) setApiError('Сессия недоступна. Откройте приложение ещё раз.');
+      return;
+    }
+    setIsSaving(true);
+    setApiError(null);
+    const result = await saveProfileTravelIntent({ draft: activeDraft, token, putTravelIntent: backendApiClient.putTravelIntent });
+    setIsSaving(false);
+    if (result.status === 'validation_error') {
+      setValidationErrors(result.errors);
+      return;
+    }
+    if (result.status === 'api_error') {
+      setApiError(result.message);
+      return;
+    }
+    onSaved(result.travelIntent);
+    setDraft(createProfileTravelIntentDraft(result.travelIntent));
+    setValidationErrors({});
+    setIsEditing(false);
+  };
+
+  return <article className="surface-card surface-card--compact"><div className="profile-header"><p className="surface-card__title">Текущий план поездки</p>{isEditing ? <span className="profile-status">Editing</span> : <button className="profile-action" type="button" onClick={() => { updateDraft(createProfileTravelIntentDraft(travelIntent)); setValidationErrors({}); setIsEditing(true); }}>Edit</button>}</div>{isEditing ? <form className="profile-form" onSubmit={handleSave} noValidate><label className="profile-form__field"><span className="profile-form__label">Направление</span><input className="profile-input" type="text" value={activeDraft.destination} onChange={(event) => updateDraft({ ...activeDraft, destination: event.target.value })} disabled={isSaving} aria-invalid={validationErrors.destination ? 'true' : undefined} />{validationErrors.destination ? <p className="profile-field-error" role="alert">{validationErrors.destination}</p> : null}</label><label className="profile-form__field"><span className="profile-form__label">Дата начала</span><input className="profile-input" type="date" value={activeDraft.dateFrom} onChange={(event) => updateDraft({ ...activeDraft, dateFrom: event.target.value })} disabled={isSaving} aria-invalid={validationErrors.dateFrom ? 'true' : undefined} />{validationErrors.dateFrom ? <p className="profile-field-error" role="alert">{validationErrors.dateFrom}</p> : null}</label><label className="profile-form__field"><span className="profile-form__label">Дата окончания</span><input className="profile-input" type="date" value={activeDraft.dateTo} onChange={(event) => updateDraft({ ...activeDraft, dateTo: event.target.value })} disabled={isSaving} aria-invalid={validationErrors.dateTo ? 'true' : undefined} />{validationErrors.dateTo ? <p className="profile-field-error" role="alert">{validationErrors.dateTo}</p> : null}</label>{apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}<div className="profile-actions"><button className="profile-button profile-button--primary" type="submit" disabled={isSaving}>{isSaving ? 'Сохраняем…' : 'Save'}</button><button className="profile-button profile-button--secondary" type="button" onClick={handleCancel} disabled={isSaving}>Cancel</button></div></form> : <dl className="detail-list"><div className="detail-list__item"><dt className="detail-list__label">Направление</dt><dd className="detail-list__value">{travelIntent.destination}</dd></div><div className="detail-list__item"><dt className="detail-list__label">Дата начала</dt><dd className="detail-list__value">{travelIntent.date_from ?? 'Не указана'}</dd></div><div className="detail-list__item"><dt className="detail-list__label">Дата окончания</dt><dd className="detail-list__value">{travelIntent.date_to ?? 'Не указана'}</dd></div></dl>}</article>;
 }
