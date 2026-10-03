@@ -187,6 +187,42 @@ backend-контуром с `TELEGRAM_BOT_TOKEN` и runtime `DATABASE_URL` ро�
 deploys from `develop`, Root Directory — `apps/backend`, Auto-Deploy — Off.
 Supabase сохраняет отдельную least-privileged role `app_runtime` для runtime.
 
+### Minimal error monitoring / incident workflow (P0.5)
+
+Текущий operational destination backend-логов — **Render Service Logs**.
+Приложение явно пишет `INFO` и выше для namespace
+`travel_friend_backend` в stderr, который захватывает обычный Uvicorn/Render
+runtime. Completion record содержит только `request_id`, method, path без
+query string, status и duration. Для unexpected `500` тот же `request_id`
+связывает completion с existing `ERROR` traceback; exception message и
+дополнительные request/credential данные в этот log contract не добавляются.
+
+При incident от external tester оператор действует так:
+
+1. Зафиксировать approximate UTC time, route/screen и `X-Request-ID`, если он
+   доступен.
+2. Открыть Render Service Logs и найти `request_id`.
+3. Проверить completion status этого request.
+4. Для unexpected `500` найти correlated `ERROR` traceback по тому же ID.
+5. Отличить expected `4xx`/`422`/`429` от `500`/`503`: для expected outcomes
+   достаточно completion record; для readiness `503` на P0.5 также достаточно
+   completion record без `ERROR`.
+6. Записать actionable finding и reproduction, не копируя credentials,
+   secret-bearing URLs или provider tokens.
+
+Vercel logs остаются границей frontend/platform, а не источником backend
+application logs. Repository не утверждает конкретный retention period: доступ
+к логам и retention зависят от provider/account settings. На P0.5 отсутствие
+external error-monitoring provider является осознанным решением.
+
+TODO / risk, вне scope P0.5:
+
+- frontend unexpected runtime errors сейчас не собираются;
+- frontend не сохраняет `X-Request-ID`;
+- ordinary business DB connections остаются без timeout policy;
+- future streaming/post-response exceptions могут попадать в
+  Uvicorn-owned logging path.
+
 ### Операторская ротация production credentials
 
 Эта процедура не выполняет ротацию автоматически и не должна получать значения
