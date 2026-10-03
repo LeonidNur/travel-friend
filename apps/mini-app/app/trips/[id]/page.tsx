@@ -29,6 +29,7 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (session === null) {
@@ -36,7 +37,6 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
     }
 
     let isCurrent = true;
-
     void backendApiClient.getTrip(session.accessToken, id).then(
       (nextDetail) => {
         if (isCurrent) {
@@ -56,7 +56,7 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
     return () => {
       isCurrent = false;
     };
-  }, [id, session]);
+  }, [id, reloadKey, session]);
 
   const screenState = getTripDetailScreenState({
     isLoading,
@@ -64,6 +64,12 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
     errorStatus,
     detail
   });
+  const handleRetry = () => {
+    setIsLoading(true);
+    setError(null);
+    setErrorStatus(null);
+    setReloadKey((key) => key + 1);
+  };
 
   if (screenState === 'loading') {
     return <TripState title="Загружаем поездку" message={null} />;
@@ -84,7 +90,7 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
   }
 
   if (screenState === 'error' || detail === null) {
-    return <TripState title="Не удалось загрузить поездку" message={error} />;
+    return <TripState title="Не удалось загрузить поездку" message={error} onRetry={handleRetry} />;
   }
 
   const route = formatTripRouteStops(detail.route_stops);
@@ -123,13 +129,14 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
   );
 }
 
-function TripState({ title, message }: Readonly<{ title: string; message: string | null }>) {
+function TripState({ title, message, onRetry }: Readonly<{ title: string; message: string | null; onRetry?: () => void }>) {
   return (
     <section className="page">
       <article className="surface-card surface-card--compact empty-state-card" aria-live="polite">
         <p className="section-kicker">Поездка</p>
         <h2 className="empty-state-card__title">{title}</h2>
         {message !== null ? <p className="surface-card__copy">{message}</p> : null}
+        {onRetry ? <button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button> : null}
       </article>
     </section>
   );

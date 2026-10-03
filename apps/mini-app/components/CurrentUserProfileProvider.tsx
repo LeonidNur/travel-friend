@@ -29,6 +29,7 @@ type CurrentUserProfileContextValue = {
   saveProfile: (profile: UserProfile) => void;
   serverProfile: ServerProfileState;
   setServerProfile: (profile: ProfileResponse) => void;
+  reloadServerProfile: () => void;
   serverTravelIntent: ServerTravelIntentState;
   setServerTravelIntent: (travelIntent: TravelIntentResponse) => void;
 };
@@ -114,6 +115,12 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     setHydrationState({ accessToken: authSession.accessToken, state: { status: 'loaded', profile } });
   }, [authSession]);
 
+  const reloadServerProfile = useCallback(() => {
+    if (authSession !== null) {
+      setHydrationState(null);
+    }
+  }, [authSession]);
+
   const setServerTravelIntent = useCallback((travelIntent: TravelIntentResponse) => {
     if (authSession === null) {
       return;
@@ -144,6 +151,7 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
       saveProfile,
       serverProfile,
       setServerProfile,
+      reloadServerProfile,
       serverTravelIntent,
       setServerTravelIntent
     };
@@ -152,6 +160,7 @@ export function CurrentUserProfileProvider({ children }: { children: React.React
     authStatus,
     hydrationState,
     profile,
+    reloadServerProfile,
     saveProfile,
     setServerProfile,
     setServerTravelIntent,

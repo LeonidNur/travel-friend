@@ -11,7 +11,13 @@ import {
   type ChatMessageResponse,
   type ChatResponse
 } from '@/lib/backend-api-client';
-import { findChatById, getMessageAuthorLabel, mapChatMessages, submitChatMessage } from '@/lib/chat-runtime';
+import {
+  findChatById,
+  getChatMessageHistoryState,
+  getMessageAuthorLabel,
+  mapChatMessages,
+  submitChatMessage
+} from '@/lib/chat-runtime';
 import { createChatTrip, getCreateTripButtonState } from '@/lib/chat-trip-runtime';
 import { getAvatarInitials } from '@/lib/travel-preferences';
 
@@ -33,6 +39,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const [chat, setChat] = useState<ChatResponse | null>(null);
   const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
   const [roomState, setRoomState] = useState<ChatRoomState>('loading');
+  const [reloadKey, setReloadKey] = useState(0);
   const [draftMessage, setDraftMessage] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -78,12 +85,13 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
     return () => {
       isCurrent = false;
     };
-  }, [chatId, session]);
+  }, [chatId, reloadKey, session]);
 
   const renderedMessages = useMemo(
     () => (session === null ? [] : mapChatMessages(messages, session.userId)),
     [messages, session]
   );
+  const messageHistoryState = getChatMessageHistoryState(renderedMessages);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -149,7 +157,16 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   }
 
   if (roomState === 'error' || chat === null) {
-    return <ChatRoomUnavailable title="Не удалось загрузить чат" message="Попробуйте открыть чат ещё раз." />;
+    return (
+      <ChatRoomUnavailable
+        title="Не удалось загрузить чат"
+        message="Попробуйте открыть чат ещё раз."
+        onRetry={() => {
+          setRoomState('loading');
+          setReloadKey((key) => key + 1);
+        }}
+      />
+    );
   }
 
   const isGroupChat = chat.type === 'group';
@@ -228,6 +245,9 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
 
       <section className="surface-card chat-room" aria-label="История сообщений">
         <div className="chat-room__timeline">
+          {messageHistoryState === 'empty' ? (
+            <p className="surface-card__copy">Сообщений пока нет</p>
+          ) : null}
           {renderedMessages.map((message) => {
             if (message.kind === 'system') {
               return (
@@ -280,13 +300,18 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   );
 }
 
-function ChatRoomUnavailable({ title, message }: Readonly<{ title: string; message: string }>) {
+function ChatRoomUnavailable({
+  title,
+  message,
+  onRetry
+}: Readonly<{ title: string; message: string; onRetry?: () => void }>) {
   return (
     <section className="page">
       <article className="surface-card surface-card--compact empty-state-card">
         <p className="section-kicker">{title}</p>
         <h2 className="empty-state-card__title">{title}</h2>
         <p className="surface-card__copy">{message}</p>
+        {onRetry ? <button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button> : null}
         <Link className="profile-button profile-button--secondary" href="/chats">
           Вернуться к списку чатов
         </Link>
