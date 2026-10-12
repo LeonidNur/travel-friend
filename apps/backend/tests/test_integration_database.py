@@ -9,6 +9,7 @@ from integration_database import (
     DISPOSABLE_TEST_DATABASE_NAME,
     UnsafeTestDatabaseUrlError,
     get_disposable_runtime_database_url,
+    get_disposable_test_database_url,
     require_disposable_test_database_url,
     truncate_disposable_test_database,
 )
@@ -114,6 +115,20 @@ def test_runtime_database_url_requires_the_disposable_runtime_role() -> None:
         get_disposable_runtime_database_url(
             {"DATABASE_URL": OWNER_DATABASE_URL}
         )
+
+
+def test_ci_fails_instead_of_skipping_when_test_database_url_is_missing() -> None:
+    with pytest.raises(UnsafeTestDatabaseUrlError, match="TEST_DATABASE_URL is required") as error:
+        get_disposable_test_database_url({"CI": "true"})
+
+    assert type(error.value) is UnsafeTestDatabaseUrlError
+
+
+def test_ci_fails_instead_of_skipping_when_runtime_database_url_is_missing() -> None:
+    with pytest.raises(UnsafeTestDatabaseUrlError, match="DATABASE_URL is required") as error:
+        get_disposable_runtime_database_url({"CI": "true"})
+
+    assert type(error.value) is UnsafeTestDatabaseUrlError
 
 
 def test_cleanup_revalidates_before_connecting_to_the_database(monkeypatch: pytest.MonkeyPatch) -> None:

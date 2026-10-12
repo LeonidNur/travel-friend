@@ -26,6 +26,15 @@ class IntegrationDatabaseNotConfiguredError(UnsafeTestDatabaseUrlError):
     """Raised when PostgreSQL integration tests have no configured target."""
 
 
+def _missing_database_configuration_error(
+    message: str,
+    environment: Mapping[str, str],
+) -> UnsafeTestDatabaseUrlError:
+    if environment.get("CI", "").lower() == "true":
+        return UnsafeTestDatabaseUrlError(message)
+    return IntegrationDatabaseNotConfiguredError(message)
+
+
 def require_disposable_test_database_url(
     database_url: str,
     *,
@@ -61,7 +70,10 @@ def get_disposable_test_database_url(
     source = os.environ if environment is None else environment
     database_url = source.get("TEST_DATABASE_URL")
     if database_url is None or not database_url.strip():
-        raise IntegrationDatabaseNotConfiguredError("TEST_DATABASE_URL is required for PostgreSQL integration tests")
+        raise _missing_database_configuration_error(
+            "TEST_DATABASE_URL is required for PostgreSQL integration tests",
+            source,
+        )
     return require_disposable_test_database_url(database_url, environment=source)
 
 
@@ -72,7 +84,10 @@ def get_disposable_runtime_database_url(
     source = os.environ if environment is None else environment
     database_url = source.get("DATABASE_URL")
     if database_url is None or not database_url.strip():
-        raise IntegrationDatabaseNotConfiguredError("DATABASE_URL is required for runtime PostgreSQL integration tests")
+        raise _missing_database_configuration_error(
+            "DATABASE_URL is required for runtime PostgreSQL integration tests",
+            source,
+        )
     parsed = _require_disposable_database_target(database_url, "DATABASE_URL")
     if unquote(parsed.username or "") != APP_RUNTIME_ROLE:
         raise UnsafeTestDatabaseUrlError(
