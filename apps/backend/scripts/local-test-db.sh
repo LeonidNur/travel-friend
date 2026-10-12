@@ -41,7 +41,10 @@ require_own_container() {
 
 wait_for_database() {
   attempts=0
-  until docker exec "$CONTAINER_NAME" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do
+  until docker exec --env "PGPASSWORD=$POSTGRES_PASSWORD" "$CONTAINER_NAME" \
+    psql --no-password --host=127.0.0.1 --set=ON_ERROR_STOP=1 \
+      --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" \
+      --command='SELECT 1' >/dev/null 2>&1; do
     attempts=$((attempts + 1))
     if [ "$attempts" -ge 30 ]; then
       echo "PostgreSQL test container did not become ready." >&2
