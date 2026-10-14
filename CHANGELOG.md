@@ -1,5 +1,9 @@
 # Журнал изменений
 
+## 2026-10-14
+
+- Добавлен [manual production deployment runbook](docs/backend/production-deployment-runbook.md) с Git SHA/schema/grants preflight, DB/API compatibility matrix, ручным rollout, smoke gates и stop criteria. №15 помечен docs-ready; Auto-Deploy остаётся Off, rollout требует отдельного подтверждения оператора.
+
 ## 2026-09-29
 
 - Закрыт P0 security baseline persisted MVP: server-side Telegram `initData`, invariant completed onboarding и active TravelIntent, lifecycle opaque sessions, backend input/domain limits и minimal in-process rate limiting.

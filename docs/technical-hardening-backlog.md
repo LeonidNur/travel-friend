@@ -19,7 +19,8 @@
 - RLS/capability boundary completed для всех 17 application tables; основные write flows onboarding, Discover → Match → Direct Chat, Group Chat, Messages и Trip creation используют контролируемые DB capabilities.
 - Production security cutover completed; production DB применена до `20260901280000`.
 - Production grants verifier, runtime deployment gate, production `/health` и Telegram smoke passed; совместимый security backend deployed.
-- Auto-Deploy remains Off pending отдельного deployment workflow.
+- Auto-Deploy remains Off; ручной production deployment workflow описан в №15 и не является решением о включении automation.
+- №15 подготовлен как manual production deployment runbook; это закрывает документационный workflow, но не включает Auto-Deploy и не подтверждает provider settings.
 - P0.5 reliability/observability completed. Это не открывает external test автоматически: перед ним обязателен отдельный External Test Cost Guardrails gate.
 
 ## P0 — completed security baseline (historical checkpoint)
@@ -47,7 +48,7 @@ Residual observability risks после закрытия P0.5 уже ведут�
 
 ## Active stage — deployment / CI / reproducibility
 
-15. **Production deployment workflow.** Safe production deployment workflow before Auto-Deploy is re-enabled.
+15. **Production deployment workflow — DOCS READY.** Операторский manual rollout, compatibility decision matrix, stop criteria и зависимости зафиксированы в [production deployment runbook](backend/production-deployment-runbook.md). Auto-Deploy остаётся Off; этот статус не является разрешением на rollout или включение automation.
 16. **Deployment provenance/environments.**
 17. **Deployment smoke chain.**
 18. **CI with disposable PostgreSQL.**

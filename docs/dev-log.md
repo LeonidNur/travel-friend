@@ -1,5 +1,23 @@
 # Дневник разработки
 
+## 2026-10-14 — №15 manual production deployment workflow
+
+### Что сделали
+
+- Подготовили [операторский runbook](backend/production-deployment-runbook.md) для ручного production rollout текущего MVP: Git SHA preflight, schema/grants compatibility, выбор DB-first/backend-first, maintenance/quiesce, ручной rollout, smoke gates и stop criteria.
+- Зафиксировали decision matrix для совместимых, additive и breaking DB/API/grants изменений и expand/contract; отдельно связали workflow с №16 provenance, №17 smoke, №21 backup/restore и №22 rollback/forward-fix.
+- Отметили №15 как docs-ready. Auto-Deploy остаётся Off, а rollout требует отдельного подтверждения оператора.
+
+### Что проверили
+
+- Сверили runbook с историческим security cutover, текущими migrations, production grants/verifier/runtime gate, backend contracts, deployment описаниями и `.github/workflows/ci.yml`.
+- Выполнена документальная проверка `git diff --check`; production, provider settings и production DB не использовались.
+
+### Что осталось
+
+- №16, №17, №21 и №22 остаются отдельными work items. Production provider targets/settings, точные deploy commands, smoke account/procedure и backup/recovery readiness требуют отдельного operator confirmation/implementation.
+- Auto-Deploy не включён.
+
 ## 2026-10-03 — P0.5 reliability/observability completion и cost-safety gates
 
 ### Что сделали
