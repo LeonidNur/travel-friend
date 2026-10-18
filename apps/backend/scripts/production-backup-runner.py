@@ -63,6 +63,29 @@ class RunnerError(Exception):
     """Safe-to-display failure without command output or secret values."""
 
 
+PREFLIGHT_STOP_REASONS = {
+    "PREFLIGHT": "an unexpected read-only preflight check failed.",
+    "CONNECTION_SQL": "the database connection or read-only SQL check failed.",
+    "METADATA": "database identity, server version, table inventory, or RLS/read coverage failed validation.",
+    "ACL": "ACL inventory was incomplete or contained an unreviewed principal.",
+    "EXTENSIONS": "extension inventory or version differed from the reviewed inventory.",
+    "DEPENDENCIES": "database dependencies or related inventories fall outside the reviewed backup scope.",
+    "TABLE_COUNTS": "one or more read-only table counts could not be validated.",
+    "MIGRATION_LEDGER": "migration history could not be validated against repository migrations.",
+}
+
+
+class PreflightStop(RunnerError):
+    """Preflight failure classified with a fixed, safe diagnostic."""
+
+    def __init__(self, stage: str) -> None:
+        if stage not in PREFLIGHT_STOP_REASONS:
+            stage = "PREFLIGHT"
+        self.stage = stage
+        self.reason = PREFLIGHT_STOP_REASONS[stage]
+        super().__init__(self.reason)
+
+
 @dataclass(frozen=True)
 class PgTools:
     pg_dump: str
@@ -472,13 +495,13 @@ def run_psql_json(tools: PgTools, password: str, sql: str, app_name: str = "trav
             env=env,
         )
     except Exception:
-        raise RunnerError("Read-only production metadata query could not be completed.") from None
+        raise PreflightStop("CONNECTION_SQL") from None
     if result.returncode != 0:
-        raise RunnerError("Read-only production metadata query failed; export stopped.")
+        raise PreflightStop("CONNECTION_SQL")
     try:
         return json.loads(result.stdout.strip())
     except (TypeError, json.JSONDecodeError):
-        raise RunnerError("Read-only production metadata was not in the expected format.") from None
+        raise PreflightStop("CONNECTION_SQL") from None
 
 
 def _quoted_identifier(identifier: str) -> str:
@@ -501,39 +524,39 @@ def run_table_count(tools: PgTools, password: str, table_name: str) -> dict[str,
             env=env,
         )
     except Exception:
-        raise RunnerError("A read-only table count could not be completed; export stopped.") from None
+        raise PreflightStop("TABLE_COUNTS") from None
     try:
         observation = json.loads(result.stdout.strip())
     except (TypeError, json.JSONDecodeError):
         observation = None
     if result.returncode != 0 or not isinstance(observation, dict) or not isinstance(observation.get("count"), int) or not isinstance(observation.get("observed_at"), str):
-        raise RunnerError("A read-only table count failed; export stopped.")
+        raise PreflightStop("TABLE_COUNTS")
     return observation
 
 
 def run_migration_ledger(tools: PgTools, password: str) -> dict[str, Any]:
     result = run_psql_json(tools, password, MIGRATION_LEDGER_SQL, "travel-friend-backup-ledger")
     if not isinstance(result.get("versions"), list) or not isinstance(result.get("count"), int):
-        raise RunnerError("Migration ledger metadata could not be validated; export stopped.")
+        raise PreflightStop("MIGRATION_LEDGER")
     return result
 
 
 def validate_preflight_metadata(metadata: dict[str, Any]) -> None:
     if metadata.get("database") != "postgres" or metadata.get("current_user") != EXPECTED_DATABASE_ROLE or metadata.get("session_user") != EXPECTED_DATABASE_ROLE:
-        raise RunnerError("Read-only preflight found an unexpected database identity.")
+        raise PreflightStop("METADATA")
     server_version = metadata.get("server_version")
     match = re.match(r"^(\d+)(?:\.|$)", server_version) if isinstance(server_version, str) else None
     if match is None or int(match.group(1)) != EXPECTED_POSTGRES_MAJOR:
-        raise RunnerError(f"Expected PostgreSQL {EXPECTED_POSTGRES_MAJOR} server; export stopped.")
+        raise PreflightStop("METADATA")
     if metadata.get("bypass_rls") is not True:
-        raise RunnerError("Backup identity does not have confirmed full-row RLS coverage; export stopped.")
+        raise PreflightStop("METADATA")
 
     tables = metadata.get("tables")
     if not isinstance(tables, list) or len(tables) != EXPECTED_TABLE_COUNT:
-        raise RunnerError("Public table inventory differs from the reviewed MVP scope; export stopped.")
+        raise PreflightStop("METADATA")
     actual_table_names = {table.get("name") for table in tables if isinstance(table, dict)}
     if actual_table_names != EXPECTED_PUBLIC_TABLES:
-        raise RunnerError("Public table names differ from the reviewed MVP scope; export stopped.")
+        raise PreflightStop("METADATA")
     if any(
         not isinstance(table, dict)
         or table.get("owner") != EXPECTED_DATABASE_ROLE
@@ -541,25 +564,25 @@ def validate_preflight_metadata(metadata: dict[str, Any]) -> None:
         or table.get("select") is not True
         for table in tables
     ):
-        raise RunnerError("Table ownership, RLS, or SELECT read coverage is incomplete; export stopped.")
+        raise PreflightStop("METADATA")
 
     scoped_acl_principals = metadata.get("acl_principals_by_scope")
     required_acl_scopes = {"relations", "functions", "types", "schema", "default_acl"}
     if not isinstance(scoped_acl_principals, dict) or not required_acl_scopes.issubset(scoped_acl_principals):
-        raise RunnerError("ACL principal inventory is incomplete; export stopped.")
+        raise PreflightStop("ACL")
     if any(
         not isinstance(scoped_acl_principals[scope], list)
         or any(not isinstance(principal, str) for principal in scoped_acl_principals[scope])
         for scope in required_acl_scopes
     ):
-        raise RunnerError("ACL principal inventory is incomplete; export stopped.")
+        raise PreflightStop("ACL")
     principals = {
         principal
         for scope in required_acl_scopes
         for principal in scoped_acl_principals[scope]
     }
     if principals - KNOWN_ACL_PRINCIPALS:
-        raise RunnerError("An unknown ACL principal was found; decide its handling before export.")
+        raise PreflightStop("ACL")
 
     extensions = metadata.get("extension_inventory")
     if not isinstance(extensions, list) or any(
@@ -568,10 +591,10 @@ def validate_preflight_metadata(metadata: dict[str, Any]) -> None:
         or not isinstance(item.get("version"), str)
         for item in extensions
     ):
-        raise RunnerError("PostgreSQL extension inventory could not be validated; export stopped.")
+        raise PreflightStop("EXTENSIONS")
     observed_extensions = {item["name"]: item["version"] for item in extensions}
     if len(observed_extensions) != len(extensions) or observed_extensions != EXPECTED_EXTENSION_INVENTORY:
-        raise RunnerError("PostgreSQL extension inventory or version differs from the reviewed inventory; export stopped.")
+        raise PreflightStop("EXTENSIONS")
     restore_dependencies = metadata.get("extension_restore_dependencies")
     if not isinstance(restore_dependencies, list) or any(
         not isinstance(item, dict)
@@ -579,23 +602,23 @@ def validate_preflight_metadata(metadata: dict[str, Any]) -> None:
         or item.get("version") != EXPECTED_EXTENSION_INVENTORY.get(item.get("name"))
         for item in restore_dependencies
     ):
-        raise RunnerError("Public objects have an unreviewed extension restore dependency; export stopped.")
+        raise PreflightStop("DEPENDENCIES")
     if metadata.get("large_object_count") != 0:
-        raise RunnerError("Large objects exist outside the selected public-schema archive; export stopped.")
+        raise PreflightStop("DEPENDENCIES")
     if metadata.get("catalog_non_public_dependencies") != []:
-        raise RunnerError("A catalog-tracked dependency outside public was found; export stopped for scope review.")
+        raise PreflightStop("DEPENDENCIES")
     if any(metadata.get(key) != 0 for key in ("auth_user_count", "storage_object_count", "vault_secret_count")):
-        raise RunnerError("Auth, Storage, or Vault inventory is non-empty; export stopped for scope review.")
+        raise PreflightStop("DEPENDENCIES")
 
 
 def _check_migration_ledger(ledger: dict[str, Any]) -> dict[str, Any]:
     if ledger.get("count") != EXPECTED_MIGRATION_COUNT or len(ledger.get("versions", [])) != EXPECTED_MIGRATION_COUNT:
-        raise RunnerError("Migration ledger count differs from the reviewed scope; export stopped.")
+        raise PreflightStop("MIGRATION_LEDGER")
     migration_dir = REPOSITORY_ROOT / "supabase" / "migrations"
     local_versions = {path.name.split("_", 1)[0] for path in migration_dir.glob("*.sql")}
     production_versions = {str(item.get("version", "")) for item in ledger["versions"] if isinstance(item, dict)}
     if len(production_versions) != EXPECTED_MIGRATION_COUNT or not production_versions.issubset(local_versions):
-        raise RunnerError("Migration ledger does not map completely to repository migrations; export stopped.")
+        raise PreflightStop("MIGRATION_LEDGER")
     return ledger
 
 
@@ -603,10 +626,14 @@ def run_read_only_preflight(tools: PgTools, password: str) -> dict[str, Any]:
     metadata = run_psql_json(tools, password, PREFLIGHT_SQL)
     validate_preflight_metadata(metadata)
 
-    table_counts = {
-        f"public.{table['name']}": run_table_count(tools, password, table["name"])
-        for table in metadata["tables"]
-    }
+    table_counts: dict[str, Any] = {}
+    for table in metadata["tables"]:
+        try:
+            table_counts[f"public.{table['name']}"] = run_table_count(tools, password, table["name"])
+        except PreflightStop:
+            raise
+        except Exception:
+            raise PreflightStop("TABLE_COUNTS") from None
     ledger = _check_migration_ledger(run_migration_ledger(tools, password))
     return {"metadata": metadata, "table_counts": table_counts, "migration_ledger": ledger}
 
@@ -648,8 +675,11 @@ def _preflight_only(password: str, tools: PgTools) -> int:
 
     try:
         preflight = run_read_only_preflight(tools, password)
+    except PreflightStop as error:
+        print(f"STOP [{error.stage}]: {error.reason} No export was attempted.", file=sys.stderr)
+        return 1
     except Exception:
-        print("STOP: a required read-only preflight check failed; no export was attempted.", file=sys.stderr)
+        print(f"STOP [PREFLIGHT]: {PREFLIGHT_STOP_REASONS['PREFLIGHT']} No export was attempted.", file=sys.stderr)
         return 1
     print_preflight_summary(preflight)
     return 0
