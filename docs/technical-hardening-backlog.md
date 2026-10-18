@@ -42,7 +42,7 @@
 12. **Active TravelIntent view/edit — COMPLETED.** Profile UI гидрирует active TravelIntent и позволяет валидированно редактировать его через существующий backend contract.
 13. **Health / readiness — COMPLETED.** `/health` сохраняет liveness contract, а `/ready` проверяет readiness database dependency и отдаёт controlled `503` при её недоступности.
 14. **Minimal error monitoring — COMPLETED.** P0.5 baseline — explicit correlated backend application logging в Render Service Logs и documented operator workflow; внешний error-monitoring provider намеренно не подключён.
-14.1. **Infrastructure cost / FinOps audit — COMPLETED (audit/plan).** Зафиксирован scope обязательного cost-safety review перед external test; production implementation этим пунктом не выполнялась.
+14.1. **FinOps / external test guardrails — AUDIT/PLAN COMPLETED; EXTERNAL TEST GATE OPEN (18.10.2026).** Единая карта production/development/operations dependencies, локальных ресурсов, account-specific billing unknowns, usage model на 5/10/25/50/100 тестировщиков, emergency-stop limits и operator preflight зафиксированы в [FinOps runbook](finops-external-test-guardrails.md). Это только audit/docs: никакие provider plans/settings не менялись. Внешний тест **STOP** до серверного tester allowlist, защиты публичного `/ready` от DB amplification, проверки billing controls и актуального deployment/schema compatibility.
 
 Residual observability risks после закрытия P0.5 уже ведутся без дубля в [backend security](backend/security.md#minimal-error-monitoring--incident-workflow): ordinary business DB connection timeout policy, сохранение `X-Request-ID` frontend, централизованный сбор frontend runtime errors и logging path для future streaming/post-response exceptions.
 
@@ -63,11 +63,13 @@ Residual observability risks после закрытия P0.5 уже ведут�
 
 ## Mandatory gate — External Test Cost Guardrails
 
-External test нельзя открывать только потому, что P0.5 завершён. Перед выдачей приложения людям требуется отдельный cost-safety gate. Его implementation scope определяется отдельным review: findings FinOps audit не становятся автоматически production implementation.
+External test нельзя открывать только потому, что P0.5 или документационный audit завершены. Полный inventory, модель нагрузки, admission/emergency policy и account-specific open questions находятся в [FinOps & external test guardrails](finops-external-test-guardrails.md). Findings не меняют application/provider configuration автоматически; каждый P0 implementation scope утверждается отдельно.
 
 ### Application-side review
 
 - tester admission boundary / Telegram-ID allowlist;
+- отсутствие серверного admission/pause mechanism сейчас блокирует внешние invites;
+- публичный `/ready` открывает unauthenticated DB connection/query без endpoint rate cap;
 - expensive или unbounded reads, включая `GET /chats` N+1;
 - рост Messages history/write;
 - рост session creation/replay;
@@ -87,11 +89,12 @@ External test нельзя открывать только потому, что 
 
 ### Operational review
 
+- подтвердить account-level plan/payment method/usage и реальные spend/pause controls;
 - определить допустимый maximum test loss;
 - размер первой tester cohort определить после provider review;
 - определить baseline usage и monitoring cadence;
 - определить stop thresholds;
-- зафиксировать точный и проверенный manual kill-switch procedure.
+- зафиксировать точный и проверенный manual stop procedure; пока он не испытан, считать его unverified.
 
 Ни размер cohort, ни длительность теста, ни процентные stop thresholds этим backlog не утверждаются.
 
