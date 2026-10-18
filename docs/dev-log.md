@@ -1,5 +1,24 @@
 # Дневник разработки
 
+## 2026-10-18 — №17 deployment smoke chain
+
+### Что сделали
+
+- Добавили read-only CLI smoke, который требует явный HTTP(S) origin без path/query/fragment, и последовательно выполняет `GET /health` и `GET /ready` с timeout 5 секунд, без переходов по redirects.
+- Принимаются только HTTP 200 с контрактными телами `{"status":"ok"}` и `{"status":"ready"}`; transport errors, некорректные ответы и неуспешные status codes приводят к non-zero exit code.
+- Обновили [production deployment runbook](backend/production-deployment-runbook.md): preflight, порядок запуска, ожидаемые результаты, STOP criteria и отдельная ручная граница Telegram E2E. Smoke не создаёт и не изменяет пользовательские данные.
+- Отметили №17 как implemented в [technical hardening backlog](technical-hardening-backlog.md); `CHANGELOG` и roadmap синхронизированы.
+
+### Что проверили
+
+- Добавили mock-only HTTP tests для успешной последовательности, статусов/тел, malformed JSON, сетевой ошибки, явного URL, bounded timeout и запрета redirects.
+- `uv run --group dev pytest tests/test_deployment_smoke.py` — 21 passed; ни один реальный backend/production запрос не выполнялся.
+- `git diff --check` прошёл.
+
+### Что осталось
+
+- Автоматический smoke не проверяет Telegram auth, бизнес-flow, schema parity или grants/RLS; эти проверки остаются в своих отдельных gates, а Telegram E2E — ручной.
+
 ## 2026-10-18 — №16 deployment provenance / environments
 
 ### Что сделали

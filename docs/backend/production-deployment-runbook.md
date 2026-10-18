@@ -58,18 +58,38 @@ Auto-Deploy остаётся **Off**. До rollout оператор провер
 
 ## 5. Smoke и критерии остановки
 
-- Проверить deployed SHA каждого изменённого service по provider deployment details; он должен совпадать с approved SHA.
-- Backend `/health` — только liveness процесса, без DB проверки. `/ready` проверяет минимальную DB dependency через `SELECT 1`, но не проверяет schema, grants, Telegram auth или business flow. Оператор использует подтверждённые base URL; они не задаются в этом документе.
-- Критичный пользовательский smoke для Telegram Auth → Profile/TravelIntent → Discover/Match → Chat/Messages → Trips нужен для целостности полного MVP flow. Порядок/данные безопасного production smoke и автоматическая smoke chain относятся к задаче №17; до её закрытия оператор должен использовать отдельно согласованный smoke сценарий и разрешённый test account, не создавать произвольные реальные пользовательские данные.
-- Schema/grants проверяются отдельными verifier-ами; HTTP health не заменяет эти проверки. При DB contract change выполнить их до traffic restore.
-- Зафиксировать observed SHA, migration version, результаты verifier/gate, health/readiness, выполненные smoke steps и решение о traffic restore в operator deployment record. Формат/автоматическая provenance относятся к №16.
+### Автоматический read-only HTTP smoke
+
+Перед запуском оператор должен:
+
+1. Убедиться, что deployment завершён для подтверждённого backend service/environment, а его фактически deployed SHA совпадает с approved SHA.
+2. Проверить CI/review, Auto-Deploy Off и все применимые к изменению migration, schema, grants и runtime gates из разделов выше.
+3. Независимо подтвердить backend base URL выбранного target. Не брать URL из непроверенного deployment output и не сохранять секретные значения в команде или отчёте.
+4. Запустить из корня репозитория, подставив только подтверждённый backend base URL:
+
+   ```sh
+   cd apps/backend
+   uv run --group dev python scripts/deployment_smoke.py --base-url "$CONFIRMED_BACKEND_BASE_URL"
+   ```
+
+`deployment_smoke.py` последовательно выполняет только `GET /health` и `GET /ready`, с timeout 5 секунд на каждый запрос и без перехода по redirects. Ожидаются HTTP 200 и точные тела `{"status":"ok"}` и `{"status":"ready"}`; при успехе команда завершается с кодом 0. Любая ошибка соединения/timeout, redirect, иной HTTP status или тело ответа даёт `FAIL` и non-zero exit code; цепочка останавливается на первой ошибке. Запросы не создают и не меняют пользовательские данные.
+
+`/health` подтверждает только liveness процесса. `/ready` подтверждает доступность минимальной DB dependency через `SELECT 1`; этот smoke не проверяет deployed schema parity, grants/RLS, Telegram authentication или бизнес-сценарии. Schema/grants проверяются отдельными verifier-ами; HTTP health их не заменяет.
+
+**STOP:** не запускать smoke при неподтверждённых target/base URL/SHA или незавершённых обязательных preflight gates. При любом non-zero результате, неожиданном redirect/ответе или transport error остановить rollout, оставить traffic quiesced, если он был quiesced, и расследовать причину. Не продолжать traffic restore до успешных обязательных проверок.
+
+### Ручной Telegram E2E
+
+Полный сценарий Telegram Auth → Profile/TravelIntent → Discover/Match → Chat/Messages → Trips остаётся отдельной ручной проверкой. Его выполняют только по отдельно согласованному сценарию, с разрешённым test account и определёнными правилами тестовых данных. Автоматический read-only smoke не аутентифицируется, не создаёт пользователей/сообщения/чаты/поездки и не заменяет Telegram E2E.
+
+Зафиксировать observed SHA, migration version, результаты verifier/gate, HTTP smoke и решение о traffic restore в operator deployment record. Provenance самого deployment относится к №16.
 
 Немедленно остановиться и оставить traffic quiesced, если target SHA не совпал, migration history/schema/grants не соответствуют плану, любой verifier/gate/health/readiness/smoke падает, появляются неожиданные ошибки или выясняется, что старая и новая версии несовместимы. Не переключать сервис обратно на старый backend после breaking DB/API/grants change без доказанной совместимости; использовать отдельно согласованный rollback/forward-fix procedure задачи №22. Если миграция изменила данные/схему, допустимость восстановления зависит от заранее проверенного backup/restore плана №21. Не импровизировать с ручным SQL, `migration repair`, credential changes или provider settings.
 
 ## Связанные задачи
 
 - **№16 — provenance/environments:** фиксирует/автоматизирует доказательство environment, commit/deployed SHA и schema parity; этот runbook требует сверять их вручную.
-- **№17 — deployment smoke:** автоматизирует безопасный smoke chain и его критерии; здесь production smoke только gate/операторский шаг.
+- **№17 — deployment smoke:** read-only HTTP chain `/health` → `/ready` документирован в этом разделе и реализован скриптом `apps/backend/scripts/deployment_smoke.py`; Telegram E2E остаётся ручным.
 - **№21 — backup/restore:** задаёт подтверждённые backup и recovery условия для DB изменений; этот документ не обещает backup/restore и не задаёт retention.
 - **№22 — rollback/forward-fix:** определяет recovery для backend/API/DB/grants. Старый backend не является допустимым rollback target автоматически после breaking change.
 
