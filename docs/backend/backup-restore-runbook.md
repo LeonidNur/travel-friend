@@ -53,8 +53,8 @@ scripts и документации; production preflight facts ниже пре�
 |---|---|---|---|---|---|
 | `public` tables и строки | Да: `users`, `telegram_identities`, `user_settings` и остальные активные данные используются backend напрямую или capability functions. `profile_photos` и `chat_summaries` есть в схеме, но security docs указывают, что MVP их не использует. | `docs/database-schema.md`; `apps/backend/src/travel_friend_backend/{auth/service.py,routers/me.py,routers/discover.py,routers/chats.py,routers/trips.py}`; `docs/backend/security.md`; operator preflight подтвердил 17 таблиц, RLS и ownership `postgres`. | Да: schema и все строки всех 17 таблиц, включая dormant tables, пока production inventory не докажет иное. | DDL — из `supabase/migrations/`; текущие строки не восстанавливаются из Git. | Фактические row counts, полнота чтения и согласованность снимка не перепроверялись в этом аудите. |
 | Functions, triggers, constraints, indexes | Да: auth/session bootstrap, projections, onboarding, Discover, chat/message и trip capabilities; триггеры поддерживают chat invariants. | `auth/service.py`; backend routers; `supabase/migrations/20260901130000_chat_persistence.sql`; остальные migrations. | Да: все требуемые application definitions и их зависимости. | Определения находятся в migrations; применение и соответствие production должны быть проверены отдельно. | Полный production catalog drift и все runtime dependencies не подтверждены. |
-| RLS policies, grants, ownership | Да: RLS и точные права — часть runtime security boundary. | `docs/backend/security.md`; migrations; `apps/backend/scripts/grant-production-app-runtime-privileges.sql`; supplied preflight: RLS на 17/17, `app_runtime` без BYPASSRLS, `postgres` владеет таблицами и имеет SELECT. | Да: сохранить policies, ownership/grants и минимальные role attributes как отдельную recovery dependency. | Policies и часть grants есть в migrations; role provisioning/grants scripts в Git. Реальные пароли, membership, owners и полное ACL состояние нельзя считать восстановленными из Git. | Preflight не устанавливал полный grants/ownership catalog вне 17 таблиц или безопасный restore всех ролей. |
-| PostgreSQL roles | Да: backend подключается как `app_runtime`; operator backup identity — `postgres`. | `db.py`, `config.py`; `provision-production-app-runtime-role.sql`; production grants script; operator preflight. | Отдельно пересоздать только `app_runtime` и нужный ACL surface. Не переносить полный cluster roles dump. | Атрибуты роли и grants описаны в scripts; production password и полное membership/ACL состояние не восстанавливаются из Git. | ACL principals в текущем production public catalog нужно сверить при разрешённом preflight. |
+| RLS policies, grants, ownership | Да: RLS и точные права — часть runtime security boundary. | `docs/backend/security.md`; migrations; `apps/backend/scripts/grant-production-app-runtime-privileges.sql`; supplied preflight: RLS на 17/17, `app_runtime` без BYPASSRLS, `postgres` владеет таблицами и имеет SELECT. | Да: сохранить policies, ownership/grants и минимальные role attributes как отдельную recovery dependency. | Policies и часть grants есть в migrations; role provisioning/grants scripts в Git. Реальные пароли, membership, owners и полное ACL состояние нельзя считать восстановленными из Git. | Principal inventory подтверждён по областям; точный grants/ownership catalog и его воспроизведение на disposable target остаются отдельными проверками. |
+| PostgreSQL roles | Да: backend подключается как `app_runtime`; operator backup identity — `postgres`. | `db.py`, `config.py`; `provision-production-app-runtime-role.sql`; production grants script; operator preflight. | Отдельно пересоздать только `app_runtime` и нужный ACL surface. Не переносить полный cluster roles dump. | Атрибуты роли и grants описаны в scripts; production password и полное membership/ACL состояние не восстанавливаются из Git. | Operator-confirmed ACL principals нужно повторно сверить перед export; их наличие в source не доказывает, что они доступны или могут быть восстановлены на disposable target. |
 | Extensions / PostgreSQL version | Явных `CREATE EXTENSION` / `ALTER EXTENSION` в app migrations не найдено; PostgreSQL runtime — зависимость. | Operator read-only SQL preflight: PostgreSQL 17.6; `plpgsql 1.0`, `pgcrypto 1.3`, `uuid-ossp 1.1`, `pg_stat_statements 1.11`, `supabase_vault 0.3.1`. | Сохранить полный inventory отдельно от фактических extension dependencies объектов `public`; обеспечить только нужные совместимые extensions на restore target. | Приложенческие migrations не задают extensions. | Production inventory подтверждён на момент preflight; его актуальность и direct object dependencies повторно проверить перед export. |
 | Supabase Auth (`auth`) | Кодовой зависимости не найдено: MVP проверяет Telegram `initData` и хранит identities/sessions в `public`; оператор подтвердил 0 Auth users. | Backend auth source; операторский production inventory. | Auth rows сейчас не входят в backup scope. Provider settings остаются отдельной recovery dependency. | Не восстанавливается приложенческими migrations. | Повторно сверить нулевой inventory перед первым backup; настройки provider не входят в PostgreSQL archive. |
 | Supabase Storage / внешние файлы | Upload/download в MVP не реализованы; оператор подтвердил 0 Storage objects. | `docs/backend/backend-contracts.md`, app source search, операторский inventory. | Object export сейчас не требуется по подтверждённому inventory; `profile_photos.storage_key` сам файл не содержит. | Нет: файлы/buckets не восстанавливаются из Git migrations или `public` archive. | Повторно проверить objects перед первым backup; bucket/provider configuration отдельно. |
@@ -309,7 +309,8 @@ STOP и не запускает export. Отказ/отсутствие инте
 read-only preflight: проверяет target identity, major version сервера 17, серверную role
 `postgres` с `BYPASSRLS`, owner `postgres`, RLS и SELECT для точного набора 17
 public tables; отдельно инвентаризирует ACL principals по relations, functions,
-types, schema и default ACL; сверяет полный extension inventory и версии с
+types, schema и default ACL и сверяет каждый scope с операторским inventory ниже;
+сверяет полный extension inventory и версии с
 операторским read-only preflight от 2026-10-18; вычисляет direct catalog-tracked
 extension dependencies объектов `public`; считает large objects и
 catalog-tracked зависимости вне `public`; читает migration ledger и counts; и
@@ -407,25 +408,41 @@ database-wide large objects и не пытается автоматически 
 `pg_restore --list`, он поддерживает выборочное восстановление и остановку на
 первой ошибке. Plain SQL проще читать и подавать через `psql`, но не даёт
 `pg_restore` TOC/selective restore/error controls. Archive сохраняет исходные
-ownership/ACL metadata. Для disposable restore применять `pg_restore
---no-owner --exit-on-error --single-transaction`: ownership назначится локальному
-restore operator, ACL останутся в archive. До restore перечислить ACL principals.
-Если archive ссылается на неизвестный или отсутствующий ACL principal, **STOP**
-до отдельного решения о его обработке; автоматически создавать `NOLOGIN`
-placeholders запрещено. Не импортировать все Supabase cluster roles/role
-password hashes. Затем создать `app_runtime` с
-least-privilege attributes и переприменить точный grant surface по
-`apps/backend/scripts/grant-production-app-runtime-privileges.sql`; не запускать
-production provisioning script против источника.
+ownership/ACL metadata. Для отдельной disposable-проверки только schema/data
+допустимы `pg_restore --no-owner --no-acl --exit-on-error
+--single-transaction`: эти флаги намеренно не проверяют восстановление source
+owners, ACL и runtime grants, поэтому такой результат не является полным
+restore.
+
+Оператор подтвердил production ACL inventory по отдельным областям:
+
+| Область | Подтверждённые principals |
+|---|---|
+| relations | `anon`, `authenticated`, `postgres`, `service_role` |
+| functions | `app_runtime`, `postgres` |
+| types | `PUBLIC`, `postgres` |
+| schema | `PUBLIC`, `anon`, `app_runtime`, `authenticated`, `pg_database_owner`, `postgres`, `service_role` |
+| default ACL | `anon`, `authenticated`, `postgres`, `service_role`, `supabase_admin` |
+
+Runner сверяет principals с allowlist именно их области. Это production inventory,
+а не доказательство, что те же managed roles и ACL можно восстановить в обычной
+disposable PostgreSQL. Для полной restore-проверки отдельно подтвердить ACL
+principals и `app_runtime` grants; отсутствующий или новый principal означает
+**STOP** до отдельного решения. Автоматически создавать placeholder roles
+запрещено. Не импортировать все Supabase cluster roles/role password hashes.
+`app_runtime` создавать только как отдельную известную application role по
+reviewed provisioning/grant scripts; не запускать production provisioning
+script против источника.
 
 Границы schema-wide dump и archive/restore options сверены с официальными
 [PostgreSQL 17 pg_dump](https://www.postgresql.org/docs/17/app-pgdump.html) и
 [pg_restore](https://www.postgresql.org/docs/17/app-pgrestore.html) docs.
 
 Миграции указывают `app_runtime` как policy/grant principal; backend не требует
-Supabase `anon`, `authenticated` или `service_role` для DB access. Однако
-полный production ACL catalog не подтверждён этим аудитом, поэтому наличие иных
-ACL principals — preflight check. В migrations нет `CREATE EXTENSION`; прямой
+Supabase `anon`, `authenticated` или `service_role` для DB access. Production ACL
+inventory подтверждён оператором и проверяется по областям; возможность
+восстановить эти principals/ACL в disposable PostgreSQL остаётся отдельной
+проверкой. В migrations нет `CREATE EXTENSION`; прямой
 зависимости MVP от Supabase Auth, Storage или Vault data не выявлено. Оператор
 подтвердил 0 Auth users, 0 Storage objects и 0 Vault secrets. Повторить эти
 inventory checks перед backup; provider configuration остаётся отдельным
@@ -465,18 +482,24 @@ backup exported snapshot coordination не требуется; это возмо
 2. Создать новое локальное disposable PostgreSQL 17 и уникальную пустую database
    из `template0`; подтвердить localhost/server identity и точное имя target,
    отличное от production. Не применять `--create` или `--clean`.
-3. До schema restore проверить ACL principals в archive. При неизвестном или
-   отсутствующем principal остановиться до отдельного решения об обработке; не
-   создавать placeholders автоматически. Затем создать `app_runtime` с
+3. До restore выбрать цель проверки. Для schema/data-only допускается исключить
+   owner и ACL через `--no-owner --no-acl`; это не подтверждает ACL или runtime
+   grants. Для полной restore отдельно сверить ACL principals и их доступность
+   на target. Новый/отсутствующий principal — **STOP** до отдельного решения;
+   не создавать placeholder roles автоматически и не импортировать полный
+   Supabase roles dump. `app_runtime` — известная отдельная application role:
+   создавать её только по reviewed provisioning procedure с
    `LOGIN`, `NOINHERIT`, `NOBYPASSRLS`, `NOSUPERUSER`, `NOCREATEDB`,
    `NOCREATEROLE`, `NOREPLICATION` и случайным локальным disposable password.
    Убедиться, что target новый и изолированный.
 4. В свежей DB проверить `public` schema. Если она уже создана template, удалять
    её разрешается только после подтверждения точного target и факта, что DB
    создана текущим restore запуском; это повторяет guard local smoke. Затем
-   восстановить archive в эту DB с `--no-owner --exit-on-error
-   --single-transaction`, без `--clean`.
-5. Запустить grant script и read-only role/grants verifier на disposable target.
+   восстановить archive в эту DB с `--no-owner --no-acl --exit-on-error
+   --single-transaction`, без `--clean`, если это schema/data-only validation.
+5. Для признания restore полной отдельно восстановить и проверить ACL, затем
+   запустить grant script и read-only role/grants verifier на disposable target.
+   Эти проверки не заменяются `--no-owner --no-acl`; placeholders не создавать.
    Сверить table/object inventory, записать восстановленные row counts, проверить
    RLS/policies, functions/triggers, indexes/constraints, hashes и 19 ledger
    versions из sidecar manifest; выполнить `ANALYZE`. Точное сравнение
@@ -493,8 +516,8 @@ PostgreSQL 17.x. Это не доказывает production restore; для м�
 argv, временный plaintext или shell history). Ни один из этих production шагов
 в этом аудите не запускался.
 
-Перед первым production export остаются непроверенными: ACL principal и
-large-object inventory, прямые catalog dependency observations, counts/ledger observations с timestamps,
+Перед первым production export остаются непроверенными: повторная актуальность
+operator-confirmed ACL inventory, large-object inventory, прямые catalog dependency observations, counts/ledger observations с timestamps,
 точная 19-row ledger-to-Git reconciliation, права/совместимость restore identity и real
 restore на disposable PG17.6. Подтверждённый extension inventory необходимо
 повторно сверить с production: его состав или версии могли измениться. Не считать выбранный scope завершённым backup до
@@ -555,8 +578,8 @@ production archive. При неизвестных grants, необходимос
 После restore сохранить результат и проверить:
 
 - SHA-256 archive совпадает с external manifest; `pg_restore --list` читается;
-  `pg_restore --exit-on-error --single-transaction --no-owner` завершился без
-  ошибок в disposable target;
+  schema/data-only `pg_restore --exit-on-error --single-transaction --no-owner
+  --no-acl` завершился без ошибок в disposable target;
 - application table/object inventory соответствует ожидаемой миграционной
   версии; все ожидаемые 17 application tables присутствуют;
 - зафиксированы row counts по application tables без вывода пользовательских
@@ -566,12 +589,13 @@ production archive. При неизвестных grants, необходимос
   требованием MVP и может быть добавлена позднее;
 - constraints, indexes, defaults, functions, triggers и RLS policies
   присутствуют; RLS enabled там, где его требует текущая schema;
-- restore ownership назначен disposable restore identity; ACL principals
-  сверены, при неизвестном/отсутствующем principal restore останавливается до
-  отдельного решения (placeholders автоматически не создаются); `app_runtime`
-  пересоздан с least-privilege attributes, grants
-  перепроверены существующими verifier scripts; production credentials не
-  переносились;
+- schema/data-only restore ownership назначен disposable restore identity;
+  этот режим с `--no-acl` не восстанавливает и не подтверждает ACL. До признания
+  restore полной ACL principals отдельно сверены с target, при
+  неизвестном/отсутствующем principal операция остановлена до решения;
+  placeholders автоматически не создаются. `app_runtime` пересоздан с
+  least-privilege attributes и grants перепроверены существующими verifier
+  scripts; production credentials не переносились;
 - нет ошибок чтения ключевых application records и связанных записей.
 
 В репозитории есть только mock-tested local smoke для структуры и synthetic row;
