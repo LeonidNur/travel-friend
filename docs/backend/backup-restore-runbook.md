@@ -221,8 +221,10 @@ scope, место хранения, срок хранения и ответст�
    общий exported snapshot не требуется. Не переключать production в read-only
    самостоятельно.
 6. Подтверждает свободное место, приватный временный каталог на зашифрованном
-   устройстве, процедуру шифрования и approved offsite destination с доступом,
-   retention и восстановлением ключа. Сейчас эти настройки не подтверждены.
+   устройстве, процедуру шифрования и approved offsite destination с доступом и
+   восстановлением ключа. Для MVP утверждены локальное хранение и зашифрованная
+   копия в Google Drive; перед каждой операцией оператор проверяет доступность
+   обоих мест и свободное место.
 7. Утверждает ожидаемые schema/data/role coverage, обработку migration history,
    custom объектов в managed schemas и tables, которые могут требовать
    исключения. Сопоставить каталог таблиц со scope до запуска; неизвестный или
@@ -665,16 +667,42 @@ source ACL из архива.
 подтверждают перенос production ACL: owners, ACL principals и все source grants
 остаются самостоятельной непроверенной областью.
 
+## Принятая MVP operational policy
+
+- Ответственный оператор: **Leonid**.
+- Выполнять backup вручную еженедельно и дополнительно перед значительными
+  изменениями базы данных. Автоматического расписания нет.
+- Хранить локальную копию и зашифрованную offsite-копию в Google Drive. В Drive
+  помещать только ciphertext; age identity не хранить в GitHub, Google Drive или
+  материалах, передаваемых Codex. Проверенная схема хранения и восстановления
+  ключа описана выше.
+- Сохранять последние четыре еженедельные копии. Оператор вручную проверяет
+  состав и возраст копий; автоматическое удаление и retention scripts не
+  используются.
+- Проверять восстановление после значительных изменений схемы и периодически.
+  Периодическую проверку проводить вручную; отдельный календарный интервал пока
+  не задан.
+
+Migration drift production и Git остаётся отдельным риском задачи №16. В частности,
+локальное применение более поздних repository migrations при restore smoke не
+подтверждает соответствие production schema или migration ledger текущему Git;
+этот drift требует отдельной проверки и не считается закрытым backup-процедурой.
+
+Не планируются платные подписки или upgrade provider plan. Supabase Free не
+предоставляет scheduled backups и PITR. Ручная политика ниже не означает, что
+Supabase-managed recovery или production ACL полностью проверены.
+
 ## RPO / RTO, STOP criteria и решения
 
-**RPO:** не установлен и не гарантируется. Scheduled backup и PITR недоступны
-на подтверждённом тарифе. Первый production archive и зашифрованная offsite copy
-подтверждены оператором, но cadence и время следующей копии не утверждены.
-Фактический RPO зависит от частоты и времени последнего успешного backup.
+**RPO target:** до 7 дней при условии своевременного успешного еженедельного
+backup. Это целевой показатель, а не гарантия: при пропуске или неуспешном запуске
+фактический RPO может быть больше. Scheduled backups и PITR на подтверждённом
+Free plan недоступны.
 
-**RTO:** не измерен и не гарантируется. Schema/data restore и application grants
-после локального replay migrations прошли, но длительность полного recovery и
-полный production ACL restore не проверены.
+**RTO target:** 24 часа; показатель ещё не измерен и не гарантируется. Локальные
+schema/data restore и application grants после replay migrations прошли, но
+длительность полного recovery, Supabase-managed recovery и полный production ACL
+restore не проверены.
 
 **STOP**, если target или backup identity не подтверждены; нет явного разрешения
 на production DB operation; нет approved encrypted local/offsite storage; у
@@ -689,13 +717,14 @@ version/extensions/roles; обнаружен неизвестный или от�
 обход RLS. Отсутствие общего exported snapshot само по себе не является STOP для
 первого MVP backup; при этом точное сравнение source/restore counts запрещено.
 
-Открытые решения для следующих production backups и полноценного recovery:
-утвердить cadence, retention и допустимые RPO/RTO; периодически подтверждать DB
-identity и schema/data/roles coverage без изменения grants; определить consistency
-window и timestamped counts/ledger observations; повторно сверять extensions,
-large objects, ACL principals, non-public schemas, migration history и
-Auth/Storage/Vault inventories. Для будущей схемы повторять проверку grants;
-production ACL требует отдельной процедуры и не подтверждён этим smoke.
+Для следующих production backups вручную соблюдать утверждённые cadence и
+retention; перед запуском повторно подтвердить DB identity и schema/data/roles
+coverage без изменения grants; сохранить consistency window и timestamped
+counts/ledger observations; повторно сверять extensions, large objects, ACL
+principals, non-public schemas, migration history и Auth/Storage/Vault inventories.
+Для будущей схемы повторять локальную проверку grants; production ACL требует
+отдельной процедуры и не подтверждён этим smoke. Migration drift остаётся отдельным
+риском задачи №16.
 Реализованный runner предусматривает
 SAFE PREVIEW, явное интерактивное подтверждение export, private no-overwrite
 directory, custom archive, timestamped counts/ledger observations без требования
