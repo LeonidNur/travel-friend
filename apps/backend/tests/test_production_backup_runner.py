@@ -32,11 +32,8 @@ def _valid_preflight_metadata(server_version: str = "17.6") -> dict[str, object]
             for name in sorted(runner.EXPECTED_PUBLIC_TABLES)
         ],
         "acl_principals_by_scope": {
-            "relations": ["postgres", "app_runtime"],
-            "functions": ["postgres"],
-            "types": ["postgres"],
-            "schema": ["postgres"],
-            "default_acl": ["postgres"],
+            scope: sorted(principals)
+            for scope, principals in runner.EXPECTED_ACL_PRINCIPALS_BY_SCOPE.items()
         },
         "extension_inventory": [
             {"name": name, "version": version}
@@ -463,6 +460,34 @@ def test_read_only_preflight_rejects_unknown_acl_principals_without_leaking_outp
     output = capsys.readouterr()
     assert "unexpected_role" not in output.out + output.err
     assert SECRET not in output.out + output.err
+
+
+def test_read_only_preflight_accepts_operator_confirmed_acl_inventory() -> None:
+    metadata = _valid_preflight_metadata()
+
+    runner.validate_preflight_metadata(metadata)
+
+
+@pytest.mark.parametrize(
+    ("scope", "principal"),
+    [
+        ("relations", "app_runtime"),
+        ("functions", "anon"),
+        ("types", "authenticated"),
+        ("schema", "supabase_admin"),
+        ("default_acl", "pg_database_owner"),
+    ],
+)
+def test_read_only_preflight_rejects_principal_outside_its_confirmed_scope(
+    scope: str, principal: str
+) -> None:
+    metadata = _valid_preflight_metadata()
+    metadata["acl_principals_by_scope"][scope].append(principal)
+
+    with pytest.raises(runner.PreflightStop) as error:
+        runner.validate_preflight_metadata(metadata)
+
+    assert error.value.stage == "ACL"
 
 
 @pytest.mark.parametrize(

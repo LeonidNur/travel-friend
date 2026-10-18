@@ -43,7 +43,13 @@ EXPECTED_PUBLIC_TABLES = frozenset({
     "trip_participants",
     "trip_stops",
 })
-KNOWN_ACL_PRINCIPALS = {"postgres", "app_runtime", "PUBLIC"}
+EXPECTED_ACL_PRINCIPALS_BY_SCOPE = {
+    "relations": frozenset({"anon", "authenticated", "postgres", "service_role"}),
+    "functions": frozenset({"app_runtime", "postgres"}),
+    "types": frozenset({"PUBLIC", "postgres"}),
+    "schema": frozenset({"PUBLIC", "anon", "app_runtime", "authenticated", "pg_database_owner", "postgres", "service_role"}),
+    "default_acl": frozenset({"anon", "authenticated", "postgres", "service_role", "supabase_admin"}),
+}
 EXPECTED_EXTENSION_INVENTORY = {
     "plpgsql": "1.0",
     "pgcrypto": "1.3",
@@ -567,8 +573,8 @@ def validate_preflight_metadata(metadata: dict[str, Any]) -> None:
         raise PreflightStop("METADATA")
 
     scoped_acl_principals = metadata.get("acl_principals_by_scope")
-    required_acl_scopes = {"relations", "functions", "types", "schema", "default_acl"}
-    if not isinstance(scoped_acl_principals, dict) or not required_acl_scopes.issubset(scoped_acl_principals):
+    required_acl_scopes = set(EXPECTED_ACL_PRINCIPALS_BY_SCOPE)
+    if not isinstance(scoped_acl_principals, dict) or set(scoped_acl_principals) != required_acl_scopes:
         raise PreflightStop("ACL")
     if any(
         not isinstance(scoped_acl_principals[scope], list)
@@ -576,12 +582,10 @@ def validate_preflight_metadata(metadata: dict[str, Any]) -> None:
         for scope in required_acl_scopes
     ):
         raise PreflightStop("ACL")
-    principals = {
-        principal
+    if any(
+        set(scoped_acl_principals[scope]) - EXPECTED_ACL_PRINCIPALS_BY_SCOPE[scope]
         for scope in required_acl_scopes
-        for principal in scoped_acl_principals[scope]
-    }
-    if principals - KNOWN_ACL_PRINCIPALS:
+    ):
         raise PreflightStop("ACL")
 
     extensions = metadata.get("extension_inventory")
