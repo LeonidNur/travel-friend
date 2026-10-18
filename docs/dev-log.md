@@ -1,5 +1,11 @@
 # Дневник разработки
 
+## 2026-10-18 — №16 Production deployment provenance и compatibility
+
+- Проведён read-only provider audit: Render deployed SHA и production migration ledger подтверждены; Vercel production deployment найден, но его Git SHA недоступен. Сопоставлены функции deployed backend и production DB, а также current repository call sites.
+- Установлено, что production соответствует 19 migrations deployed Render revision, тогда как текущая repository source использует отсутствующие в production 6-аргументный bootstrap и `chat_participant_public_profile`; без отдельного DB migration/grants review это блокирует выпуск соответствующего source. Полный schema drift audit не завершён.
+- Production `/health` smoke завершился сетевым timeout; `/ready` не запускался. Frontend/backend compatibility и фактический `BACKEND_API_ORIGIN` остались UNKNOWN. Runbook, backlog и roadmap обновлены; production migrations, writes, deployments и provider configuration не менялись.
+
 ## 2026-10-18 — №22 Rollback / forward-fix readiness
 
 - Сверили manual deployment workflow, provider capabilities, migrations, backend health/readiness и backup restore boundaries. В runbook добавлены раздельные сценарии frontend rollback, backend rollback, failed migration и potential data corruption.

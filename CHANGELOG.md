@@ -3,6 +3,7 @@
 ## 2026-10-18
 
 - Дополнен [production deployment runbook](docs/backend/production-deployment-runbook.md): описаны frontend/backend rollback, migration forward-fix и реакция на возможное повреждение данных. Уточнено, что provider rollback не возвращает DB state, production ACL и Supabase-managed recovery остаются непроверенными; №22 отмечена как operator runbook ready без production execution.
+- Дополнен [production deployment runbook](docs/backend/production-deployment-runbook.md) timestamped release provenance record и результатами read-only аудита №16. Зафиксированы Render deployed SHA, неизвестный Vercel SHA, production migration drift, несовместимые с текущей repository source функции и неуспешный live `/health` smoke; №16 остаётся открытой.
 
 ## 2026-10-14
 
