@@ -90,7 +90,7 @@ Auto-Deploy остаётся **Off**. До rollout оператор провер
 
 - **№16 — provenance/environments:** фиксирует/автоматизирует доказательство environment, commit/deployed SHA и schema parity; этот runbook требует сверять их вручную.
 - **№17 — deployment smoke:** read-only HTTP chain `/health` → `/ready` документирован в этом разделе и реализован скриптом `apps/backend/scripts/deployment_smoke.py`; Telegram E2E остаётся ручным.
-- **№21 — backup/restore:** задаёт подтверждённые backup и recovery условия для DB изменений; этот документ не обещает backup/restore и не задаёт retention.
+- **№21 — backup/restore:** текущий статус — AUDIT/PLAN; см. [backup/restore audit and operator plan](backup-restore-runbook.md). Восстановимого backup пока нет, а restore не проверялся; этот deployment runbook не задаёт backup storage или recovery procedure.
 - **№22 — rollback/forward-fix:** определяет recovery для backend/API/DB/grants. Старый backend не является допустимым rollback target автоматически после breaking change.
 
 Завершение №15 как docs-ready не закрывает №16, №17, №21 или №22, не подтверждает текущие provider settings и не означает, что следующий production deployment уже одобрен.
