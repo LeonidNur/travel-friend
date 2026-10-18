@@ -227,13 +227,10 @@ database identity, RLS bypass или read coverage нужен production DB quer
 Не использовать `app_runtime`, Supabase API `service_role` JWT или CLI login token
 как взаимозаменяемые DB credentials: DB connection требует именно проверенную
 PostgreSQL identity. Не хранить connection URL в Git, `.env`, shell history,
-backup manifest или обычном логе. Подключение через `--db-url` передаёт URL CLI
-процессу; выполнять команду только с operator host/account, где командная
-строка не доступна посторонним процессам. Использовать секретное хранилище,
-которое оператор одобрил для кратковременной подстановки в shell variable;
-отключить shell tracing (`set +x`) и не печатать значение. Если обеспечить эту
-границу нельзя — **STOP**. Supabase CLI authentication token сам по себе не
-заменяет DB password/identity.
+backup manifest или обычном логе. Не передавать password/URI в argv. CLI login
+token сам по себе не заменяет DB password/identity. До появления runner, который
+безопасно использует Keychain и принудительно задаёт `sslmode=require`, production
+CLI command не запускать.
 
 ### Локальная проверка production connection settings на macOS
 
@@ -264,60 +261,53 @@ coverage требуют отдельных разрешённых проверо
 неожиданный target или ошибка формирования приводят к non-zero status с общим
 сообщением без диагностического вывода Keychain/URI. Не ослаблять target checks и
 не выводить URI для передачи в shell history, logs или Codex. Helper не выдаёт
-URI вызывающему процессу, поэтому сам по себе не является credential-delivery
-механизмом для будущей CLI dump команды или разрешением на production connection.
+URI вызывающему процесс и не является разрешением на production connection.
 
-## Ручное получение backup через Supabase CLI
+## Ручной production backup через Supabase CLI — STOP до устранения TLS-блокера
 
-После выполнения preflight и отдельного разрешения подготовить уникальную
-директорию на подтверждённом encrypted local volume. Сначала проверить CLI
-команды локально через `--help`; этот runbook не выполняет их. Ниже
-`SUPABASE_DB_URL` — временная переменная shell, полученная из approved secret
-source и сверенная с Dashboard; не вводить буквальный password в команду:
+Production runner не реализован, и команды ниже не являются инструкцией к
+экспорту. Проверка [CLI reference](https://supabase.com/docs/reference/cli/supabase-link)
+и [исходника db dump](https://github.com/supabase/cli/blob/develop/apps/cli/src/commands/db/dump/dump.handler.ts)
+показала, что пароль можно передать без URI в argv: CLI документирует
+`SUPABASE_DB_PASSWORD`, а [builder environment для pg_dump](https://github.com/supabase/cli/blob/develop/apps/cli/src/command-internal/pg-dump.env.ts)
+передаёт пароль как `PGPASSWORD`. Это не доказывает, что секрет
+невидим другим процессам того же macOS account или администраторам локального
+Docker Engine; права на Mac и Docker daemon остаются частью модели доступа.
 
-```sh
-umask 077
-set -eu
-set +x
-BACKUP_DIR="/approved-encrypted-volume/travel-friend-prod-$(date -u +%Y%m%dT%H%M%SZ)"
-: "${SUPABASE_DB_URL:?Load the approved DB URL from the protected secret source}"
-mkdir "$BACKUP_DIR"  # STOP if it already exists; never reuse/overwrite a directory
+Обнаружен отдельный блокирующий вопрос по обязательному `sslmode=require`.
+В исходниках Supabase CLI builder для `db dump` формирует `PGHOST`, `PGPORT`,
+`PGUSER`, `PGPASSWORD` и `PGDATABASE`, но не передаёт `sslmode` в environment
+контейнера `pg_dump`. Хотя parser CLI распознаёт `sslmode` в DB URL, рассмотренный
+путь dump не сохраняет это поле в передаваемых параметрах `pg_dump`. Поэтому
+нельзя считать достаточными ни `SUPABASE_DB_PASSWORD` с `--linked`, ни URI без
+пароля с `--db-url`: по проверенному пути не подтверждено принудительное
+TLS-подключение именно с `sslmode=require`. Не запускать production export, пока
+CLI не предоставит и не подтвердит для используемой версии способ задать и
+проверить `PGSSLMODE=require` внутри процесса `pg_dump` без включения пароля в
+argv, plaintext-файл или shell history. Не обходить этот блокер wrapper-ом,
+который меняет CLI/container internals.
 
-supabase --version > "$BACKUP_DIR/tool-versions.txt"
-supabase db dump --db-url "$SUPABASE_DB_URL" \
-  --role-only --file "$BACKUP_DIR/roles.sql"
-supabase db dump --db-url "$SUPABASE_DB_URL" \
-  --file "$BACKUP_DIR/schema.sql"
-supabase db dump --db-url "$SUPABASE_DB_URL" \
-  --data-only --use-copy --file "$BACKUP_DIR/data.sql"
-unset SUPABASE_DB_URL
-```
+Потенциальный будущий runner должен получать пароль напрямую из существующей
+Keychain-записи, валидировать зафиксированный project ref и target, передавать
+секрет только через environment, отключать telemetry/debug, подавлять сырые
+stdout/stderr CLI и использовать три раздельных вызова:
+`--role-only`, schema dump, затем `--data-only --use-copy`. До получения
+подтверждённого механизма `sslmode=require` такой runner не должен создавать
+SQL-файлы или выполнять сетевые операции. На этом этапе безопасен только
+отдельный локальный connection check выше; он не является preview экспорта.
 
-Команды создают три отдельных plain SQL files: `roles.sql` содержит custom
-cluster roles; `schema.sql` — user-managed schema objects; `data.sql` — rows.
-`supabase db dump` использует `pg_dump`, но фильтрует Supabase-managed schemas и
-reserved roles. Фиксировать версию CLI; локальный `pg_dump --version` не
-подтверждает версию pg_dump внутри CLI container. Не добавлять `--schema=public`
-без явно утверждённого решения о потере других user schemas. Текущая CLI
-документация указывает исключение
-`storage.buckets_vectors` и `storage.vector_indexes` в примере data export;
-сначала выяснить, существуют ли они и нужны ли данные, затем явно зафиксировать
-scope. CLI и точные flags проверить по [Supabase CLI reference](https://supabase.com/docs/reference/cli/supabase-db-dump)
-и [backup/restore guide](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore).
-Если recovery objective требует сохранения `supabase_migrations` history,
-официальный guide предусматривает отдельный schema/data export этой служебной
-schema; включить его в утверждённый scope до запуска. Текущие три базовых files
-не подтверждают такую history coverage.
+После снятия блокера и отдельного явного разрешения оператора будущая процедура
+должна создавать новую приватную директорию с отказом при коллизии, проверять
+наличие и ненулевой размер `roles.sql`, `schema.sql`, `data.sql`, записывать
+SHA-256 manifest без credentials и сохранять неполный результат при ошибке для
+ручного разбора — автоматически удалять SQL нельзя. Только тогда следует
+утвердить consistency window, encrypted/offsite storage, schema/data/role
+coverage и ограничения Supabase-managed schemas. CLI exports не являются полным
+backup Supabase project; зафиксировать CLI version и отдельно решить вопрос
+`supabase_migrations` history и прочих user-managed schemas.
 
-Не запускать `supabase db push`, `db reset`, `migration`, `psql` restore или
-любую команду DDL. `db dump` должен завершаться с кодом 0 три раза. При любом
-ненулевом коде, timeout, RLS/permission error, неожиданном prompt или сомнении в
-target прекратить последовательность, не публиковать частичный набор и не
-повторять подключение к другому target. Изолировать только каталог текущего
-запуска для расследования; не удалять его, пока оператор не установил, что это
-именно временные файлы данной попытки.
-
-Проверить до признания набора кандидатом backup:
+Только после снятия TLS-блокера и отдельного разрешения, при появлении будущего
+runner, проверить до признания набора кандидатом backup:
 
 - присутствуют все три regular files, они не пустые и находятся в ожидаемой
   новой директории с закрытыми правами; SQL-файлы не печатать и не открывать в
