@@ -49,7 +49,9 @@ Residual observability risks после закрытия P0.5 уже ведут�
 ## Active stage — deployment / CI / reproducibility
 
 15. **Production deployment workflow — DOCS READY.** Операторский manual rollout, compatibility decision matrix, stop criteria и зависимости зафиксированы в [production deployment runbook](backend/production-deployment-runbook.md). Auto-Deploy остаётся Off; этот статус не является разрешением на rollout или включение automation.
-16. **Deployment provenance/environments.**
+16. **Deployment provenance/environments — PARTIALLY VERIFIED (read-only audit, 18.10.2026).** Подтверждённая topology: Vercel project `travel-friend-mini-app`; Render service `travel-friend-api`, branch `develop`, manual deployment, Auto-Deploy Off; Supabase project `travel-friend-dev` (`tlgprfsecdasloqnuyjo`). Read-only snapshot Supabase: `ACTIVE_HEALTHY`; 19 production migrations сопоставлены с SQL в `develop`; 17 application tables с включённым RLS, 17 policies и 18 functions. `app_runtime` имеет `LOGIN`, `NOINHERIT`, `NOBYPASSRLS`; ей доступны 16 функций, `PUBLIC EXECUTE` отсутствует.
+
+   **Ограничения аудита:** полный schema drift audit не завершён; дополнительные migrations в репозитории не исключены исчерпывающей проверкой; фактический `BACKEND_API_ORIGIN` не раскрывался. Эти результаты не подтверждают полную schema parity или полный deployment provenance; №16 остаётся открытой до завершения проверок.
 17. **Deployment smoke chain.**
 18. **CI with disposable PostgreSQL.**
 19. **Local test DB hygiene.**

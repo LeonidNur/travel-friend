@@ -1,5 +1,24 @@
 # Дневник разработки
 
+## 2026-10-18 — №16 deployment provenance / environments
+
+### Что сделали
+
+- Зафиксировали подтверждённую topology: Vercel `travel-friend-mini-app`; Render `travel-friend-api` на `develop` с ручным deployment и Auto-Deploy Off; Supabase `travel-friend-dev` (`tlgprfsecdasloqnuyjo`).
+- Записали read-only snapshot Supabase: `ACTIVE_HEALTHY`, 19 production migrations сопоставлены с SQL в `develop`, 17 application tables с RLS, 17 policies, 18 functions; `app_runtime` — `LOGIN`, `NOINHERIT`, `NOBYPASSRLS`, имеет доступ к 16 функциям, `PUBLIC EXECUTE` отсутствует.
+- Обновили №16 в [technical hardening backlog](technical-hardening-backlog.md) как частично подтверждённую задачу; это аудит-документация, provider и production actions не выполнялись.
+
+### Что проверили
+
+- Сверили результаты аудита с deployment runbook и текущими правилами документации. Полный schema drift audit не заявляли.
+- Фактический `BACKEND_API_ORIGIN` не раскрывался; дополнительные migrations в репозитории не исключены исчерпывающей проверкой. Поэтому schema parity и полная provenance не объявлены подтверждёнными.
+- Выполнена документальная проверка `git diff --check`.
+
+### Что осталось
+
+- Завершить полный schema drift audit и исчерпывающую сверку repository migrations; отдельно подтвердить provenance, необходимую для закрытия №16.
+- `BACKEND_API_ORIGIN` остаётся нераскрытым в записи аудита.
+
 ## 2026-10-14 — №15 manual production deployment workflow
 
 ### Что сделали
