@@ -235,6 +235,38 @@ backup manifest или обычном логе. Подключение чере�
 границу нельзя — **STOP**. Supabase CLI authentication token сам по себе не
 заменяет DB password/identity.
 
+### Локальная проверка production connection settings на macOS
+
+Для будущей ручной процедуры добавлен check-only helper
+`apps/backend/scripts/production-backup-connection-check.py`. Запустить из
+`apps/backend` на Mac:
+
+```sh
+python3 scripts/production-backup-connection-check.py
+```
+
+Helper читает generic-password item из macOS Keychain с service
+`travel-friend-production-postgres` и account
+`postgres.tlgprfsecdasloqnuyjo`; пароль не передавать аргументом или через
+переменную окружения. Он проверяет заданные в коде host
+`aws-0-eu-central-1.pooler.supabase.com`, port `5432`, database `postgres`,
+username `postgres.tlgprfsecdasloqnuyjo` и `sslmode=require`, затем в памяти
+формирует PostgreSQL URI с percent-encoding пароля и проверяет разобранные
+параметры. Сам URI и пароль не выводятся, не записываются в файл и не сохраняются
+для последующего использования; при успехе выводится только безопасное сообщение
+о локальной проверке.
+
+Helper не открывает сеть, не проверяет доступность или принадлежность реального
+target, не запускает Supabase CLI и не выполняет backup. Успех подтверждает только
+наличие непустого Keychain item и корректную локальную сборку URI для ожидаемой
+конфигурации; production connection identity, права, полнота данных и export
+coverage требуют отдельных разрешённых проверок. Отсутствующая/пустая запись,
+неожиданный target или ошибка формирования приводят к non-zero status с общим
+сообщением без диагностического вывода Keychain/URI. Не ослаблять target checks и
+не выводить URI для передачи в shell history, logs или Codex. Helper не выдаёт
+URI вызывающему процессу, поэтому сам по себе не является credential-delivery
+механизмом для будущей CLI dump команды или разрешением на production connection.
+
 ## Ручное получение backup через Supabase CLI
 
 После выполнения preflight и отдельного разрешения подготовить уникальную
