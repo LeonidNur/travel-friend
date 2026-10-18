@@ -1,5 +1,30 @@
 # Дневник разработки
 
+## 2026-10-18 — №21 Backup/restore, локальный restore подтверждён
+
+- Фактический Docker smoke прошёл с exit code 0: `pg_dump` создал archive,
+  `pg_restore` восстановил его в отдельную disposable DB, schema и synthetic
+  control data validation прошли, cleanup завершился успешно.
+- Подтверждён только локальный сценарий; production backup, offsite storage и
+  restore production data остаются непроверенными. №21 не закрыта.
+
+## 2026-10-18 — №21 Backup/restore, локальная проверка
+
+### Что сделали
+
+- Добавили локальный smoke сценарий с отдельными `travel_friend_test` и `travel_friend_backup_restore_test`: synthetic контрольные данные, custom `pg_dump`, `pg_restore`, сравнение схемы и контрольных значений. Он использует существующий guard и прекращает работу при заданных DB URL переменных или существующем restore target.
+- Обновили [backup/restore runbook](backend/backup-restore-runbook.md) и статус №21: локальная реализация подготовлена, production backup/restore остаётся непроверенным.
+
+### Что проверили
+
+- 14 smoke regression cases с Docker CLI stubs и 51 тест вместе с существующими DB guard/workflow tests прошли; они не запускали PostgreSQL и не создавали backup.
+- Docker Engine недоступен (`docker info` не подключился к локальному socket), поэтому фактический dump/restore на disposable PostgreSQL не выполнялся. Настоящий backup-файл не создавался.
+- Shell syntax checks и `git diff --check` прошли.
+
+### Что осталось
+
+- Повторить локальный smoke при доступном Docker Engine. Для production отдельно остаются backup identity/scope, external encrypted storage, cadence/retention, restore на подходящей disposable среде, RPO/RTO и explicit operator authorization перед любыми production DB operations.
+
 ## 2026-10-18 — №21 Backup/restore audit and plan
 
 ### Что сделали

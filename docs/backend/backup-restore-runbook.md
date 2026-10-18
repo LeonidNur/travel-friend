@@ -1,9 +1,12 @@
-# Backup / restore — audit and operator plan (stage 1)
+# Backup / restore — audit, local validation and operator plan
 
-**Статус: AUDIT/PLAN.** Документ описывает выбранный для MVP подход и будущую
-операторскую последовательность. Он не подтверждает наличие backup, не является
-разрешением на production DB operation и не сообщает об успешном restore.
-Команды ниже не запускались.
+**Статус: LOCAL RESTORE VERIFIED (2026-10-18). Production backup/restore
+остаётся AUDIT/PLAN.** В локальном Docker smoke `pg_dump` создал custom archive,
+`pg_restore` восстановил его в отдельную disposable DB, сравнение public schema
+и проверка synthetic control data прошли, cleanup завершился успешно; exit code
+был 0. Оператор подтвердил, что восстановимого production backup нет.
+Production-процедура ниже не запускалась и не является разрешением на production
+DB operation.
 
 ## Подтверждённые факты и текущие границы
 
@@ -12,7 +15,7 @@
   платного дополнения к Pro.
 - Оператор подтвердил, что восстановимого backup сейчас нет. Для MVP выбран
   ручной logical backup с внешним хранением и проверкой restore на отдельной
-  disposable БД. Этот подход пока не реализован и не проверен.
+  disposable БД. Production-подход не реализован и не проверен.
 - Migrations в `supabase/migrations/` позволяют заново создать версионируемые объекты
   схемы — таблицы, constraints, indexes, functions, triggers и RLS policies.
   Найденные в них прикладные `INSERT`/`UPDATE` находятся в телах функций и
@@ -24,7 +27,9 @@
   файлов/объектов за пределами PostgreSQL также требует отдельного backup;
   `profile_photos.storage_key` хранит ссылку/ключ, а не файл.
 - `local-test-db.sh` управляет только локальным disposable PostgreSQL и его
-  destructive `reset` пересоздаёт схему. Это не backup/restore процедура.
+  destructive `reset` пересоздаёт схему. `local-db-backup-restore-smoke.sh`
+  прошёл фактический локальный Docker запуск с `pg_dump`/`pg_restore` и
+  synthetic контрольными данными.
   Production `app_runtime` provisioning/grants scripts, read-only verifier и
   runtime deployment gate решают задачи ролей и security checks, а не сохраняют
   данные. CI запускает local test workflow и cleanup; production backup/restore
@@ -49,8 +54,9 @@
   создают backup и не выполняют restore.
 - Production deployment runbook упоминает №21 как recovery prerequisite, но
   backup/restore команды и storage/retention procedure там не определены.
-- Отдельных backup/restore scripts, CI steps или существующего recoverable
-  artifact в репозитории не обнаружено.
+- Production backup/restore scripts, CI steps или существующий recoverable
+  artifact в репозитории не обнаружены. Локальный smoke не создаёт сохраняемый
+  production backup и не интегрирован в CI.
 
 ## Проверки, которых пока нет
 
@@ -60,13 +66,67 @@
   retention и независимая проверка checksum после переноса.
 - Нет утверждённого manifest с версией source schema, backup scope и
   consistency/row-count evidence.
-- Нет disposable restore target с подтверждёнными PostgreSQL version,
-  extensions и role prerequisites; фактический `pg_restore` не запускался.
+- Локальный smoke подтвердил restore только в disposable PostgreSQL текущего
+  запуска; он не проверяет production backup completeness, внешнее хранение,
+  ownership/privileges, application data или provider state.
 - Нет инвентаря всех object owners/ACL и проверенного способа воспроизвести их
   вместе с ролью `app_runtime` без production credentials.
-- Нет restore-specific verifier/test, подтверждённой полноты данных или
+- Нет production restore verifier, подтверждённой полноты backup данных или
   измерения RPO/RTO. Supabase-managed schemas, Storage objects и прочее
   provider-level state не инвентаризированы для восстановления.
+
+## Локальная проверка `pg_dump` / `pg_restore`
+
+Из `apps/backend` оператор запускает:
+
+```sh
+./scripts/local-db-backup-restore-smoke.sh
+```
+
+Сценарий принимает только фиксированный локальный контейнер
+`travel-friend-test-postgres`, для которого существующий `local-test-db.sh`
+проверяет точное имя, disposable label, ожидаемые DB/user settings и loopback
+binding. Он не принимает URL/имя target из аргументов; если заданы `DATABASE_URL`,
+`TEST_DATABASE_URL`, `SUPABASE_DB_URL` или `PRODUCTION_RUNTIME_DATABASE_URL`,
+сценарий прекращает работу до обращения к Docker. Source — `travel_friend_test`,
+restore target — отдельная `travel_friend_backup_restore_test`. Если target уже
+существует или не удалось проверить его отсутствие, сценарий останавливается до
+reset source и ничего не перезаписывает.
+
+После preflight сценарий пересоздаёт только выделенную локальную source DB через
+существующий guarded `local-test-db.sh reset`, добавляет одну синтетическую
+control table/row, создаёт custom-format `pg_dump` только для `public` во
+временной директории с `umask 077`, проверяет archive через `pg_restore --list`,
+создаёт отсутствующий target и восстанавливает archive без `--clean`. Проверка
+сравнивает только `public` schema в normalized schema-only dump обеих БД; для
+сравнения используются `--no-owner --no-privileges`, поэтому ownership и
+privileges/ACL этой проверкой не сравниваются. Отдельная data assertion проверяет
+только synthetic control table/row, а не application records. Любая ошибка или
+несовпадение даёт non-zero exit code. При успешном `createdb` сценарий удаляет
+созданный им restore target при завершении, временный backup-файл и повторно
+reset-ит выделенную source DB. Если `createdb` вернул ошибку, результат считается
+неопределённым: команда могла создать DB до ошибки ответа. Smoke останавливается,
+не запускает restore и не удаляет target автоматически; оператор должен вручную
+проверить существование и принадлежность `travel_friend_backup_restore_test`
+перед повторным запуском. При прерывании процесса или сбое cleanup оператор
+должен проверить только эту disposable локальную среду; неизвестный target
+вручную не удалять.
+
+PostgreSQL 17 добавляет в schema-only output случайные служебные строки
+`\restrict <key>` и `\unrestrict <key>`. Smoke удаляет только строки, начинающиеся
+точно с этих команд, и только из временных сравнительных schema-only файлов.
+Custom backup archive не меняется; всё остальное содержимое comparative dumps
+сравнивается строго.
+
+Regression tests подменяют Docker CLI stub и проверяют последовательность,
+collision target, container guard отказ, ошибки команд и несовпадение
+структуры/данных; сами тесты не запускают PostgreSQL. Отдельный фактический
+Docker smoke от 2026-10-18 завершился с кодом 0: archive создан, restore в
+отдельную disposable DB выполнен, сравнение `public` schema и synthetic control
+data прошло, cleanup завершился успешно. Это подтверждает только локальный
+сценарий. Проверка не подтверждает production recovery, полноту application
+data, ownership/privileges, роли, Supabase state или внешнее хранение; созданный
+временный archive удалён smoke cleanup и не является сохраняемым backup.
 
 ## Операторская последовательность для будущего backup
 
@@ -191,10 +251,10 @@ partial restore только в этой disposable среде; не повто�
   их attributes/passwords;
 - нет ошибок чтения ключевых application records и связанных записей.
 
-В репозитории пока нет restore-specific validator, manifest format или
-автоматизированного restore test. Поэтому этот checklist — план проверки;
-restore считается непроверенным до фактического успешного disposable restore и
-фиксации результатов оператором.
+В репозитории есть только mock-tested local smoke для структуры и synthetic row;
+production restore validator и manifest format отсутствуют. Этот checklist —
+план проверки: production restore считается непроверенным до disposable
+восстановления реального backup и фиксации результатов оператором.
 
 ## RPO / RTO, STOP criteria и решения
 
@@ -203,7 +263,8 @@ restore считается непроверенным до фактическо�
 После появления manual backup фактический RPO будет зависеть от утверждённой
 частоты и времени последней успешной копии.
 
-**RTO:** не измерен и не гарантируется. Restore не запускался; длительность,
+**RTO:** не измерен и не гарантируется. Локальный synthetic restore прошёл, но
+production restore не запускался; длительность,
 совместимость версий/roles/extensions и post-restore validation не проверены.
 
 **STOP**, если target или backup identity не подтверждены; нет явного разрешения
