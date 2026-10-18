@@ -325,4 +325,3 @@ def test_caller_database_url_fails_closed_before_docker_access(
     assert result.returncode != 0
     assert "caller-supplied database URLs must be unset" in result.stderr
     assert calls == []
-
