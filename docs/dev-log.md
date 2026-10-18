@@ -1,5 +1,22 @@
 # Дневник разработки
 
+## 2026-10-18 — №18 CI cleanup disposable PostgreSQL
+
+### Что сделали
+
+- Добавили после backend tests отдельный cleanup step с `if: always()`, который вызывает существующий `./scripts/local-test-db.sh stop`. Локальный DB lifecycle и frontend CI не менялись.
+- Отметили №18 как implemented в [technical hardening backlog](technical-hardening-backlog.md); CI job не задаёт production DB credentials или secrets, а integration database guards ограничивают destructive tests локальной disposable БД.
+
+### Что проверили
+
+- Добавили статический regression test на порядок test/cleanup шагов, `if: always()`, отсутствие `continue-on-error` у tests и DB/secrets references в backend job.
+- `uv run --group dev pytest tests/test_local_test_database_workflow.py tests/test_integration_database.py` — 23 passed; tests проверяют disposable URL safety и CI wiring без запуска PostgreSQL.
+- `git diff --check` прошёл. Hosted Actions и Docker cleanup при forced runner loss не запускались.
+
+### Что осталось
+
+- Реальный GitHub Actions run и forced runner-loss cleanup не симулировались; `if: always()` не может гарантировать cleanup после уничтожения/потери runner.
+
 ## 2026-10-18 — №17 deployment smoke chain
 
 ### Что сделали

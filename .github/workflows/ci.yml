@@ -57,3 +57,7 @@ jobs:
 
       - name: Run backend tests with disposable PostgreSQL
         run: ./scripts/local-test-db.sh test
+
+      - name: Stop disposable PostgreSQL
+        if: always()
+        run: ./scripts/local-test-db.sh stop
