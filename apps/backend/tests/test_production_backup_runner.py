@@ -240,8 +240,47 @@ def test_preflight_only_failure_stops_without_export_or_secret_output(
     assert runner.main(["--preflight-only"]) == 1
 
     output = capsys.readouterr()
-    assert "STOP:" in output.err
-    assert "no export was attempted" in output.err
+    assert "STOP [PREFLIGHT]:" in output.err
+    assert "no export was attempted" in output.err.lower()
+    assert SECRET not in output.out + output.err
+    assert URI not in output.out + output.err
+    assert not (tmp_path / "backups").exists()
+
+
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "PREFLIGHT",
+        "CONNECTION_SQL",
+        "METADATA",
+        "ACL",
+        "EXTENSIONS",
+        "DEPENDENCIES",
+        "TABLE_COUNTS",
+        "MIGRATION_LEDGER",
+    ],
+)
+def test_preflight_only_reports_safe_stage_diagnostics(
+    stage: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _patch_local_prerequisites(monkeypatch, tmp_path / "backups")
+    monkeypatch.setattr(runner.sys, "stdin", type("Terminal", (), {"isatty": lambda self: True})())
+    monkeypatch.setattr("builtins.input", lambda _prompt: runner.PREFLIGHT_CONFIRMATION)
+    monkeypatch.setattr(
+        runner,
+        "run_read_only_preflight",
+        lambda *_args: (_ for _ in ()).throw(runner.PreflightStop(stage)),
+    )
+    monkeypatch.setattr(runner, "run_export_dump", lambda *_args: pytest.fail("STOP must not export"))
+
+    assert runner.main(["--preflight-only"]) == 1
+
+    output = capsys.readouterr()
+    assert f"STOP [{stage}]" in output.err
+    assert runner.PREFLIGHT_STOP_REASONS[stage] in output.err
     assert SECRET not in output.out + output.err
     assert URI not in output.out + output.err
     assert not (tmp_path / "backups").exists()
@@ -426,6 +465,73 @@ def test_read_only_preflight_rejects_unknown_acl_principals_without_leaking_outp
     assert SECRET not in output.out + output.err
 
 
+@pytest.mark.parametrize(
+    ("stage", "change"),
+    [
+        ("METADATA", lambda metadata: metadata.update(database="unexpected")),
+        ("ACL", lambda metadata: metadata["acl_principals_by_scope"]["functions"].append("unexpected_role")),
+        ("EXTENSIONS", lambda metadata: metadata["extension_inventory"].pop()),
+        ("DEPENDENCIES", lambda metadata: metadata.update(large_object_count=1)),
+    ],
+)
+def test_metadata_validation_assigns_safe_preflight_stage(
+    stage: str, change: object
+) -> None:
+    metadata = _valid_preflight_metadata()
+    change(metadata)
+
+    with pytest.raises(runner.PreflightStop) as error:
+        runner.validate_preflight_metadata(metadata)
+
+    assert error.value.stage == stage
+
+
+def test_read_only_preflight_classifies_table_count_and_migration_ledger_stops(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools = runner.PgTools("/pg17/pg_dump", "/pg17/pg_restore", "/pg17/psql")
+    metadata = _valid_preflight_metadata()
+    monkeypatch.setattr(runner, "run_psql_json", lambda *_args, **_kwargs: metadata)
+    monkeypatch.setattr(
+        runner,
+        "run_table_count",
+        lambda *_args: (_ for _ in ()).throw(runner.RunnerError("unsafe table count detail")),
+    )
+
+    with pytest.raises(runner.PreflightStop) as error:
+        runner.run_read_only_preflight(tools, SECRET)
+    assert error.value.stage == "TABLE_COUNTS"
+
+    monkeypatch.setattr(
+        runner,
+        "run_table_count",
+        lambda *_args: {"count": 0, "observed_at": "2026-10-18T10:00:00Z"},
+    )
+    monkeypatch.setattr(runner, "run_migration_ledger", lambda *_args: {"count": 18, "versions": []})
+
+    with pytest.raises(runner.PreflightStop) as error:
+        runner.run_read_only_preflight(tools, SECRET)
+    assert error.value.stage == "MIGRATION_LEDGER"
+
+
+def test_read_only_sql_failure_is_classified_as_connection_sql(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tools = runner.PgTools("/pg17/pg_dump", "/pg17/pg_restore", "/pg17/psql")
+    monkeypatch.setattr(runner, "connection_environment", lambda *_args: {})
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *_args, **_kwargs: _completed([tools.psql], stderr=f"unsafe {SECRET}", returncode=1),
+    )
+
+    with pytest.raises(runner.PreflightStop) as error:
+        runner.run_psql_json(tools, SECRET, runner.PREFLIGHT_SQL)
+
+    assert error.value.stage == "CONNECTION_SQL"
+    assert SECRET not in str(error.value)
+
+
 def test_preflight_rejects_a_different_17_table_inventory() -> None:
     metadata = _valid_preflight_metadata()
     metadata["tables"] = [
@@ -433,14 +539,16 @@ def test_preflight_rejects_a_different_17_table_inventory() -> None:
         for name in sorted(runner.EXPECTED_PUBLIC_TABLES - {"trip_stops"} | {"unexpected_table"})
     ]
 
-    with pytest.raises(runner.RunnerError, match="table names"):
+    with pytest.raises(runner.PreflightStop) as error:
         runner.validate_preflight_metadata(metadata)
+    assert error.value.stage == "METADATA"
 
 
 def test_preflight_accepts_postgresql_17_minor_versions_and_rejects_other_major() -> None:
     runner.validate_preflight_metadata(_valid_preflight_metadata("17.11"))
-    with pytest.raises(runner.RunnerError, match="PostgreSQL 17 server"):
+    with pytest.raises(runner.PreflightStop) as error:
         runner.validate_preflight_metadata(_valid_preflight_metadata("18.0"))
+    assert error.value.stage == "METADATA"
 
 
 @pytest.mark.parametrize(
@@ -455,8 +563,9 @@ def test_preflight_stops_for_unknown_or_changed_extensions(extension_name: str, 
         if name != extension_name
     ] + [{"name": extension_name, "version": version}]
 
-    with pytest.raises(runner.RunnerError, match="extension inventory"):
+    with pytest.raises(runner.PreflightStop) as error:
         runner.validate_preflight_metadata(metadata)
+    assert error.value.stage == "EXTENSIONS"
 
 
 def test_preflight_observations_do_not_claim_shared_archive_snapshot() -> None:
