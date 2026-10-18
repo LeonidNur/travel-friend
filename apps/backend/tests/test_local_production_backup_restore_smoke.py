@@ -172,7 +172,9 @@ def _valid_grants_csv() -> str:
         elif section == "sequences":
             pass
         elif section == "capabilities":
-            writer.writerows([[signature, "t", "t"] for signature in range(18)])
+            writer.writerows([[signature, "t", "t"] for signature in range(19)])
+        elif section == "api_roles":
+            writer.writerows([[role, "t", "f", "t"] for role in smoke.SUPABASE_API_ROLE_STUBS])
         elif section == "unexpected_functions":
             pass
         elif section == "owners":
@@ -197,6 +199,25 @@ def test_grants_verifier_fails_closed_on_missing_table_coverage() -> None:
         smoke.validate_grants_verifier_csv(output)
 
 
+def test_grants_verifier_rejects_api_role_execute_on_backend_resolver() -> None:
+    output = _valid_grants_csv().replace("anon,t,f,t\n", "anon,t,t,f\n", 1)
+
+    with pytest.raises(smoke.RestoreSmokeError, match="API role can execute"):
+        smoke.validate_grants_verifier_csv(output)
+
+
+def test_new_function_api_role_check_is_complete_and_fails_closed() -> None:
+    sql = smoke._api_role_function_denials_sql()
+
+    assert "count(*) = 9" in sql
+    assert all(signature in sql for signature in smoke.NEW_BACKEND_FUNCTIONS)
+    assert "has_function_privilege" in sql
+    smoke.validate_api_role_function_denials("t")
+
+    with pytest.raises(smoke.RestoreSmokeError, match="API role can execute"):
+        smoke.validate_api_role_function_denials("f")
+
+
 def test_docker_and_restore_commands_are_isolated_and_never_clean_or_create_target() -> None:
     container = "tf-backup-restore-20261018-abcdef123456"
     run_command = smoke._container_create_command(container, "abcdef123456")
@@ -215,6 +236,54 @@ def test_docker_and_restore_commands_are_isolated_and_never_clean_or_create_targ
     assert "--username=postgres" in restore_command
     assert "--clean" not in restore_command
     assert "--create" not in restore_command
+
+
+def test_supabase_api_roles_are_only_local_nologin_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str, str, str, str]] = []
+
+    def capture_psql(
+        container_name: str,
+        database: str,
+        sql: str,
+        *,
+        stage: str,
+        reason: str,
+    ) -> str:
+        calls.append((container_name, database, sql, stage, reason))
+        return ""
+
+    monkeypatch.setattr(smoke, "_psql", capture_psql)
+
+    smoke._prepare_supabase_api_role_stubs("task-local-container")
+
+    assert smoke.SUPABASE_API_ROLE_STUBS == ("anon", "authenticated", "service_role")
+    assert len(calls) == 1
+    container_name, database, sql, stage, reason = calls[0]
+    assert (container_name, database, stage) == ("task-local-container", "postgres", "GRANTS")
+    assert "NOLOGIN" in sql
+    assert "CREATE ROLE %I" in sql
+    assert all(f"'{role}'" in sql for role in smoke.SUPABASE_API_ROLE_STUBS)
+    assert reason
+
+
+def test_migration_row_count_check_compares_only_complete_aggregate_inventory() -> None:
+    before = json.dumps({table: 1 for table in smoke.EXPECTED_PUBLIC_TABLES})
+    unchanged = json.dumps({table: 1 for table in smoke.EXPECTED_PUBLIC_TABLES})
+    changed = json.dumps({table: 1 for table in smoke.EXPECTED_PUBLIC_TABLES if table != "messages"} | {"messages": 2})
+
+    smoke.validate_migration_row_counts(before, unchanged)
+
+    with pytest.raises(smoke.RestoreSmokeError, match="changed application table row counts"):
+        smoke.validate_migration_row_counts(before, changed)
+
+
+def test_migration_row_count_check_fails_closed_on_incomplete_or_invalid_inventory() -> None:
+    with pytest.raises(smoke.RestoreSmokeError, match="incomplete or invalid"):
+        smoke.validate_migration_row_counts('{"users": 0}', '{"users": 0}')
+
+    invalid = json.dumps({table: -1 for table in smoke.EXPECTED_PUBLIC_TABLES})
+    with pytest.raises(smoke.RestoreSmokeError, match="incomplete or invalid"):
+        smoke.validate_migration_row_counts(invalid, invalid)
 
 
 def test_cleanup_only_stops_exact_container_after_per_run_identity_check(monkeypatch: pytest.MonkeyPatch) -> None:

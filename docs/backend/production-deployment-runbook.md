@@ -40,9 +40,17 @@ Release считается provenance-complete только когда intended 
 | Render backend | Service `travel-friend-api`, branch `develop`, manual deployment, Auto-Deploy Off. Live deployment `dep-dapvgnlg1s2s73dicitg`, SHA `b25e08dce158b7fe7ea6d17b40d96c3e893330fa`, завершён `2026-09-23T16:04:41Z`. | Service settings и deployed SHA — VERIFIED по provider history. |
 | Supabase | Project `travel-friend-dev` (`tlgprfsecdasloqnuyjo`), `ACTIVE_HEALTHY`; PostgreSQL `17.6.1.165`. Production ledger содержит 19 migrations. | Project identity/status/version/ledger — VERIFIED в read-only provider inventory на 2026-10-18. |
 
-На commit Render `b25e08d…` находится 19 migration-файлов; эти 19 соответствуют production ledger. В текущем обследованном repository inventory есть ещё четыре более поздние migrations, отсутствующие в production ledger: `20260924090000_completed_onboarding_active_travel_intent_invariant.sql`, `20260924100000_session_lifecycle_baseline.sql`, `20260924110000_backend_field_domain_limits.sql`, `20261003090000_chat_participant_public_profile.sql`. Это наблюдаемое migration drift, а не подтверждение, что все остальные schema objects совпадают.
+На commit Render `b25e08d…` находится 19 migration-файлов; эти 19 соответствуют production ledger, подтверждённому 2026-10-18. В текущем `develop` inventory находится 24 migration-файла. Пять последующих файлов, отсутствующих в подтверждённом ledger:
 
-Read-only function/permission comparison подтверждает для Render SHA `b25e08d…` наличие и `app_runtime` EXECUTE для его 12 используемых public functions, включая восьмиаргументную `bootstrap_telegram_login` и `chat_participant_profile_projection(uuid)`. Следовательно, проверенная backend↔DB compatibility для этого SHA ограничена его наблюдаемым migration/function/runtime-permission surface; полный schema drift audit не завершён. На текущем repository source используются шестипараметрическая версия `bootstrap_telegram_login` и `chat_participant_public_profile(uuid,uuid)`, которых в production на дату проверки нет. Без применения соответствующих migrations текущий source **не совместим с production**: Telegram login и просмотр профиля участника чата затронуты. Перед выпуском такого source нужны отдельная migration review/preflight, grants verification и явное разрешение на production migration; migrations не применялись в этом аудите.
+1. `20260924090000_completed_onboarding_active_travel_intent_invariant.sql`
+2. `20260924100000_session_lifecycle_baseline.sql`
+3. `20260924110000_backend_field_domain_limits.sql`
+4. `20261003090000_chat_participant_public_profile.sql`
+5. `20261018090000_server_side_tester_admission_session_identity.sql`
+
+Это подтверждённый migration drift на дату наблюдения, а не подтверждение того, что все остальные schema objects совпадают. Перед rollout ledger нужно получить повторно; за время после read-only snapshot он мог измениться.
+
+Read-only function/permission comparison подтверждает для Render SHA `b25e08d…` наличие и `app_runtime` EXECUTE для его 12 используемых public functions, включая восьмиаргументную `bootstrap_telegram_login` и `chat_participant_profile_projection(uuid)`. Следовательно, проверенная backend↔DB compatibility для этого SHA ограничена его наблюдаемым migration/function/runtime-permission surface; полный schema drift audit не завершён. На текущем repository source используются шестипараметрическая версия `bootstrap_telegram_login`, `chat_participant_public_profile(uuid,uuid)` и `resolve_bearer_session_with_identity(text)`, которых в production на дату проверки нет. Без применения соответствующих migrations текущий source **не совместим с production**: Telegram login, профиль участника чата и все authenticated Bearer requests затронуты. Перед выпуском такого source нужны отдельная migration review/preflight, grants verification и явное разрешение на production migration; migrations не применялись в этом аудите.
 
 Frontend↔backend compatibility — **UNKNOWN**: frontend deployed SHA не раскрыт provider record, фактическое `BACKEND_API_ORIGIN` не проверялось/не раскрывалось, а source-level frontend tests не подтверждают deployed pair. Текущий read-only HTTP smoke Render URL завершился network timeout на `GET /health`; `GET /ready` не запускался, поскольку smoke останавливается на первой ошибке. Поэтому свежие live health/readiness и основные production flows этим аудитом не подтверждены.
 
@@ -73,6 +81,76 @@ Frontend↔backend compatibility — **UNKNOWN**: frontend deployed SHA не р�
 
 **STOP:** production identity/target не подтверждены; migration history неожиданна; verifier или runtime gate не прошёл; или нужный schema/grants state невозможно проверить. Не исправлять drift через `migration repair`, ручное редактирование migration history, ad-hoc SQL или возврат broad grants.
 
+### Production migration readiness audit: pending migrations и rollout gate
+
+Аудит SQL пяти файлов выше выполнен статически по Git и локально повторён на
+копии production archive в disposable PostgreSQL 17.11. Это подтверждает
+поведение проверенного Git checkout в обычном PostgreSQL, но не устраняет
+production schema drift и не доказывает идентичность Supabase production.
+
+| Migration | Объекты / поведение | Data, RLS и privilege effects | Совместимость и риск |
+|---|---|---|---|
+| `20260924090000_completed_onboarding_active_travel_intent_invariant.sql` | `CREATE OR REPLACE` для `archive_current_active_travel_intent()`; serializes with completion through `user_activity_states` row. | DML выполняется только при вызове capability; migration сам не backfill-ит данные, не меняет таблицы/policies. Function `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, `app_runtime` execute. | Сигнатура сохранена; приложение должно продолжать передавать активный TravelIntent при завершённом onboarding. Production rows/behavior не перепроверялись. |
+| `20260924100000_session_lifecycle_baseline.sql` | Добавляет canonical шестипараметрический `bootstrap_telegram_login(...)`; заменяет legacy восьмипараметрический overload wrapper-ом в canonical function. | Login capability создаёт/обновляет identity и session только при вызове. Оба overload `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked; grants применяются отдельным runtime grant step. RLS/table definitions не меняются. | Legacy 8-arg signature сохраняет старый Render backend call contract; `created_at`/`expires_at` от старого backend игнорируются, TTL задаёт DB. Новая версия backend требует canonical 6-arg capability. Для нового 6-arg object SQL не отзывает явно `anon`/`authenticated`/`service_role`; default ACL production неизвестны — до migration проверить их и после apply сверить effective EXECUTE. |
+| `20260924110000_backend_field_domain_limits.sql` | Проверяет legacy blank `profiles.display_name` и `travel_intents.destination_label`, затем добавляет два `CHECK` constraints; заменяет `create_current_group_chat(uuid[])` и `send_current_chat_message(uuid,text)`. | Нет data backfill. При blank legacy values migration останавливается до добавления constraints. Изменённые functions `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, execute — `app_runtime`; RLS/policies не изменяются. | Behavior становится строже: пустые значения / невалидные group-chat inputs и сообщения будут отклоняться. Два `ALTER TABLE ... ADD CONSTRAINT` требуют таблицевых lock и проверки существующих строк; точная длительность/ожидание production неизвестны. Подготовить maintenance window и STOP при legacy rows или неприемлемом lock-рискe. См. [PostgreSQL 17 ALTER TABLE](https://www.postgresql.org/docs/17/sql-altertable.html) и [explicit locking](https://www.postgresql.org/docs/17/explicit-locking.html). |
+| `20261003090000_chat_participant_public_profile.sql` | Добавляет `chat_participant_public_profile(uuid,uuid)` для чтения профиля активного участника общего чата. | Нет table/policy changes. Function `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, execute — `app_runtime`. | Это нужная новая backend capability; архив и production snapshot её не содержали. Старый `chat_participant_profile_projection(uuid)` не удаляется, что поддерживает старый backend contract. Как и для canonical login capability, явного revoke названных API roles в migration нет; проверить production default ACL до apply и effective EXECUTE после. |
+| `20261018090000_server_side_tester_admission_session_identity.sql` | Аддитивно добавляет `resolve_bearer_session_with_identity(text)` с `session_id`, `user_id`, Telegram numeric identity. Старый `resolve_bearer_session(text)` оставлен неизменным. | Нет table/policy changes и прямых `app_runtime` SELECT grants на `users`/`telegram_identities`. Function `SECURITY DEFINER`, `search_path=pg_catalog`; `PUBLIC`, `anon`, `authenticated`, `service_role` EXECUTE отзывается если роль есть; runtime grant задаётся существующим grant script. | Новому backend нужна эта capability при каждом Bearer request. Существующие старые sessions сохраняются, однако admission env и runtime behavior должны быть проверены до внешнего допуска. |
+
+Dependency chain: migration 1 использует уже созданные `user_activity_states`,
+`travel_intents` и `current_authenticated_user_id()`; migration 2 добавляет
+login overload поверх существующих identity/session/profile/activity objects;
+migration 3 опирается на существующие `profiles`, `travel_intents` и chat
+capabilities; migration 4 требует `chat_participants`, `profiles`, active
+`travel_intents`, `users` и authenticated-user context; migration 5 требует
+`user_sessions`, `users` и `telegram_identities`. Все пять — одна последовательная
+ветка после migration 19, в timestamp order. Grant script/verifier и runtime
+gate идут после полного SQL chain. Ни `resolve_bearer_session(text)`, ни старые
+`bootstrap_telegram_login` и `chat_participant_profile_projection(uuid)` не
+удаляются этим набором.
+
+Общие выводы SQL review: ни одна из пяти миграций не удаляет таблицу или столбец;
+нет массового data migration/backfill; явные функции работают с `SECURITY
+DEFINER` и фиксированным `search_path=pg_catalog`; новые capabilities запрещают
+`PUBLIC EXECUTE` и доступны через `app_runtime`. Локальная проверка подтвердила
+применение 26 явных migration-declared `PUBLIC EXECUTE` revokes. Проверка Git SQL
+не исключает production drift, нестандартные ACL, дополнительные объекты или
+операторские зависимости Supabase.
+
+**ACL STOP:** подтверждённый production default-ACL inventory содержит
+`anon`, `authenticated` и `service_role`, но предыдущий снимок не зафиксировал
+их default function privileges. Существующий verifier проверяет запрет
+effective EXECUTE для этих ролей на новый Bearer resolver; он не даёт такого
+assertion для новых 6-arg login и Chat profile functions. Локальный rehearsal
+отдельно проверил effective denial трёх новых функций для локальных известных
+API role stubs, однако локальные default ACL не доказывают production ACL. До
+разрешения первого migration apply оператор должен подтвердить identity, от
+которой будут созданы функции, её default ACL и отсутствие effective EXECUTE у
+`anon`/`authenticated`/`service_role` на новых backend-only capabilities; после
+apply повторить это read-only verifier-ом. Неожиданный EXECUTE — **STOP** до
+отдельно reviewed исправления; не применять миграции и не деплоить backend.
+
+#### Compatibility matrix
+
+| Состояние | Вывод | Основание / предел |
+|---|---|---|
+| A. Deployed backend `b25e08d…` с БД после каждой migration | Его прежние 8-arg login, старый session resolver и `chat_participant_profile_projection(uuid)` сохраняются; статически call contracts совместимы. Migration 1/3 могут изменить поведение и отклонять ранее принимавшиеся данные. | Сигнатуры старого backend и migration SQL сверены из локального Git SHA. Полный интеграционный прогон старого бинарного deployment на мигрированном snapshot не выполнялся; production drift/legacy rows неизвестны. |
+| B. Backend из текущего `develop` до migrations | **Несовместим**: login вызывает 6-arg bootstrap, Chats — `chat_participant_public_profile(uuid,uuid)`, каждый Bearer request — новый resolver; этих объектов нет в archive ledger schema. | Локальное восстановление 19-migration archive подтвердило отсутствие capabilities до replay. Не деплоить новый backend раньше полного DB/grants gate. |
+| C. Backend из `develop` после пяти migrations и grants | **Локально VERIFIED для schema/runtime contract** на disposable restore. Production readiness остаётся условной до повторного ledger/schema/ACL preflight, grant verifier, deployment gate и корректной серверной admission config. | Локальный smoke: 17 tables, 21 functions, RLS/policies, row counts до/после replay, app_runtime grant script/verifier и effective API-role denial на трёх новых функциях — PASS. Локальные default ACL не доказывают production ACL. |
+| D. Existing production frontend с новым backend | **UNKNOWN**. | Production frontend Git SHA и фактический `BACKEND_API_ORIGIN` неизвестны; source-level API tests не доказывают deployed pair. До rollout найти независимое evidence SHA/origin и выполнить разрешённый HTTP + Telegram flow smoke. |
+
+В local rehearsal проверены также неизменность агрегированного row count каждой из
+17 application tables между restore и replay пяти migrations. Это исключает
+изменение числа строк в данной disposable DB во время replay, но не сравнивает
+production snapshot с архивом и не доказывает полноту production data.
+
+Подробный migration order и admission-specific checklist приведены ниже. Новый
+backend нельзя выкатывать до всех пяти migrations, grants, verifier и runtime
+gate. Старый backend имеет сохранённые SQL overloads, но это не доказывает
+безрисковый rollout: миграция ограничений меняет допустимое поведение, а старый
+artifact нужно заново подтвердить в provider history. Миграции не откатывать
+автоматически; при ошибке остановиться, сохранить фактическое состояние и
+подготовить forward-fix.
+
 ### Отдельный dependency/order plan: server-side tester admission
 
 Новая migration `20261018090000_server_side_tester_admission_session_identity.sql`
@@ -83,7 +161,7 @@ Frontend↔backend compatibility — **UNKNOWN**: frontend deployed SHA не р�
 `users`/`telegram_identities`, новые RLS policies и таблицы admission не нужны.
 
 На дату read-only inventory production ledger содержит 19 записей; перед этой
-migration в Git есть ещё четыре отсутствующие в production migration. Из-за
+migration в Git есть ещё пять отсутствующих в production migration. Из-за
 известного drift нельзя применять «последнюю migration» отдельно или считать
 этот список доказательством совместимости. Оператор должен сначала повторно
 сверить exact production ledger и объекты, затем review/apply возможные pending

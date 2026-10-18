@@ -20,6 +20,13 @@
 - Установлено, что production соответствует 19 migrations deployed Render revision, тогда как текущая repository source использует отсутствующие в production 6-аргументный bootstrap и `chat_participant_public_profile`; без отдельного DB migration/grants review это блокирует выпуск соответствующего source. Полный schema drift audit не завершён.
 - Production `/health` smoke завершился сетевым timeout; `/ready` не запускался. Frontend/backend compatibility и фактический `BACKEND_API_ORIGIN` остались UNKNOWN. Runbook, backlog и roadmap обновлены; production migrations, writes, deployments и provider configuration не менялись.
 
+## 2026-10-18 — №16 Production migration readiness audit
+
+- Сопоставлены подтверждённый ledger из 19 миграций и текущий `develop` из 24 файлов; выполнен SQL/security review пяти последующих migrations и матрица совместимости старого Render SHA, текущего backend и неизвестной frontend revision.
+- В network-isolated disposable PostgreSQL 17.11 восстановлен production archive, локально replay-нуты пять migrations, затем успешно прошли 26 PUBLIC revokes, `app_runtime` grants и verifier. Проверены schema/data restore, 17 таблиц, структура, RLS/policies, совпадение counts по каждой таблице до/после replay и отсутствие effective EXECUTE у локальных API role stubs на три новые backend-only functions; неизвестные ACL roles не создавались.
+- Regression validation: backend suite — 553 passed, 97.11% coverage; frontend unit tests — 168 passed; local restore smoke — exit 0; targeted smoke tests — 31 passed; Python syntax и `git diff --check` — PASS.
+- Production не подключали. Ledger/schema parity, Vercel SHA и фактический `BACKEND_API_ORIGIN`, live health, production ACL и совместимость deployed frontend/backend остались UNKNOWN; rollout запрещён до нового preflight и отдельного разрешения.
+
 ## 2026-10-18 — №22 Rollback / forward-fix readiness
 
 - Сверили manual deployment workflow, provider capabilities, migrations, backend health/readiness и backup restore boundaries. В runbook добавлены раздельные сценарии frontend rollback, backend rollback, failed migration и potential data corruption.
