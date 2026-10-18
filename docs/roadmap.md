@@ -51,7 +51,7 @@
 
 Реализованный backend-backed vertical slice: `Telegram Auth → onboarding → Profile → TravelIntent → Discover → reciprocal Match → direct/group Chat → Messages → Trip creation → Trip List/Detail`. Group Chat создаётся из existing matched/direct-chat companions с фиксированным MVP-составом; Trips List/Detail читают persistence.
 
-Ближайший технический этап — deployment / CI reproducibility из [technical hardening backlog](technical-hardening-backlog.md), начиная с №16 Deployment provenance/environments. Для ручного rollout действует [production deployment runbook](backend/production-deployment-runbook.md); он не реализует №16, №17, №21 или №22. External test остаётся после необходимых deployment и control gates; детальный порядок hardening остаётся в backlog и не дублируется здесь.
+Ближайший технический этап — deployment / CI reproducibility из [technical hardening backlog](technical-hardening-backlog.md), начиная с №16 Deployment provenance/environments. Для ручного rollout и recovery после неудачного deployment/DB change действует [production deployment runbook](backend/production-deployment-runbook.md); №16 и №21 остаются с открытыми границами, №17 даёт read-only backend smoke, №22 описывает operator rollback/forward-fix процедуры без production execution. External test остаётся после необходимых deployment и control gates; детальный порядок hardening остаётся в backlog и не дублируется здесь.
 
 Последующие самостоятельные work items:
 

@@ -86,11 +86,237 @@ Auto-Deploy остаётся **Off**. До rollout оператор провер
 
 Немедленно остановиться и оставить traffic quiesced, если target SHA не совпал, migration history/schema/grants не соответствуют плану, любой verifier/gate/health/readiness/smoke падает, появляются неожиданные ошибки или выясняется, что старая и новая версии несовместимы. Не переключать сервис обратно на старый backend после breaking DB/API/grants change без доказанной совместимости; использовать отдельно согласованный rollback/forward-fix procedure задачи №22. Если миграция изменила данные/схему, допустимость восстановления зависит от заранее проверенного backup/restore плана №21. Не импровизировать с ручным SQL, `migration repair`, credential changes или provider settings.
 
+## 6. Recovery после неудачного deployment или DB change (№22)
+
+Этот раздел готовит operator procedure, но сам не выполняет и не разрешает
+production action. Перед rollback, traffic isolation, migration или restore
+оператор получает отдельное явное подтверждение на выбранное действие.
+
+### 6.1 Общий recovery preflight
+
+Сначала зафиксировать время инцидента (UTC), симптомы, затронутые компоненты,
+последний успешный и текущий deployment IDs/SHA, фактические migration records,
+выполненные operator actions и результаты проверок. Не помещать в запись
+credentials, пользовательские сообщения или PII.
+
+Перед любым действием независимо сверить target в provider dashboard:
+
+- Vercel project `travel-friend-mini-app`, Production environment и домен,
+  фактически назначенный production deployment;
+- Render service `travel-friend-api`, ветку `develop`, текущий и целевой deploy
+  SHA; Auto-Deploy должен оставаться Off;
+- при DB-проверке — Supabase project `travel-friend-dev`
+  (`tlgprfsecdasloqnuyjo`) и ожидаемую базу `postgres`.
+
+Имена подтверждены, но точные provider IDs, production URLs, history/retention
+доступных deploys, frontend automation и доступные operator permissions в Git не
+зафиксированы. Сверить их в provider UI для конкретного инцидента; при
+неоднозначности — **STOP**. Не считать rollback приложения возвратом DB schema,
+DB data, secrets, environment variables, domains или provider configuration.
+Известный migration drift production↔Git остаётся отдельным риском задачи №16;
+rollback приложения или новый forward-fix сам по себе этот drift не разрешает.
+
+«Известная рабочая версия» — это конкретный успешный deployment, для которого
+можно независимо подтвердить deployment ID, полный Git SHA и соответствующую
+DB/API compatibility. Последний по времени deploy сам по себе не является
+известным рабочим. Проверить, что SHA доступен в repository и deployment history,
+а настройки/окружение target остаются ожидаемыми. Не создавать платный plan и не
+менять provider settings, чтобы расширить доступную историю rollback.
+
+Применимость и ограничения механизмов сверены с официальной документацией:
+[Vercel production rollback](https://vercel.com/docs/deployments/rollback-production-deployment),
+[Vercel rollback CLI](https://vercel.com/docs/cli/rollback) и
+[Render rollback](https://render.com/docs/rollbacks). Их наличие не подтверждает
+настройки или разрешения конкретного project/service. Для Mini App автоматической
+проверки основных UI flows в репозитории нет; существующий
+[`deployment_smoke.py`](../../apps/backend/scripts/deployment_smoke.py) проверяет
+только backend HTTP health/readiness.
+
+Rollback Vercel/Render возвращает deployment artifact или переключает traffic на
+другой artifact и в общем случае повторяем как provider operation, но не откатывает
+DB schema/data, migration ledger, environment variables или secrets. DB DDL и
+изменения данных считать необратимыми, пока обратимость конкретной операции не
+доказана. Forward-fix предпочтительнее слепого reverse SQL; restore может удалить
+корректные более новые данные и всегда требует отдельного решения.
+
+### A. Неудачный frontend deployment (Vercel)
+
+**Признаки:** production build/deployment завершился ошибкой; Mini App не
+открывается или отдает явную ошибку; после нового frontend SHA нарушился ранее
+работавший flow при здоровом backend.
+
+1. В Vercel проверить правильные project, Production environment/domain, failed
+   deployment ID/SHA, build/runtime logs и назначенный сейчас production
+   deployment. Уточнить, затронут только frontend ли это: проверить backend
+   `/health` и `/ready` по независимо подтверждённому base URL.
+2. Найти предыдущий успешный production deployment. Сверить его полный SHA,
+   frontend API contract и build-time environment requirements с текущим backend.
+   Rollback UI/routing может вернуть только frontend artifact; он не возвращает
+   environment variables или backend deployment.
+3. Если кандидат доступен текущему плану/проекту и совместим с текущим backend,
+   оператор отдельно подтверждает rollback и выполняет его через Vercel
+   deployment UI/доступный аккаунту механизм. Vercel ограничивает rollback
+   доступной deployment history и plan; если предыдущий подходящий deployment
+   недоступен без upgrade — **STOP**, не менять тариф. Не выполнять guessed CLI
+   command или выбирать deployment только по времени.
+4. Дождаться завершения и проверить, что production domain назначен ожидаемому
+   deployment ID/SHA. Убедиться, что environment/configuration не менялись.
+5. Проверить загрузку Mini App, доступность статических ресурсов и вызовы
+   backend. Запустить backend read-only smoke из §5. Telegram Auth/профиль и
+   основные пользовательские flows проверять только вручную с разрешённой
+   тестовой учётной записью; auth и часть flow создают/изменяют DB state, поэтому
+   без отдельного разрешения и согласованных тестовых данных их не выполнять.
+
+**Успех:** ожидаемый frontend deployment активен, Mini App открывается, backend
+health/readiness проходят, разрешённые проверки интерфейса проходят и нет новых
+связанных ошибок. **STOP:** нет точного известного рабочего deployment; frontend
+SHA не совместим с текущим backend; rollback entitlement/history не позволяет
+выбрать target; domain/environment изменились; smoke/UI проверка не проходит.
+При неуспехе не переключаться вслепую на другой deployment; сохранить состояние
+и подготовить reviewed fix/forward deployment.
+
+### B. Неудачный backend deployment (Render)
+
+**Признаки:** deploy failed/canceled, экземпляр не становится healthy, `/health`
+или `/ready` падает после rollout, либо коррелированные ошибки показывают
+несовместимость backend/API.
+
+1. В Render подтвердить `travel-friend-api`, production service, branch `develop`,
+   фактический deploy SHA/status и logs. Сверить `/health` и `/ready` с exact
+   operator-confirmed backend URL. Не менять `DATABASE_URL`, secrets или service
+   configuration для «починки» rollback.
+2. До выбора старой версии установить, менялась ли production DB, migration
+   ledger, grants/RLS, functions или API contract после версии-кандидата.
+   Сопоставить конкретные call sites старого backend с текущими tables, columns,
+   functions, policies и grants. Проверить migration SQL и runtime verifier/gate
+   по применимости. Совместимость не выводить только из того, что миграция
+   называлась additive.
+3. Если DB contract не менялся либо доказана обратная совместимость текущей DB
+   со старым SHA, выбрать exact ранее успешный Render deployment/SHA из history.
+   Render Dashboard предоставляет rollback к предыдущему успешному deploy; также
+   допускается manual deploy конкретного commit, если target SHA и deployment
+   method подтверждены в текущем service. Отдельно подтвердить действие, затем
+   проверить фактический active SHA. Auto-Deploy оставить Off.
+4. После возврата запустить `deployment_smoke.py` по подтверждённому backend
+   origin. При успехе проверить только согласованные основные flows с разрешённой
+   тестовой учётной записью; smoke не доказывает schema parity и Telegram
+   business-flow correctness.
+
+Пользовательский checklist для разрешённой ручной проверки: запуск Mini App и
+Telegram Auth → Profile/TravelIntent → Discover → Chats/Messages → Trips
+List/Detail. Auth создаёт session state; interest decisions, сообщения и создание
+Trip меняют production data. Их выполнять только при наличии отдельно
+разрешённой тестовой учётной записи и согласованного порядка очистки/сохранения
+test data; иначе ограничиться запуском и read-only экранами и отметить write flows
+как непроверенные.
+
+**Успех:** Render показывает ожидаемый known-good SHA, `/health`=`ok`,
+`/ready`=`ready`, применимые verifier checks проходят; разрешённые flow checks
+успешны. **STOP:** текущая DB schema/grants появились после rollback target и
+совместимость не доказана; migration ledger неясен; нужных deploy artifacts/SHA
+нет; readiness/verifier падает. В этом случае оставить deployment как есть или
+остановить traffic только подтверждённым способом и перейти к forward-fix
+разбору; не применять обратные миграции.
+
+### C. Неудачная database migration
+
+**Признаки:** migration command завершился ошибкой, появился неизвестный
+ledger/schema state, verifier/grants gate не проходит, либо backend после DB
+change видит отсутствующие объекты/ошибки запросов.
+
+1. **STOP: автоматический rollback migrations запрещён.** Не запускать reverse
+   SQL, `db reset`, `migration repair`, ручные правки `supabase_migrations` или
+   повторный blind `db push`. Не предполагать, что весь batch был атомарным:
+   установить фактический результат и транзакционные границы конкретной
+   migration по логам и read-only состоянию.
+2. Подтвердить project/database identity и ограничить дальнейшие deployment и
+   DB changes. Способ остановки/изоляции traffic для текущего Render service
+   отдельно не подтверждён; использовать его только если оператор заранее
+   проверил способ и дал отдельное разрешение. Сохранить sanitized logs и exact
+   failed migration version.
+3. Read-only проверками определить: какие migration records записаны; какие
+   ожидаемые tables/columns/functions/policies/grants присутствуют; затронуты ли
+   data или только schema; работают ли текущий и target backend с этим состоянием.
+   При migration drift, частично применённой migration или неизвестных data
+   effects — **STOP** и эскалировать review.
+4. Проверить применимый verified backup по [№21](backup-restore-runbook.md), его
+   timestamp/data window, checksum и проверенный локальный restore путь. Это
+   входные данные оценки, а не разрешение на production restore. Full Supabase
+   recovery и production ACL не подтверждены; production restore автоматически
+   не выполнять.
+5. Подготовить минимальный новый forward-fix migration на отдельной reviewed
+   revision. Воспроизвести состояние и fix только в disposable PostgreSQL;
+   проверить migration order, повторное чтение из исходной/target schema,
+   `app_runtime` grants verifier и backend tests. Не менять уже применённый SQL
+   migration и не редактировать production ledger для прохождения проверки.
+6. До production apply получить отдельное разрешение на точный migration SHA,
+   target, SQL scope, backup decision и maintenance plan. Применять только по
+   проверенной для данного change инструкции из §1–4; после — сверить migration
+   history, schema/grants verifier, `/health`, `/ready` и разрешённые flow checks.
+
+**Успех:** согласованный forward-fix завершён без неожиданных schema/data
+effects, ledger соответствует фактическому применению, verifier/gate и smoke
+проходят, operator record содержит итог и residual risks. **STOP:** невозможно
+доказать target, состояние миграции или совместимость; fix требует неутверждённых
+DDL/grants, данных, credentials/provider changes; или требуется automatic
+rollback/production restore. Если forward-fix не проходит, не импровизировать
+следующий SQL: оставить изменения и traffic в безопасном подтверждённом состоянии
+и запросить отдельный recovery decision.
+
+### D. Потенциальное повреждение данных
+
+**Признаки:** некорректные/пропавшие записи, неожиданный массовый update/delete,
+нарушенные инварианты, несоответствие данных в пользовательских flows или
+инцидентная метрика/жалоба.
+
+1. Немедленно прекратить новые deployment и DB changes. Оценить, продолжают ли
+   приложение или job писать данные. Quiesce/maintenance механизм не
+   подтверждён в проектной конфигурации: не изобретать toggle или команду;
+   применить только заранее проверенный оператором способ с отдельным
+   разрешением. Не останавливать service способом, последствия которого
+   неизвестны.
+2. Сохранить временной интервал, affected tables/операции, deployment/migration
+   SHA и sanitized logs. Оценить масштаб и границу данных только безопасными
+   read-only средствами; не собирать PII в incident report и не выполнять
+   корректирующие SQL-записи наугад.
+3. Сравнить предполагаемый affected window с verified backup/offsite copy и
+   текущей политикой №21. Еженедельная копия не гарантирует отсутствие потери
+   данных за прошедший интервал; точное сравнение counts без общего snapshot не
+   является доказательством. Проверить отдельно зависимости схемы, runtime
+   grants и production ACL; последние не полностью проверены.
+4. Предпочесть минимальный reviewed forward-fix/repair, если он безопасно
+   восстанавливает инварианты без потери корректных новых данных. Если обсуждается
+   restore, сначала потребовать отдельный анализ data loss, проверенный restore
+   на disposable target и явное отдельное утверждение recovery procedure.
+   **Автоматический production restore запрещён.** Ни backup runner, ни local
+   restore smoke не выполняют его.
+
+**Успех:** scope инцидента установлен; согласованная repair/recovery операция
+завершена; integrity/constraints, migration ledger, runtime grants/verifier,
+health/readiness и разрешённые flows проверены; остаточная потеря и риски
+зафиксированы. **STOP:** scope неясен, есть продолжающиеся writes без безопасного
+quiesce, backup может перезаписать корректные данные, отсутствует разрешение или
+не доказана возможность восстановления. Не выполнять production restore для
+«проверки».
+
+### Post-recovery record и обязательные проверки
+
+После любого recovery записать incident UTC time, environment/target, исходный и
+итоговый deployment IDs/SHA, migration records, действия/подтверждения,
+результаты `/health`, `/ready`, применимых schema/grants checks и разрешённых
+flow checks, а также UNKNOWN/BLOCKED items. Не отмечать recovery успешным, если
+обязательная для изменения проверка не выполнялась; указать, почему.
+
+Общий **STOP** действует при любой неопределённости target, известной рабочей
+версии, backend/DB compatibility или data effects; при необходимости платного
+upgrade; при запросе provider/secrets changes; либо если действие необратимо и
+для него нет отдельного разрешения и проверенной процедуры.
+
 ## Связанные задачи
 
 - **№16 — provenance/environments:** фиксирует/автоматизирует доказательство environment, commit/deployed SHA и schema parity; этот runbook требует сверять их вручную.
 - **№17 — deployment smoke:** read-only HTTP chain `/health` → `/ready` документирован в этом разделе и реализован скриптом `apps/backend/scripts/deployment_smoke.py`; Telegram E2E остаётся ручным.
-- **№21 — backup/restore:** текущий статус — AUDIT/PLAN; см. [backup/restore audit and operator plan](backup-restore-runbook.md). Восстановимого backup пока нет, а restore не проверялся; этот deployment runbook не задаёт backup storage или recovery procedure.
-- **№22 — rollback/forward-fix:** определяет recovery для backend/API/DB/grants. Старый backend не является допустимым rollback target автоматически после breaking change.
+- **№21 — backup/restore:** MVP backup policy, production archive/encrypted offsite copy и локальный schema/data + application-grants restore smoke зафиксированы в [backup/restore runbook](backup-restore-runbook.md). Full Supabase recovery и production ACL не подтверждены.
+- **№22 — rollback/forward-fix:** operator procedure описана в этом документе, §6. Она не является автоматизацией или разрешением на production action; старый backend не считается допустимым rollback target без проверки compatibility с текущей DB.
 
-Завершение №15 как docs-ready не закрывает №16, №17, №21 или №22, не подтверждает текущие provider settings и не означает, что следующий production deployment уже одобрен.
+Завершение №15 как docs-ready не закрывает №16, №17 или №21, не подтверждает текущие provider settings и не означает, что следующий production deployment уже одобрен. №22 описывает процедуру, но не подтверждает, что реальные rollback или recovery уже выполнялись.
