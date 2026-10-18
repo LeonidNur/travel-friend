@@ -1,5 +1,22 @@
 # Дневник разработки
 
+## 2026-10-18 — №21 Backup/restore audit and plan
+
+### Что сделали
+
+- Проверили migrations, DB scripts, production deployment runbook и backlog на существующие backup/restore механизмы. Migrations восстанавливают schema objects, но не текущие application data; production dump/restore tooling и процедура в репозитории не найдены.
+- Зафиксировали операторское подтверждение Supabase Free Plan, отсутствия scheduled backup/PITR и восстановимого backup, а также выбранный план ручного logical backup с внешним хранением и restore-проверкой на отдельной disposable БД.
+- Добавили [backup/restore audit and operator plan](backend/backup-restore-runbook.md) и отметили №21 как `AUDIT/PLAN`. Backup/restore не выполнялись; №22 не затрагивалась.
+
+### Что проверили
+
+- Выполнен read-only просмотр документации, migrations, DB scripts и CI. Production DB connection, dump, restore и DDL не выполнялись.
+- Проверили относительные links и выполнили `git diff --check`.
+
+### Что осталось
+
+- Оператору нужно подтвердить внешнее зашифрованное хранилище, cadence/retention, backup identity/scope, disposable restore environment, проверки и RPO/RTO. Отдельное явное разрешение обязательно перед любым production DB connection/query/dump.
+
 ## 2026-10-18 — №20 Backend runbook/README
 
 ### Что сделали
