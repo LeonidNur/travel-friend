@@ -52,7 +52,7 @@ Residual observability risks после закрытия P0.5 уже ведут�
 16. **Deployment provenance/environments — PARTIALLY VERIFIED (read-only audit, 18.10.2026).** Подтверждённая topology: Vercel project `travel-friend-mini-app`; Render service `travel-friend-api`, branch `develop`, manual deployment, Auto-Deploy Off; Supabase project `travel-friend-dev` (`tlgprfsecdasloqnuyjo`). Read-only snapshot Supabase: `ACTIVE_HEALTHY`; 19 production migrations сопоставлены с SQL в `develop`; 17 application tables с включённым RLS, 17 policies и 18 functions. `app_runtime` имеет `LOGIN`, `NOINHERIT`, `NOBYPASSRLS`; ей доступны 16 функций, `PUBLIC EXECUTE` отсутствует.
 
    **Ограничения аудита:** полный schema drift audit не завершён; дополнительные migrations в репозитории не исключены исчерпывающей проверкой; фактический `BACKEND_API_ORIGIN` не раскрывался. Эти результаты не подтверждают полную schema parity или полный deployment provenance; №16 остаётся открытой до завершения проверок.
-17. **Deployment smoke chain.**
+17. **Deployment smoke chain — IMPLEMENTED (read-only HTTP).** Скрипт [deployment_smoke.py](../apps/backend/scripts/deployment_smoke.py) требует явно указанный backend base URL, последовательно проверяет `GET /health` и `GET /ready` с bounded timeout и fail-closed exit code. Тестируется только через mock HTTP responses. Предварительные проверки, ожидаемые ответы, STOP criteria и ручная граница Telegram E2E зафиксированы в [production deployment runbook](backend/production-deployment-runbook.md). Скрипт не создаёт и не меняет production data; schema/grants checks и Telegram E2E остаются отдельными проверками.
 18. **CI with disposable PostgreSQL.**
 19. **Local test DB hygiene.**
 20. **Backend runbook/README.**
