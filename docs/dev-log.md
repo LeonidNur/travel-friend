@@ -1,5 +1,11 @@
 # Дневник разработки
 
+## 2026-10-18 — №22 Rollback / forward-fix readiness
+
+- Сверили manual deployment workflow, provider capabilities, migrations, backend health/readiness и backup restore boundaries. В runbook добавлены раздельные сценарии frontend rollback, backend rollback, failed migration и potential data corruption.
+- Зафиксированы exact target и known-good SHA gates, обязательная проверка backend/DB compatibility, запрет автоматического migration rollback и production restore, отдельное разрешение опасных операций, post-recovery checks и записи результатов.
+- Только локальный audit и documentation review: production deployment/rollback, migration, provider changes и restore не выполнялись. Vercel/Render deployment history/permissions, safe traffic quiesce, frontend E2E и full Supabase/production ACL recovery остаются UNKNOWN/unverified; migration drift сохранён как отдельный риск №16.
+
 ## 2026-10-18 — №21 Production backup scope audit
 
 - Сверили backend/frontend source, contracts, migrations, role scripts и security docs: MVP использует собственные `public` данные, PostgreSQL functions/triggers, RLS и роль `app_runtime`; Telegram `initData` — текущая auth интеграция. В коде не найдено использования Supabase Auth API, Storage upload/download или Vault.

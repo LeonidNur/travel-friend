@@ -1,5 +1,9 @@
 # Журнал изменений
 
+## 2026-10-18
+
+- Дополнен [production deployment runbook](docs/backend/production-deployment-runbook.md): описаны frontend/backend rollback, migration forward-fix и реакция на возможное повреждение данных. Уточнено, что provider rollback не возвращает DB state, production ACL и Supabase-managed recovery остаются непроверенными; №22 отмечена как operator runbook ready без production execution.
+
 ## 2026-10-14
 
 - Добавлен [manual production deployment runbook](docs/backend/production-deployment-runbook.md) с Git SHA/schema/grants preflight, DB/API compatibility matrix, ручным rollout, smoke gates и stop criteria. №15 помечен docs-ready; Auto-Deploy остаётся Off, rollout требует отдельного подтверждения оператора.
