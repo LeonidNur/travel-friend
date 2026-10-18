@@ -1,5 +1,13 @@
 # Дневник разработки
 
+## 2026-10-18 — FinOps и внешние тестовые guardrails
+
+- Составлена единая карта production, development и operations: Vercel, Render, Supabase, Telegram, GitHub Actions, Docker Desktop/local Supabase/PostgreSQL, Homebrew/CLI, backup chain, Google Drive, Apple Keychain/Passwords, age, Codex, logging и DNS. Отдельно разделены счета, тарифные лимиты, Mac disk/CPU ресурсы и операционные последствия отказа.
+- Read-only provider/local evidence: Supabase organization Free; Render API service использует Free compute; GitHub repo public; Vercel team plan и account charges не подтверждены. Docker Desktop 4.88.1 работает с четырьмя локальными Supabase dev containers; images занимают 11.71 GB, volumes 661 MB. Не выполнялись cleanup, paid actions, provider settings changes или production stop.
+- Смоделированы типовые сценарии на 5/10/25/50/100 testers, включая повторные Discover reads, открытие чатов, полную историю, интенсивный поиск, login и public `/ready`. Это условная SQL/request модель, не реальные production usage/billing measurements.
+- Зафиксировано **STOP перед внешним тестом**: серверного Telegram tester allowlist нет, public `/ready` создаёт DB probe без endpoint limit, billing controls неизвестны для ряда аккаунтов, актуальная deployment/schema compatibility требует повторного подтверждения. Детали и точные open questions находятся в [FinOps runbook](finops-external-test-guardrails.md); код и provider settings в рамках этой задачи не менялись.
+- Локальный доступ к Docker daemon потребовал read-only разрешения и после него был успешно просмотрен; источниками лимитов служили официальные provider docs. Production stress tests и emergency stop не выполнялись.
+
 ## 2026-10-18 — №16 Production deployment provenance и compatibility
 
 - Проведён read-only provider audit: Render deployed SHA и production migration ledger подтверждены; Vercel production deployment найден, но его Git SHA недоступен. Сопоставлены функции deployed backend и production DB, а также current repository call sites.
