@@ -1,5 +1,11 @@
 # Дневник разработки
 
+## 2026-10-18 — №21 Production backup scope audit
+
+- Сверили backend/frontend source, contracts, migrations, role scripts и security docs: MVP использует собственные `public` данные, PostgreSQL functions/triggers, RLS и роль `app_runtime`; Telegram `initData` — текущая auth интеграция. В коде не найдено использования Supabase Auth API, Storage upload/download или Vault.
+- Зафиксировали минимальный application scope — schema и все строки 17 `public` tables — и recovery dependencies по roles/grants, PostgreSQL/extensions, migration revision, credentials и provider state. Supabase CLI schema/data/roles exports описаны как частичные компоненты, не как полный backup проекта.
+- Отдельно обозначили неизвестность production contents `auth`, `storage`, `vault`, `supabase_migrations` и других schemas, Storage objects, extensions, role state и consistency. Только документационные изменения; production не подключали, SQL/dump/restore не выполняли. №21 остаётся открытой до первого разрешённого production backup и проверки restore.
+
 ## 2026-10-18 — №21 Backup storage recovery проверен на synthetic данных
 
 - Зафиксирован тестовый путь: age v1.3.2 encrypt/decrypt локально, ciphertext

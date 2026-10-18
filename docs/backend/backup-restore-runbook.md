@@ -42,6 +42,51 @@ DB operation.
 - Logical dump будет содержать персональные данные и содержимое сообщений и
   должен обрабатываться как чувствительная пользовательская информация.
 
+## Production dependency audit и минимальный scope
+
+Аудит выполнен по backend/frontend source, contracts, migrations, runtime-role
+scripts и документации; production preflight facts ниже предоставлены оператором.
+К production в рамках этого аудита не подключались. Репозиторий подтверждает
+зависимости приложения, но не фактическое содержимое production schemas.
+
+| Компонент | Используется текущим MVP | Подтверждение | Нужен в backup | Восстановление из Git | Что неизвестно |
+|---|---|---|---|---|---|
+| `public` tables и строки | Да: `users`, `telegram_identities`, `user_settings` и остальные активные данные используются backend напрямую или capability functions. `profile_photos` и `chat_summaries` есть в схеме, но security docs указывают, что MVP их не использует. | `docs/database-schema.md`; `apps/backend/src/travel_friend_backend/{auth/service.py,routers/me.py,routers/discover.py,routers/chats.py,routers/trips.py}`; `docs/backend/security.md`; operator preflight подтвердил 17 таблиц, RLS и ownership `postgres`. | Да: schema и все строки всех 17 таблиц, включая dormant tables, пока production inventory не докажет иное. | DDL — из `supabase/migrations/`; текущие строки не восстанавливаются из Git. | Фактические row counts, полнота чтения и согласованность снимка не перепроверялись в этом аудите. |
+| Functions, triggers, constraints, indexes | Да: auth/session bootstrap, projections, onboarding, Discover, chat/message и trip capabilities; триггеры поддерживают chat invariants. | `auth/service.py`; backend routers; `supabase/migrations/20260901130000_chat_persistence.sql`; остальные migrations. | Да: все требуемые application definitions и их зависимости. | Определения находятся в migrations; применение и соответствие production должны быть проверены отдельно. | Полный production catalog drift и все runtime dependencies не подтверждены. |
+| RLS policies, grants, ownership | Да: RLS и точные права — часть runtime security boundary. | `docs/backend/security.md`; migrations; `apps/backend/scripts/grant-production-app-runtime-privileges.sql`; supplied preflight: RLS на 17/17, `app_runtime` без BYPASSRLS, `postgres` владеет таблицами и имеет SELECT. | Да: сохранить policies, ownership/grants и минимальные role attributes как отдельную recovery dependency. | Policies и часть grants есть в migrations; role provisioning/grants scripts в Git. Реальные пароли, membership, owners и полное ACL состояние нельзя считать восстановленными из Git. | Preflight не устанавливал полный grants/ownership catalog вне 17 таблиц или безопасный restore всех ролей. |
+| PostgreSQL roles | Да: backend подключается как `app_runtime`; operator backup identity — `postgres`. | `db.py`, `config.py`; production role scripts; supplied preflight. | Зафиксировать необходимые custom role definitions, attributes, memberships и grants. Пароли хранить/выпускать отдельно через approved secret store. | Частично: provisioning/grants scripts описывают `app_runtime`; production role state и credentials из Git не восстанавливаются. | Полный список custom roles, memberships, role passwords и права CLI role export неизвестны. Supabase reserved roles не следует считать переносимыми. |
+| Extensions / PostgreSQL version | Явных `CREATE EXTENSION` / `ALTER EXTENSION` в app migrations не найдено; PostgreSQL runtime — зависимость. | Поиск в `supabase/migrations/`; supplied preflight: PostgreSQL 17.6. | Включить inventory имён/версий и нужных расширений в recovery manifest; обеспечить совместимую версию на target. | Приложенческие migrations не задают extensions. | Production extension inventory и зависимости объектов на extensions не проверены. |
+| Supabase Auth (`auth`) | Кодовой зависимости не найдено: MVP проверяет Telegram `initData` и хранит собственные identities/sessions в `public`. | `apps/backend/src/travel_friend_backend/auth/telegram.py`, `auth/service.py`; searches по app code/contracts/migrations; supplied preflight подтвердил наличие schema. | Не включать содержимое managed schema в app logical dump без отдельного решения. Перед исключением проверить dashboard users/providers и интеграции. | Не восстанавливается приложенческими migrations. Provider configuration и credentials отдельно от DB backup. | Фактические Auth users, provider settings и возможные ручные/внешние зависимости не инвентаризированы. |
+| Supabase Storage / внешние файлы | Upload/download не реализованы в текущем MVP; `profile_photos` есть как dormant table, поле `storage_key` не доказывает наличие файлов. | `docs/backend/backend-contracts.md` (storage mechanism undecided), `docs/feature-list.md`, migration `20260826084844_core_identity.sql`; app-code search без upload/download/storage API. | Включать object backup только если инвентарь подтвердит используемые production objects. Если объекты нужны, нужен отдельный object export и mapping к `profile_photos`; SQL dump файлы не содержит. | Нет: объекты и buckets не восстанавливаются из Git migrations. | Bucket/object inventory, содержимое `profile_photos`, внешние URL/файлы и связи не проверялись. |
+| Supabase Vault (`vault`) | Кодовой или migration зависимости не найдено. | Search по app code/migrations/config; supplied preflight сообщил о schema `vault`. | Не включать managed schema в обычный CLI dump. До исключения проверить, не хранятся ли там используемые проектом secrets/keys. | Не восстанавливается приложенческими migrations; секреты нельзя класть в backup artifact. | Наличие секретов, их consumers и отдельный provider recovery путь неизвестны. |
+| `supabase_migrations` history | Backend не читает migration ledger; операционная история нужна для provenance/повторного применения миграций. | Search по backend code; `supabase/migrations/`; production security migration runbook предписывает не менять ledger вручную. | Сохранить зафиксированный список применённых production migration versions и соответствие Git revision; решение об отдельном history export принять до полного recovery plan. | SQL definitions восстанавливаются из Git, но фактическая production applied-history и соответствие версии из Git не гарантируются. | Полный production ledger не проверялся в этой задаче; нельзя вручную редактировать его для восстановления. |
+| Остальные schemas / provider state | Приложенческой зависимости в найденных исходниках нет. | Supplied preflight сообщил о `auth`, `storage`, `supabase_migrations`, `vault` и других schemas; CLI docs/runbook описывают исключения managed schemas. | До первого backup составить inventory user-managed objects вне `public`; явно включить нужные custom schemas или записать обоснованное исключение. Provider settings, secrets и Storage objects — отдельные recovery dependencies. | Не полностью: application migrations охватывают только проектные definitions, а не hosted/provider state. | Имена, owners, объекты, данные и consumers прочих schemas неизвестны. |
+
+### Минимальный достаточный backup для текущей application data
+
+После разрешённого read-only preflight рекомендуемый минимум — полный логический
+экспорт schema и всех строк `public` (включая все 17 таблиц), поддерживаемые
+object definitions и явный inventory PostgreSQL version/extensions; отдельный
+role/grant recovery record для `app_runtime` и других необходимых custom roles;
+manifest с exact project/database, timestamp/window, CLI/PG versions, scope,
+Git revision миграций и checksums. Roles export не доказывает переносимость
+Supabase reserved roles, безопасное восстановление LOGIN passwords или полный
+provider state. Секреты и connection credentials в dump/manifest не помещать.
+
+Считать этот набор достаточным для приложения можно только после разрешения
+открытых проверок по non-public schemas, Storage buckets/objects, Vault usage,
+Auth configuration/users, migration ledger и extensions. Если inventory находит
+нужные файлы или custom objects вне `public`, scope расширяется отдельной
+зашифрованной копией и проверенным restore шагом до запуска backup. Нельзя
+объявлять обычные Supabase CLI schema/data/roles exports полным backup проекта.
+
+Recovery также зависит от доступного `supabase/migrations/` revision,
+совместимого PostgreSQL/extension environment, отдельно восстановленных role
+attributes/grants и выданного runtime credential, Telegram bot secret и
+provider configuration, защищённого age recovery identity, внешнего зашифрованного
+backup storage, а при подтверждённой необходимости — Storage objects и Auth/Vault
+provider state. Эти конфигурационные secrets не должны попадать в SQL artifacts.
+
 ## Уже существующие процедуры и инструменты
 
 - Version-controlled Supabase migrations восстанавливают schema structure,
