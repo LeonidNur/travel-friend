@@ -81,6 +81,7 @@ ARCHIVE_EXPECTED_FUNCTIONS = (
 CURRENT_APP_ADDITIONAL_FUNCTIONS = (
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
     "public.chat_participant_public_profile(uuid,uuid)",
+    "public.resolve_bearer_session_with_identity(text)",
 )
 CURRENT_APP_EXPECTED_FUNCTIONS = (*ARCHIVE_EXPECTED_FUNCTIONS, *CURRENT_APP_ADDITIONAL_FUNCTIONS)
 PUBLIC_FUNCTION_REVOKE_PATTERN = re.compile(

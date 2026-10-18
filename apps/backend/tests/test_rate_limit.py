@@ -15,7 +15,7 @@ os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token")
 os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-test-import")
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
-from travel_friend_backend.config import BackendSettings
+from travel_friend_backend.config import AdmissionPolicy, BackendSettings
 from travel_friend_backend.dependencies import get_authenticated_database_connection
 from travel_friend_backend.main import create_app
 from travel_friend_backend.rate_limit import (
@@ -322,7 +322,13 @@ def test_telegram_login_is_limited_after_verification_and_before_login(
 ) -> None:
     import travel_friend_backend.main as backend_main
 
-    app = create_app(BackendSettings(telegram_bot_token="test-token", database_url="postgresql://unused"))
+    app = create_app(
+        BackendSettings(
+            telegram_bot_token="test-token",
+            database_url="postgresql://unused",
+            admission_policy=AdmissionPolicy(frozenset({123}), frozenset(), False),
+        )
+    )
     events: list[str] = []
 
     class Verifier:

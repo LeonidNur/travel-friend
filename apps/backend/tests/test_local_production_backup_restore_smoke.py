@@ -89,10 +89,11 @@ def test_validate_archive_rejects_checksum_mismatch(tmp_path: Path) -> None:
 
 def test_expected_function_inventory_matches_archived_migration_era() -> None:
     assert len(smoke.ARCHIVE_EXPECTED_FUNCTIONS) == 18
-    assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 20
+    assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 21
     assert set(smoke.CURRENT_APP_ADDITIONAL_FUNCTIONS) == {
         "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
         "public.chat_participant_public_profile(uuid,uuid)",
+        "public.resolve_bearer_session_with_identity(text)",
     }
 
 

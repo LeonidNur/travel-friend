@@ -85,6 +85,8 @@ GRANT SELECT (id, trip_id, position, place_label, country_code, place_ref,
 
 REVOKE ALL PRIVILEGES ON FUNCTION public.current_authenticated_user_id() FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.resolve_bearer_session(text) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.resolve_bearer_session_with_identity(text) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.resolve_bearer_session_with_identity(text) FROM anon, authenticated, service_role;
 REVOKE ALL PRIVILEGES ON FUNCTION public.bootstrap_telegram_login(
   bigint, text, text, text, text, text
 ) FROM app_runtime;
@@ -108,6 +110,7 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.create_current_trip_from_chat(uuid) FRO
 
 GRANT EXECUTE ON FUNCTION public.current_authenticated_user_id() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.resolve_bearer_session_with_identity(text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
   bigint, text, text, text, text, text
 ) TO app_runtime;

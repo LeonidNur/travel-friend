@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token-for-request-correlation")
 os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-request-correlation")
 
-from travel_friend_backend.config import BackendSettings
+from travel_friend_backend.config import AdmissionPolicy, BackendSettings
 from travel_friend_backend.main import create_app
 from travel_friend_backend.rate_limit import TELEGRAM_LOGIN_POLICY
 from travel_friend_backend.request_correlation import RequestCorrelationMiddleware
@@ -35,7 +35,13 @@ def capture_application_logs(caplog: pytest.LogCaptureFixture):
 
 
 def make_app():
-    return create_app(BackendSettings(telegram_bot_token="test-token", database_url="postgresql://unused"))
+    return create_app(
+        BackendSettings(
+            telegram_bot_token="test-token",
+            database_url="postgresql://unused",
+            admission_policy=AdmissionPolicy(frozenset({123}), frozenset(), False),
+        )
+    )
 
 
 def assert_generated_v4(value: str) -> None:

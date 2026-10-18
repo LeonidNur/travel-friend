@@ -20,6 +20,7 @@ VERIFY_SCRIPT_PATH = SCRIPTS_DIRECTORY / "verify-production-app-runtime-privileg
 REQUIRED_CAPABILITIES = {
     "public.current_authenticated_user_id()",
     "public.resolve_bearer_session(text)",
+    "public.resolve_bearer_session_with_identity(text)",
     "public.bootstrap_telegram_login(\n  bigint, text, text, text, text, text\n)",
     "public.bootstrap_telegram_login(\n  bigint, text, text, text, text, text, timestamptz, timestamptz\n)",
     "public.discover_eligible_travel_intents()",
@@ -215,6 +216,16 @@ def test_production_runtime_grants_and_verifier_execute_against_migrated_schema(
         connection.rollback()
 
     assert verification_results
+    api_resolver_acl_rows = next(
+        rows
+        for column_names, rows in verification_results
+        if {"role_name", "is_present", "unexpected_execute", "is_exact"} <= set(column_names)
+    )
+    assert api_resolver_acl_rows == [
+        ("anon", True, False, True),
+        ("authenticated", True, False, True),
+        ("service_role", True, False, True),
+    ]
     boolean_results = [
         value
         for column_names, rows in verification_results

@@ -109,6 +109,23 @@ test('returns an auth error when Telegram authentication fails', async () => {
   });
 });
 
+test('keeps admission denial details and Telegram identifiers out of the login error', async () => {
+  const state = await runTelegramAuthBootstrap(
+    createBootstrapInput({
+      authenticateWithTelegram: async () => {
+        throw new Error('Access is not enabled for Telegram ID 987654321; token=secret');
+      }
+    })
+  );
+
+  assert.deepEqual(state, {
+    status: 'auth_error',
+    message: 'Не удалось подтвердить сессию Telegram. Попробуйте открыть приложение ещё раз.'
+  });
+  assert.equal(JSON.stringify(state).includes('987654321'), false);
+  assert.equal(JSON.stringify(state).includes('secret'), false);
+});
+
 test('returns an auth error for missing or empty initData without calling the backend', async () => {
   let authenticateCalls = 0;
   const authenticateWithTelegram = async () => {

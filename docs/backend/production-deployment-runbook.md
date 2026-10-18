@@ -73,6 +73,71 @@ Frontend↔backend compatibility — **UNKNOWN**: frontend deployed SHA не р�
 
 **STOP:** production identity/target не подтверждены; migration history неожиданна; verifier или runtime gate не прошёл; или нужный schema/grants state невозможно проверить. Не исправлять drift через `migration repair`, ручное редактирование migration history, ad-hoc SQL или возврат broad grants.
 
+### Отдельный dependency/order plan: server-side tester admission
+
+Новая migration `20261018090000_server_side_tester_admission_session_identity.sql`
+аддитивно добавляет `public.resolve_bearer_session_with_identity(text)` и не
+меняет return contract существующей `resolve_bearer_session(text)`. Backend
+использует только новую capability для authenticated requests. Она возвращает
+`session_id`, `user_id` и Telegram numeric ID; прямые `SELECT` grants на
+`users`/`telegram_identities`, новые RLS policies и таблицы admission не нужны.
+
+На дату read-only inventory production ledger содержит 19 записей; перед этой
+migration в Git есть ещё четыре отсутствующие в production migration. Из-за
+известного drift нельзя применять «последнюю migration» отдельно или считать
+этот список доказательством совместимости. Оператор должен сначала повторно
+сверить exact production ledger и объекты, затем review/apply возможные pending
+migrations строго в repository order:
+
+1. `20260924090000_completed_onboarding_active_travel_intent_invariant.sql` —
+   обновляет onboarding/TravelIntent capability.
+2. `20260924100000_session_lifecycle_baseline.sql` — добавляет canonical
+   шестипараметрический login capability и сохраняет legacy overload для
+   overlap compatibility.
+3. `20260924110000_backend_field_domain_limits.sql` — проверяет legacy blank
+   values и завершится ошибкой, если найдёт их; не backfill-ить автоматически.
+4. `20261003090000_chat_participant_public_profile.sql` — добавляет capability
+   чтения профиля участника Chat.
+5. `20261018090000_server_side_tester_admission_session_identity.sql` — добавляет
+   versioned Bearer resolver после появления базовых identity/session objects.
+
+Это dependency order, а не разрешение на production DDL. Перед любым apply
+нужны отдельное explicit operator approval, успешный backup/preflight по
+[backup/restore runbook](backup-restore-runbook.md), review каждой pending
+migration и решение по возможным legacy data blockers. Не редактировать ledger,
+не пропускать migration и не переносить только пятую migration поверх drift.
+
+После отдельно разрешённого migration этапа выполнить approved
+`grant-production-app-runtime-privileges.sql`, затем
+`verify-production-app-runtime-privileges.sql` и
+`production-runtime-deployment-gate.py` через подтверждённый runtime identity.
+Новая функция должна иметь `SECURITY DEFINER`, фиксированный `search_path`, не
+иметь `PUBLIC EXECUTE`, быть executable для `app_runtime`; `anon`,
+`authenticated` и `service_role` не должны иметь effective EXECUTE. `app_runtime`
+не должен получать прямой доступ к `users` или `telegram_identities`. Grant
+verifier и gate должны пройти до backend deployment.
+
+Перед ручным backend deployment оператор отдельно настраивает в защищённой
+server environment Render `TELEGRAM_CORE_USER_IDS`,
+`TELEGRAM_TESTER_USER_IDS` и `TELEGRAM_TESTERS_PAUSED`; все три переменные
+должны быть заданы и валидируются при startup. Tester list может быть явно
+пустым, чтобы закрыть доступ всем внешним тестировщикам без блокировки core.
+Реальные IDs не помещать в Git,
+frontend, tickets или Codex материалы. Сначала оставить testers paused, затем
+deploy approved backend SHA, проверить core login и отказ tester/direct API,
+после чего оператор отдельным config change может открыть tester cohort.
+Удаление ID из списка или pause влияет только после процесса с новой
+конфигурацией; Auto-Deploy Off означает, что нельзя считать изменение
+мгновенным. Повторно проверить tester pause при сохранении core access,
+revoke уже выданной сессии и Profile/Discover/Chats/Trips flows.
+
+**STOP:** любой migration drift/legacy-data finding, неуспешные grants/verifier/
+runtime gate, отсутствующие или ошибочные server environment settings,
+неизвестная deployed revision, несовместимость с текущими backend/frontend или
+недоступный проверенный rollback candidate. Provider rollback не отменяет
+migrations. Никакая production migration, environment change или deployment
+этим кодовым изменением не выполнялись.
+
 ## 3. Оценить DB/API compatibility и выбрать порядок
 
 Для каждой migration и backend/API change определить, могут ли одновременно работать текущие и целевые backend instances на старой/новой schema, и может ли текущий frontend работать с целевым backend API (и наоборот на время переключения). Проверить SQL, migration comments, backend contracts и реальные call sites; слово «additive» само по себе не доказывает совместимость.

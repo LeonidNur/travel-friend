@@ -73,6 +73,11 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
                 TELEGRAM_LOGIN_POLICY,
                 str(verified.identity.telegram_user_id),
             )
+            admission_policy = backend_settings.admission_policy
+            if admission_policy is None or not admission_policy.is_allowed(
+                verified.identity.telegram_user_id
+            ):
+                raise HTTPException(403, "Access is not enabled")
             return login(backend_settings.database_url, verified.identity)
         except HTTPException:
             raise

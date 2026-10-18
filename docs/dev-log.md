@@ -1,5 +1,11 @@
 # Дневник разработки
 
+## 2026-10-18 — Server-side tester admission
+
+- Добавлен fail-closed admission policy с тремя server-only настройками: core Telegram IDs, tester Telegram IDs и tester pause. Проверка стоит до login bootstrap, а общая Bearer dependency перепроверяет Telegram ID каждой активной сессии, включая прямые API requests.
+- Сохранён существующий `resolve_bearer_session(text)`; additive SECURITY DEFINER capability возвращает только session/user UUID и Telegram numeric ID за один DB round trip. Обновлены local/prod grants, read-only verifiers и local restore inventory; прямые runtime `SELECT` grants на identity/users и RLS не расширялись.
+- Проверены локальные migration chain, auth/revoke/pause flows, runtime grants/RLS и regression tests. Production migrations, Render environment и deployment не выполнялись. Из-за четырёх unapplied migrations перед новым resolver подготовлен отдельный reviewed порядок; external testing остаётся STOP до approved rollout и других P0 gates.
+
 ## 2026-10-18 — FinOps и внешние тестовые guardrails
 
 - Составлена единая карта production, development и operations: Vercel, Render, Supabase, Telegram, GitHub Actions, Docker Desktop/local Supabase/PostgreSQL, Homebrew/CLI, backup chain, Google Drive, Apple Keychain/Passwords, age, Codex, logging и DNS. Отдельно разделены счета, тарифные лимиты, Mac disk/CPU ресурсы и операционные последствия отказа.

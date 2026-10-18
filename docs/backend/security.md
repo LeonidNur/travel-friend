@@ -67,6 +67,46 @@ Telegram `initData` по-прежнему проверяется только Fa
 
 Bearer session resolution — отдельная pre-auth bootstrap capability. FastAPI извлекает raw Bearer token, вычисляет его hash и передаёт только hash в `public.resolve_bearer_session(text)`. Эта owner-owned `SECURITY DEFINER` capability возвращает только `session_id` и `user_id` активной, неотозванной, неистёкшей сессии не удалённого пользователя; raw token, `token_hash` и business/profile data она не возвращает. Lookup остаётся в отдельном bootstrap connection: authenticated business transaction с `app.user_id` ещё не существует в этот момент.
 
+### Server-side tester admission
+
+Backend применяет deny-by-default admission после проверки подписанного Telegram
+`initData` и до вызова bootstrap capability, поэтому отклонённый пользователь не
+создаёт `users`, `telegram_identities` или bearer session. На каждом
+authenticated Bearer request общий `auth_dependency` повторно получает
+Telegram numeric ID через additive capability
+`public.resolve_bearer_session_with_identity(text)` и повторно применяет тот же
+policy. Поэтому удаление tester ID из server allowlist и tester pause блокируют
+также уже выданные токены и прямые запросы к Render. Вызов выполняется одним
+DB round trip; backend не читает `users` или `telegram_identities` напрямую.
+Resolver доступен только `app_runtime`: migration отзывает `PUBLIC` и
+`anon`/`authenticated`/`service_role`, а production verifier и deployment gate
+проверяют отсутствие effective EXECUTE у Supabase API roles.
+
+Policy хранится только в process environment backend:
+
+- `TELEGRAM_CORE_USER_IDS` — ровно три положительных уникальных numeric IDs;
+- `TELEGRAM_TESTER_USER_IDS` — от нуля до семи положительных уникальных IDs,
+  не пересекающихся с core; явно заданное пустое значение означает, что
+  временно или постоянно не допущен ни один tester;
+- `TELEGRAM_TESTERS_PAUSED` — строго `true` или `false`.
+
+Core допускается всегда; tester — только при `TELEGRAM_TESTERS_PAUSED=false`;
+остальные получают общий отказ `403 Access is not enabled`. Отсутствующая,
+некорректная, пересекающаяся или превышающая разрешённый размер конфигурация
+прерывает startup; явный пустой tester list допустим. Backend не выводит IDs в
+ответах и логах.
+Telegram IDs не хранятся в Git, frontend bundle, request logs или документации.
+
+Оператор управляет списками и pause только в защищённой server-side конфигурации
+Render и применяет изменения контролируемым ручным deploy/restart. Auto-Deploy
+остаётся Off. Изменение не мгновенное: прежняя политика действует до запуска
+процесса с новой конфигурацией; после применения новый backend проверяет каждый
+Bearer request. Перед включением внешнего доступа нужно пройти отдельный
+production migration/grants/deployment preflight из
+[deployment runbook](production-deployment-runbook.md). Эта реализация сама по
+себе не является разрешением на production migration, изменение environment
+или external testing.
+
 Для authenticated business request FastAPI после успешной Bearer authentication является единственным источником `app.user_id`: dependency открывает отдельный explicit outer transaction и выполняет параметризованный `set_config('app.user_id', <principal.user_id>, true)` до router/service SQL. Флаг `true` делает контекст transaction-local; при commit или rollback он больше не представляет identity запроса. Authenticated business UoW начинается только после authentication. Для условия текущего logout PostgreSQL также требует column-level `SELECT(id)` вместе с `UPDATE`; table-level `SELECT` и чтение `token_hash` отсутствуют, а Bearer resolution идёт только через capability. `profiles`, `travel_intents`, `user_activity_states` и `user_sessions` покрыты owner-scoped RLS. `users`, `telegram_identities`, `user_settings`, `profile_photos` и `chat_summaries` также имеют enabled RLS, но намеренно не имеют runtime policy или direct privilege: первые три доступны только существующим owner-owned `SECURITY DEFINER` bootstrap/resolver/projection paths, последние две не используются текущим MVP. Persisted onboarding changes остаются только в owner-owned `SECURITY DEFINER` paths `bootstrap_telegram_login()` и `complete_current_onboarding()`. Discover cross-user чтение проходит через отдельную owner-owned SECURITY DEFINER capability с server-derived context.
 
 `public.current_authenticated_user_id()` — минимальный fail-closed accessor для RLS policies и DB tests: он возвращает `NULL` при отсутствующем, пустом или некорректном UUID setting. `user_activity_states` допускает runtime только SELECT собственных `user_id` и `onboarding_status`; INSERT/UPDATE/DELETE policies отсутствуют. `user_sessions` также защищена RLS: authenticated runtime может читать только `id` и отозвать через `revoked_at` только собственную session row; создание остаётся в pre-auth `SECURITY DEFINER` bootstrap path, resolution — в отдельной pre-auth capability. Принятое MVP-ограничение сохраняется: transaction-local context не предназначен для per-user containment при компрометации credential `app_runtime` с прямым произвольным SQL доступом.

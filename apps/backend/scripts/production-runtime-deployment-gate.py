@@ -41,6 +41,7 @@ APPLICATION_TABLES = (
 REQUIRED_FUNCTIONS = (
     "public.current_authenticated_user_id()",
     "public.resolve_bearer_session(text)",
+    "public.resolve_bearer_session_with_identity(text)",
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamp with time zone,timestamp with time zone)",
     "public.discover_eligible_travel_intents()",
@@ -171,6 +172,7 @@ def check_required_functions(connection: psycopg.Connection) -> None:
 def check_capability_metadata(connection: psycopg.Connection) -> None:
     """Require hardened definer functions and no accidental PUBLIC execution."""
     expected = {
+        "public.resolve_bearer_session_with_identity(text)": True,
         "public.is_current_active_chat_participant(uuid)": True,
         "public.create_current_group_chat(uuid[])": True,
         "public.send_current_chat_message(uuid,text)": True,
@@ -191,7 +193,19 @@ def check_capability_metadata(connection: psycopg.Connection) -> None:
             FROM aclexplode(COALESCE(procedure.proacl, acldefault('f', procedure.proowner))) AS acl
             WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
           ) AS public_execute,
-          COALESCE(has_function_privilege(current_user, procedure.oid, 'EXECUTE'), false) AS runtime_execute
+          COALESCE(has_function_privilege(current_user, procedure.oid, 'EXECUTE'), false) AS runtime_execute,
+          CASE WHEN signature = 'public.resolve_bearer_session_with_identity(text)' THEN (
+            SELECT count(*) = 3
+            FROM pg_roles
+            WHERE rolname IN ('anon', 'authenticated', 'service_role')
+          ) ELSE true END AS api_roles_present,
+          CASE WHEN signature = 'public.resolve_bearer_session_with_identity(text)' THEN ARRAY(
+            SELECT api_role.role_name
+            FROM unnest(ARRAY['anon', 'authenticated', 'service_role']::text[]) AS api_role(role_name)
+            WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = api_role.role_name)
+              AND has_function_privilege(api_role.role_name, procedure.oid, 'EXECUTE')
+            ORDER BY api_role.role_name
+          ) ELSE ARRAY[]::text[] END AS api_execute_roles
         FROM unnest(%s::text[]) AS expected(signature)
         LEFT JOIN pg_proc AS procedure ON procedure.oid = to_regprocedure(expected.signature)
         ORDER BY signature
@@ -201,12 +215,15 @@ def check_capability_metadata(connection: psycopg.Connection) -> None:
     require(len(rows) == len(expected), "capability catalog lookup was incomplete")
     invalid = [
         signature
-        for signature, exists, security_definer, fixed_search_path, public_execute, runtime_execute in rows
+        for signature, exists, security_definer, fixed_search_path, public_execute, runtime_execute,
+            api_roles_present, api_execute_roles in rows
         if not exists
         or not security_definer
         or not fixed_search_path
         or public_execute
         or runtime_execute is not expected[signature]
+        or not api_roles_present
+        or api_execute_roles
     ]
     require(not invalid, f"capability security metadata is invalid: {', '.join(invalid)}")
 
