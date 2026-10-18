@@ -10,6 +10,46 @@ Auto-Deploy остаётся **Off**. До rollout оператор провер
 
 Этот документ задаёт порядок для нового изменения и не является повтором [завершённого security cutover](production-security-migrations-runbook.md). Там зафиксированы exact исторические SHA, migration suffix, grants, preconditions и failure boundary; их нельзя переносить на новое изменение или повторять как универсальные команды. Источники истины: текущие migrations в `supabase/migrations/`, grants/verifier/gate в `apps/backend/scripts/`, backend HTTP contracts и выбранный target commit.
 
+## 0. Release provenance record
+
+Для каждого выпуска оператор сохраняет короткую запись до и после rollout. Запись должна связывать **intended revision** с **фактически deployed revision**; текущая ветка, локальный `HEAD`, имя deployment и время сами по себе не заменяют Git SHA.
+
+До rollout заполнить intended Vercel/Render SHA, подтверждённые project/service/environment, ожидаемый production migration ledger и проверенный backend↔DB/frontend↔backend contract. После каждого provider deployment открыть детали именно выбранного production deployment и записать его фактический Git SHA (или отметить `UNKNOWN`, если provider его не показывает), deployment ID/URL и timestamp в UTC. Для DB записать Supabase project identity, observed PostgreSQL version и migration version/name inventory с временем наблюдения. Не включать secrets, DSN, пользовательские записи или PII.
+
+Если provider не раскрывает SHA, release provenance для этого компонента остаётся `UNKNOWN`: остановить rollout или получить подтверждение из другого независимого deployment record, привязанного к тому же deployment ID. Не выводить SHA из даты, alias, текущего branch HEAD или соседнего компонента. Проверить, что после rollout production alias указывает на ожидаемый deployment. Сохранить запись в принятом operator release record; отдельное хранилище для MVP не вводится.
+
+Минимальные поля записи:
+
+| Поле | До rollout | После rollout |
+|---|---|---|
+| Target | provider, project/service, environment, подтверждённый production URL | фактически выбранный provider target и production alias |
+| Frontend | intended Git SHA и contract expectations | deployed SHA либо `UNKNOWN`, deployment ID, timestamp |
+| Backend | intended Git SHA и contract expectations | deployed SHA либо `UNKNOWN`, deployment ID, timestamp |
+| Database | ожидаемые migration versions, schema/grants gates | observed project identity, PostgreSQL version, migration inventory и timestamp |
+| Validation | CI/review, compatibility evidence, known-good candidate | HTTP smoke, ручные основные flows, verifier/gate results, решение и остаточные риски |
+
+Release считается provenance-complete только когда intended и actual SHA каждого изменённого приложения совпадают с approved SHA, target подтверждён, а schema/API совместимость проверена. `UNKNOWN` нельзя трактовать как совпадение. Запись о прошлом успешном deployment — кандидат на known-good только после проверки его SHA, совместимости с **текущей** DB/API и доступности у провайдера; rollback не возвращает schema, grants, secrets или provider settings.
+
+### Read-only production snapshot — 2026-10-18
+
+Ниже зафиксированы наблюдения аудита на указанную дату. Это снимок, а не гарантия последующего состояния и не разрешение на rollout.
+
+| Компонент | Подтверждённое наблюдение | Уверенность / ограничение |
+|---|---|---|
+| Vercel frontend | Project `travel-friend-mini-app`, production deployment `dpl_Di21ceCkxg4poxD2Udyfeanar4En`, READY, created `2026-09-02T17:26:08Z`; alias `travel-friend-mini-app.vercel.app`. | Environment и deployment identity — VERIFIED. Deployment record показывает source `cli`, не содержит Git SHA или Git source; фактический frontend SHA — **UNKNOWN**. |
+| Render backend | Service `travel-friend-api`, branch `develop`, manual deployment, Auto-Deploy Off. Live deployment `dep-dapvgnlg1s2s73dicitg`, SHA `b25e08dce158b7fe7ea6d17b40d96c3e893330fa`, завершён `2026-09-23T16:04:41Z`. | Service settings и deployed SHA — VERIFIED по provider history. |
+| Supabase | Project `travel-friend-dev` (`tlgprfsecdasloqnuyjo`), `ACTIVE_HEALTHY`; PostgreSQL `17.6.1.165`. Production ledger содержит 19 migrations. | Project identity/status/version/ledger — VERIFIED в read-only provider inventory на 2026-10-18. |
+
+На commit Render `b25e08d…` находится 19 migration-файлов; эти 19 соответствуют production ledger. В текущем обследованном repository inventory есть ещё четыре более поздние migrations, отсутствующие в production ledger: `20260924090000_completed_onboarding_active_travel_intent_invariant.sql`, `20260924100000_session_lifecycle_baseline.sql`, `20260924110000_backend_field_domain_limits.sql`, `20261003090000_chat_participant_public_profile.sql`. Это наблюдаемое migration drift, а не подтверждение, что все остальные schema objects совпадают.
+
+Read-only function/permission comparison подтверждает для Render SHA `b25e08d…` наличие и `app_runtime` EXECUTE для его 12 используемых public functions, включая восьмиаргументную `bootstrap_telegram_login` и `chat_participant_profile_projection(uuid)`. Следовательно, проверенная backend↔DB compatibility для этого SHA ограничена его наблюдаемым migration/function/runtime-permission surface; полный schema drift audit не завершён. На текущем repository source используются шестипараметрическая версия `bootstrap_telegram_login` и `chat_participant_public_profile(uuid,uuid)`, которых в production на дату проверки нет. Без применения соответствующих migrations текущий source **не совместим с production**: Telegram login и просмотр профиля участника чата затронуты. Перед выпуском такого source нужны отдельная migration review/preflight, grants verification и явное разрешение на production migration; migrations не применялись в этом аудите.
+
+Frontend↔backend compatibility — **UNKNOWN**: frontend deployed SHA не раскрыт provider record, фактическое `BACKEND_API_ORIGIN` не проверялось/не раскрывалось, а source-level frontend tests не подтверждают deployed pair. Текущий read-only HTTP smoke Render URL завершился network timeout на `GET /health`; `GET /ready` не запускался, поскольку smoke останавливается на первой ошибке. Поэтому свежие live health/readiness и основные production flows этим аудитом не подтверждены.
+
+Известный backend deployment SHA `b25e08d…` — reference для анализа совместимости, но не автоматическое разрешение rollback: перед выбором known-good нужно заново удостовериться, что deployment доступен в Render history и подходит текущим DB/API state. Более ранний SHA из истории предшествует security cutover и не считается безопасным rollback candidate без отдельного доказательства.
+
+**Текущий итог №16: PARTIALLY VERIFIED / OPEN.** Для закрытия остаются: получение frontend deployed SHA, подтверждение фактического backend origin без раскрытия credentials, повторяемая полная сверка production schema drift, live health/readiness и проверка основных flows после устранения timeout, а также явное решение о порядке миграций и grants для текущего repository source. Не объявлять полную frontend/backend/DB совместимость или полную production provenance.
+
 ## 1. Preflight и Git SHA
 
 1. Получить отдельное подтверждение оператора на конкретный production rollout. Зафиксировать, какие backend/frontend изменения и DB изменения входят в него.
