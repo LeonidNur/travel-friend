@@ -84,6 +84,29 @@ CURRENT_APP_ADDITIONAL_FUNCTIONS = (
     "public.resolve_bearer_session_with_identity(text)",
 )
 CURRENT_APP_EXPECTED_FUNCTIONS = (*ARCHIVE_EXPECTED_FUNCTIONS, *CURRENT_APP_ADDITIONAL_FUNCTIONS)
+SUPABASE_API_ROLE_STUBS = ("anon", "authenticated", "service_role")
+NEW_BACKEND_FUNCTIONS = (
+    "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
+    "public.chat_participant_public_profile(uuid,uuid)",
+    "public.resolve_bearer_session_with_identity(text)",
+)
+SUPABASE_API_ROLE_STUB_SETUP_SQL = """\
+DO $do$
+DECLARE
+  api_role text;
+BEGIN
+  FOREACH api_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = api_role) THEN
+      RAISE EXCEPTION 'known Supabase API role already exists in the disposable cluster';
+    END IF;
+    EXECUTE pg_catalog.format(
+      'CREATE ROLE %I NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION',
+      api_role
+    );
+  END LOOP;
+END
+$do$;
+"""
 PUBLIC_FUNCTION_REVOKE_PATTERN = re.compile(
     r"(?is)\brevoke\s+(?:all|execute)\s+on\s+function\s+[^;]+?\s+from\s+public\s*;"
 )
@@ -351,6 +374,56 @@ def _row_count_sql() -> str:
     return f"SELECT COALESCE(sum(row_count), 0)::bigint FROM ({table_counts}) counts"
 
 
+def _table_row_counts_sql() -> str:
+    table_counts = " UNION ALL ".join(
+        f"SELECT '{name}'::text AS table_name, count(*)::bigint AS row_count FROM public.\"{name}\""
+        for name in sorted(EXPECTED_PUBLIC_TABLES)
+    )
+    return f"SELECT jsonb_object_agg(table_name, row_count ORDER BY table_name) FROM ({table_counts}) counts"
+
+
+def _api_role_function_denials_sql() -> str:
+    role_values = ", ".join(f"('{role}')" for role in SUPABASE_API_ROLE_STUBS)
+    function_values = ", ".join(f"('{signature}')" for signature in NEW_BACKEND_FUNCTIONS)
+    expected_pairs = len(SUPABASE_API_ROLE_STUBS) * len(NEW_BACKEND_FUNCTIONS)
+    return f"""\
+WITH api_roles(role_name) AS (VALUES {role_values}),
+capabilities(signature) AS (VALUES {function_values}),
+resolved AS (
+  SELECT roles.oid AS role_oid, to_regprocedure(capabilities.signature) AS function_oid
+  FROM api_roles
+  JOIN pg_catalog.pg_roles AS roles ON roles.rolname = api_roles.role_name
+  CROSS JOIN capabilities
+)
+SELECT count(*) = {expected_pairs}
+  AND COALESCE(bool_and(NOT has_function_privilege(role_oid, function_oid, 'EXECUTE')), false)
+FROM resolved
+WHERE function_oid IS NOT NULL
+""".strip()
+
+
+def validate_api_role_function_denials(result: str) -> None:
+    if result != "t":
+        raise RestoreSmokeError("GRANTS", "a Supabase API role can execute a newly added backend function.")
+
+
+def validate_migration_row_counts(before: str, after: str) -> None:
+    try:
+        before_counts = json.loads(before)
+        after_counts = json.loads(after)
+    except (TypeError, json.JSONDecodeError):
+        raise RestoreSmokeError("DATA", "application table row-count inventory could not be parsed safely.") from None
+    for counts in (before_counts, after_counts):
+        if (
+            not isinstance(counts, dict)
+            or set(counts) != EXPECTED_PUBLIC_TABLES
+            or any(type(value) is not int or value < 0 for value in counts.values())
+        ):
+            raise RestoreSmokeError("DATA", "application table row-count inventory was incomplete or invalid.")
+    if before_counts != after_counts:
+        raise RestoreSmokeError("DATA", "repository migration replay changed application table row counts.")
+
+
 def normalize_schema_dump(dump: str) -> str:
     lines = dump.splitlines()
     normalized = [
@@ -460,6 +533,7 @@ VERIFIER_SECTIONS = {
     ("table_name", "column_name", "privilege_type", "column_exists", "actual_granted", "is_exact"): "column_rights",
     ("sequence_name", "privilege_type", "unexpected_effective_privilege", "is_absent"): "sequences",
     ("function_signature", "execute_granted", "is_expected"): "capabilities",
+    ("role_name", "is_present", "unexpected_execute", "is_exact"): "api_roles",
     ("unexpected_function_signature", "unexpected_execute"): "unexpected_functions",
     ("table_name", "owner_role", "is_not_owned_by_app_runtime"): "owners",
     ("table_name", "rls_enabled", "is_not_owned_by_app_runtime", "actual_policy_count", "expected_policy_count", "is_rls_enabled", "is_not_owned", "is_expected_policy_count"): "policies",
@@ -497,8 +571,12 @@ def validate_grants_verifier_csv(output: str) -> None:
         raise RestoreSmokeError("GRANTS", "the runtime grants verifier did not cover all application tables.")
     if len(sections["owners"]) != len(EXPECTED_PUBLIC_TABLES) or len(sections["policies"]) != len(EXPECTED_PUBLIC_TABLES):
         raise RestoreSmokeError("GRANTS", "the runtime grants verifier did not cover all application tables.")
-    if len(sections["capabilities"]) != 18:
+    if len(sections["capabilities"]) != 19:
         raise RestoreSmokeError("GRANTS", "the runtime capability grant inventory was incomplete.")
+    if {row.get("role_name") for row in sections["api_roles"]} != set(SUPABASE_API_ROLE_STUBS):
+        raise RestoreSmokeError("GRANTS", "the Supabase API role inventory was incomplete.")
+    if any(row.get("unexpected_execute") != "f" for row in sections["api_roles"]):
+        raise RestoreSmokeError("GRANTS", "a Supabase API role can execute the backend-only resolver.")
 
     for section, rows in sections.items():
         if section == "unexpected_functions":
@@ -532,6 +610,17 @@ def _container_create_command(container_name: str, run_id: str) -> list[str]:
         "--label", f"{CONTAINER_LABEL_KEY}={run_id}",
         "--env", "POSTGRES_HOST_AUTH_METHOD=trust", POSTGRES_IMAGE,
     ]
+
+
+def _prepare_supabase_api_role_stubs(container_name: str) -> None:
+    """Model only the known Supabase API role names in this disposable cluster."""
+    _psql(
+        container_name,
+        "postgres",
+        SUPABASE_API_ROLE_STUB_SETUP_SQL,
+        stage="GRANTS",
+        reason="known Supabase API role stubs could not be prepared in the disposable cluster.",
+    )
 
 
 def _cleanup_task_container(container_name: str, run_id: str) -> None:
@@ -786,6 +875,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
         )
         if role_exists != "f":
             raise RestoreSmokeError("GRANTS", "app_runtime already exists in the new container; refusing implicit role replacement.")
+        _prepare_supabase_api_role_stubs(container_name)
         _psql(
             container_name,
             "postgres",
@@ -867,9 +957,29 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
             f"Structure: PASS (schema-only equality; constraints {summary['constraint_count']}, indexes {summary['index_count']}, triggers {len(summary['trigger_names'])}, functions {summary['function_count']}).",
             f"RLS/policies: PASS ({summary['rls_table_count']}/{len(EXPECTED_PUBLIC_TABLES)} tables, {summary['policy_count']} policies).",
             "Archive-era expected objects: PASS; manifest records 19 migrations.",
+            "Supabase API roles: PASS (known NOLOGIN role names modeled locally; no unknown roles created).",
         ]
 
+        pre_migration_row_counts = _psql(
+            container_name,
+            database,
+            _table_row_counts_sql(),
+            stage="DATA",
+            reason="application table row counts could not be checked before migration replay.",
+        )
         repository_migrations = _replay_repository_migrations(container_name, database, manifest)
+        post_migration_row_counts = _psql(
+            container_name,
+            database,
+            _table_row_counts_sql(),
+            stage="DATA",
+            reason="application table row counts could not be checked after migration replay.",
+        )
+        validate_migration_row_counts(
+            pre_migration_row_counts,
+            post_migration_row_counts,
+        )
+        partial_summary.append("Application table row counts: PASS (unchanged across local migration replay; no source comparison).")
         current_summary = json.loads(_psql(
             container_name,
             database,
@@ -918,10 +1028,18 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
             validate_grants_verifier_csv(verifier.stdout.decode("utf-8", errors="strict"))
         except UnicodeError:
             raise RestoreSmokeError("GRANTS", "the runtime grants verifier output could not be validated safely.") from None
+        validate_api_role_function_denials(_psql(
+            container_name,
+            database,
+            _api_role_function_denials_sql(),
+            stage="GRANTS",
+            reason="Supabase API role function permissions could not be checked safely.",
+        ))
 
         success_summary = [
             *partial_summary,
             "app_runtime grants: PASS (existing grants script and read-only verifier).",
+            "API role capabilities: PASS (no effective EXECUTE on three newly added functions in the local target; production default ACL remains unknown).",
             "Production Supabase ACL restoration: NOT VERIFIED; --no-acl excluded source ACLs.",
         ]
     except RestoreSmokeError as error:

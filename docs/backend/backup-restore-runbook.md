@@ -13,7 +13,7 @@ ACL; production restore запрещён и не выполнялся.
   scheduled backups недоступны, Point-in-Time Recovery недоступен и требует
   платного дополнения к Pro.
 - Оператор подтвердил production archive от 2026-10-18 и проверенную зашифрованную
-  offsite copy. Schema/data архива локально восстановлены. После replay четырёх
+  offsite copy. Schema/data архива локально восстановлены. После replay пяти
   repository migrations и их явных `REVOKE ... FROM PUBLIC` текущие application
   grants/verifier прошли на disposable target. Это не восстанавливает production
   ACL и не подтверждает production recovery.
@@ -622,7 +622,10 @@ Runner проверяет SHA-256 по manifest, custom/public scope, PostgreSQL
 disposable DB repository migrations, которых нет в manifest. После этого
 повторяет только `REVOKE ... FROM PUBLIC` statements, явно записанные в migration
 SQL, запускает structural/RLS inventory, текущий grant script и read-only
-verifier. Новые роли, функции и migration files не создаются и не изменяются.
+verifier. Для проверки grant script runner моделирует только подтверждённые
+Supabase API role names `anon`, `authenticated` и `service_role` как локальные
+NOLOGIN роли с ограниченными attributes. Неизвестные ACL principals не
+создаются. Новые application роли, функции и migration files не создаются и не изменяются.
 `supabase_migrations` ledger не восстанавливается и не изменяется.
 Печатаются только агрегаты. Контейнер удаляется в cleanup; исходные archive и
 manifest открываются только для чтения.
@@ -634,9 +637,9 @@ server/client major равны 17; `pg_restore --no-owner --no-acl --exit-on-err
 18 functions, RLS на 17/17 таблицах, 17 policies и 133 aggregate rows в restored
 database. Source counts не сравнивались.
 Production archive manifest содержит 19 migration records; все версии и имена
-сопоставились с repository migration filenames. В checkout есть четыре более
-поздние migration files, которые runner применил только в disposable database;
-после них inventory содержит 20 functions. В архиве нет определения
+сопоставились с repository migration filenames. В checkout есть пять более
+поздних migration files, которые runner применил только в disposable database;
+после них inventory содержит 21 function. В архиве нет определения
 `public.bootstrap_telegram_login(bigint,text,text,text,text,text)` и
 `public.chat_participant_public_profile(uuid,uuid)`, которые добавляются
 соответственно `20260924100000_session_lifecycle_baseline.sql` и
@@ -654,12 +657,24 @@ Production archive manifest содержит 19 migration records; все вер
 
 Первый прогон grants остановился на двух функциях, отсутствовавших в архиве.
 После проверки их migration и application происхождения runner в новом
-контейнере применил четыре уже имеющиеся repository migrations, затем 25
+контейнере применил пять уже имеющихся repository migrations, затем 26
 migration-declared `PUBLIC EXECUTE` revokes, production app_runtime grant script
 и read-only verifier. Application grants прошли для восстановленной и
 forward-migrated disposable schema. Это отдельная локальная проверка прав,
 заданных Git migrations и grant script; она не импортирует и не подтверждает
 source ACL из архива.
+
+Повторный результат local readiness rehearsal 2026-10-18: restore остался
+успешным после добавления локальных NOLOGIN stubs для трёх известных Supabase
+API role names; 5 migrations применены в repository order; 26 PUBLIC revokes,
+`app_runtime` grants и verifier прошли. Восстановленная база содержала 133
+агрегированные строки до replay; по каждой из 17 application tables runner
+сравнил агрегированный row count до и после migration replay — значения не
+изменились. Это проверка только локальной restored DB; source counts с ней не
+сравнивались, PII не читалась. Effective EXECUTE для трёх новых backend-only
+функций отсутствовал у локальных API role stubs; production default ACL не
+подтверждён. Production ACL не переносились и не проверялись;
+этот прогон подтверждает только application grants из текущего Git contract.
 
 Локальный schema/data restore, current-schema structural/RLS checks и
 `app_runtime` grants/verifier подтверждены. Production restore в Supabase не
