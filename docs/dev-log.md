@@ -1,5 +1,26 @@
 # Дневник разработки
 
+## 2026-10-18 — №21 Backup storage recovery проверен на synthetic данных
+
+- Зафиксирован тестовый путь: age v1.3.2 encrypt/decrypt локально, ciphertext
+  upload/download через Google Drive с побайтным сравнением; скачанная копия
+  расшифрована. Recovery copy age identity находится в Apple «Пароли», sync с
+  iPhone и расшифровка synthetic archive восстановленной identity подтверждены.
+- Восстановительный временный файл удалён. Приватный ключ запрещено хранить в
+  GitHub, Google Drive или передаваемых Codex материалах.
+- Runbook и backlog уточнены. Использовались только synthetic data; production
+  backup не создавался и production recovery не проверялся.
+
+## 2026-10-18 — №21 Backup/restore, production procedure план
+
+- Runbook обновлён операторским планом Supabase CLI для отдельных `roles.sql`,
+  `schema.sql` и `data.sql`, включая preflight, credential/storage safeguards,
+  coverage checks, STOP criteria и limitations managed schemas/RLS/Storage.
+- Это только документация: production connection/dump/restore не выполнялись.
+  Первый backup требует явного разрешения и нерешённых операторских решений по
+  identity/coverage, consistency window, внешнему шифрованному хранению и
+  disposable restore validation. №21 не закрыта.
+
 ## 2026-10-18 — №21 Backup/restore, локальный restore подтверждён
 
 - Фактический Docker smoke прошёл с exit code 0: `pg_dump` создал archive,
