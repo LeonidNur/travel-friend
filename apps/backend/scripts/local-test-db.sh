@@ -12,6 +12,7 @@ POSTGRES_PASSWORD="travel_friend_test_local_only"
 APP_RUNTIME_USER="app_runtime"
 APP_RUNTIME_PASSWORD="app_runtime_local_only"
 HOST_PORT="55432"
+CONTAINER_INSPECT_TEMPLATE='{{printf "NAME:%s\n" .Name}}{{printf "LABEL:%s\n" (index .Config.Labels "com.travel-friend.disposable-test-db")}}{{range .Config.Env}}{{printf "ENV:%s\n" .}}{{end}}{{range $port, $bindings := .HostConfig.PortBindings}}{{range $bindings}}{{printf "BIND:%s|%s|%s\n" $port .HostIp .HostPort}}{{end}}{{end}}'
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 BACKEND_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
@@ -33,8 +34,30 @@ container_exists() {
 }
 
 require_own_container() {
-  if [ "$(docker container inspect --format '{{ index .Config.Labels "com.travel-friend.disposable-test-db" }}' "$CONTAINER_NAME")" != "true" ]; then
-    echo "Refusing to modify $CONTAINER_NAME: it is not this disposable test container." >&2
+  if ! inspect_output=$(docker container inspect --format "$CONTAINER_INSPECT_TEMPLATE" "$CONTAINER_NAME" 2>/dev/null); then
+    echo "Refusing to modify $CONTAINER_NAME: unable to inspect container configuration." >&2
+    exit 1
+  fi
+
+  expected_name="NAME:/$CONTAINER_NAME"
+  expected_label="LABEL:true"
+  expected_database="ENV:POSTGRES_DB=$POSTGRES_DB"
+  expected_user="ENV:POSTGRES_USER=$POSTGRES_USER"
+  expected_binding="BIND:5432/tcp|127.0.0.1|$HOST_PORT"
+  database_count=$(printf '%s\n' "$inspect_output" | grep -c '^ENV:POSTGRES_DB=' || true)
+  user_count=$(printf '%s\n' "$inspect_output" | grep -c '^ENV:POSTGRES_USER=' || true)
+  binding_count=$(printf '%s\n' "$inspect_output" | grep -c '^BIND:' || true)
+  name_matches=$(printf '%s\n' "$inspect_output" | grep -Fxc "$expected_name" || true)
+  label_matches=$(printf '%s\n' "$inspect_output" | grep -Fxc "$expected_label" || true)
+  database_matches=$(printf '%s\n' "$inspect_output" | grep -Fxc "$expected_database" || true)
+  user_matches=$(printf '%s\n' "$inspect_output" | grep -Fxc "$expected_user" || true)
+  binding_matches=$(printf '%s\n' "$inspect_output" | grep -Fxc "$expected_binding" || true)
+
+  if [ "$name_matches" -ne 1 ] || [ "$label_matches" -ne 1 ] \
+    || [ "$database_count" -ne 1 ] || [ "$database_matches" -ne 1 ] \
+    || [ "$user_count" -ne 1 ] || [ "$user_matches" -ne 1 ] \
+    || [ "$binding_count" -ne 1 ] || [ "$binding_matches" -ne 1 ]; then
+    echo "Refusing to modify $CONTAINER_NAME: container does not match the disposable test configuration." >&2
     exit 1
   fi
 }
@@ -55,9 +78,7 @@ wait_for_database() {
 }
 
 start() {
-  if container_exists; then
-    require_own_container
-  else
+  if ! container_exists; then
     docker run --detach --rm \
       --name "$CONTAINER_NAME" \
       --label "$CONTAINER_LABEL" \
@@ -67,11 +88,13 @@ start() {
       --env "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
       "$POSTGRES_IMAGE" >/dev/null
   fi
+  require_own_container
   wait_for_database
 }
 
 reset() {
   start
+  require_own_container
   docker exec -i "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
