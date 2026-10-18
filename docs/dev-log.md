@@ -1,5 +1,17 @@
 # Дневник разработки
 
+## 2026-10-18 — №19 Local test DB hygiene
+
+### Что сделали
+
+- Усилили `local-test-db.sh`: перед reset и stop проверяются container name, disposable label, ожидаемые database/user settings и loopback port binding; при несовпадении destructive команды не выполняются.
+- Сохранили команды lifecycle и локальные DSN для `test`; CI, migrations и runtime-role SQL не менялись. №19 отмечен implemented в backlog.
+
+### Что проверили
+
+- Regression tests запускают script с Docker CLI stub для ожидаемого контейнера и несовпадений name, label, database/user и port binding.
+- Реальный Docker/PostgreSQL и destructive tests против БД не использовались.
+
 ## 2026-10-18 — №18 CI cleanup disposable PostgreSQL
 
 ### Что сделали
