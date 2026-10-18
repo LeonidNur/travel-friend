@@ -1,21 +1,22 @@
 # Backup / restore — audit, local validation and operator plan
 
-**Статус: LOCAL RESTORE VERIFIED (2026-10-18). Production backup/restore
-остаётся AUDIT/PLAN.** В локальном Docker smoke `pg_dump` создал custom archive,
-`pg_restore` восстановил его в отдельную disposable DB, сравнение public schema
-и проверка synthetic control data прошли, cleanup завершился успешно; exit code
-был 0. Оператор подтвердил, что восстановимого production backup нет.
-Production-процедура ниже не запускалась и не является разрешением на production
-DB operation.
+**Статус: LOCAL ARCHIVE RESTORE + CURRENT APP_RUNTIME GRANTS VERIFIED;
+PRODUCTION ACL NOT VERIFIED (2026-10-18).** Archive checksum, schema/data,
+archive-era structure/RLS, replay недостающих repository migrations,
+migration-declared `PUBLIC EXECUTE` revokes, app_runtime grants и read-only
+verifier прошли в новом disposable PostgreSQL 17.11. `--no-acl` исключил source
+ACL; production restore запрещён и не выполнялся.
 
 ## Подтверждённые факты и текущие границы
 
 - Оператор проверил Supabase Dashboard 18.10.2026: проект на Free Plan,
   scheduled backups недоступны, Point-in-Time Recovery недоступен и требует
   платного дополнения к Pro.
-- Оператор подтвердил, что восстановимого backup сейчас нет. Для MVP выбран
-  ручной logical backup с внешним хранением и проверкой restore на отдельной
-  disposable БД. Production-подход не реализован и не проверен.
+- Оператор подтвердил production archive от 2026-10-18 и проверенную зашифрованную
+  offsite copy. Schema/data архива локально восстановлены. После replay четырёх
+  repository migrations и их явных `REVOKE ... FROM PUBLIC` текущие application
+  grants/verifier прошли на disposable target. Это не восстанавливает production
+  ACL и не подтверждает production recovery.
 - Migrations в `supabase/migrations/` позволяют заново создать версионируемые объекты
   схемы — таблицы, constraints, indexes, functions, triggers и RLS policies.
   Найденные в них прикладные `INSERT`/`UPDATE` находятся в телах функций и
@@ -32,8 +33,9 @@ DB operation.
   synthetic контрольными данными.
   Production `app_runtime` provisioning/grants scripts, read-only verifier и
   runtime deployment gate решают задачи ролей и security checks, а не сохраняют
-  данные. CI запускает local test workflow и cleanup; production backup/restore
-  tooling в репозитории не найдено.
+  данные. CI запускает local test workflow и cleanup. Добавлен локальный
+  production archive restore smoke; schema/data, структурные проверки и
+  текущие application grants/verifier прошли после локального replay миграций.
 - Supabase CLI export был рассмотрен, но не выбран из-за неподтверждённой
   передачи `sslmode=require` в `pg_dump`. Текущий аудит рассматривает прямые
   PostgreSQL 17 tools и только `public`; это также не является образом всего
@@ -100,12 +102,12 @@ provider state. Эти конфигурационные secrets не должн�
   создают backup и не выполняют restore.
 - Production deployment runbook упоминает №21 как recovery prerequisite, но
   backup/restore команды и storage/retention procedure там не определены.
-- Добавлен macOS manual production backup runner; он не запускался против
-  production. Restore automation, CI backup steps и существующий recoverable
-  production artifact отсутствуют. Локальный smoke создаёт только временный
-  synthetic backup.
+- На момент первоначального audit production archive и проверенной offsite copy
+  ещё не было. Оператор позднее подтвердил их создание; результат локального
+  restore указан ниже. CI backup steps и автоматизированный recovery workflow
+  не добавлялись.
 
-## Проверки, которых пока нет
+## Границы первоначального audit и текущие пробелы
 
 - Не получены или не сверены полнота `pg_dump` для всех application rows,
   identity read coverage и поведение RLS на подтверждённом production target.
@@ -115,14 +117,16 @@ provider state. Эти конфигурационные secrets не должн�
   timestamped counts/ledger observations. Общий exported snapshot для этих
   observations не требуется для MVP; без него нельзя делать точное сравнение
   source/restore counts.
-- Локальный smoke подтвердил restore только в disposable PostgreSQL текущего
-  запуска; он не проверяет production backup completeness, внешнее хранение,
-  ownership/privileges, application data или provider state.
+- Synthetic local smoke подтвердил restore тестового архива. Отдельный local
+  smoke для production archive подтвердил checksum, target isolation,
+  schema/data restore и агрегаты структуры; backup completeness, source ACL и
+  provider state остаются непроверенными.
 - Нет инвентаря всех object owners/ACL и проверенного способа воспроизвести их
   вместе с ролью `app_runtime` без production credentials.
-- Нет production restore verifier, подтверждённой полноты backup данных или
-  измерения RPO/RTO. Supabase-managed schemas, Storage objects и прочее
-  provider-level state не инвентаризированы для восстановления.
+- Production archive verifier прошёл schema/data, structural, RLS/policy и
+  app_runtime grants checks после локального replay migrations. Source ACL,
+  полнота backup данных и RPO/RTO не подтверждены. Supabase-managed schemas,
+  Storage objects и прочее provider-level state не восстанавливаются этим smoke.
 
 ## Локальная проверка `pg_dump` / `pg_restore`
 
@@ -513,15 +517,16 @@ PostgreSQL 17.x. Это не доказывает production restore; для м�
 валидации нужен disposable server той же minor version 17.6. Перед export
 проверять major version 17 у `pg_dump`/`pg_restore`, фиксированный host/database и
 `sslmode=require`; пароль передавать через `PGPASSWORD` environment (не URI в
-argv, временный plaintext или shell history). Ни один из этих production шагов
-в этом аудите не запускался.
+argv, временный plaintext или shell history). Local restore smoke не подключался
+к production и не повторял эти проверки.
 
-Перед первым production export остаются непроверенными: повторная актуальность
-operator-confirmed ACL inventory, large-object inventory, прямые catalog dependency observations, counts/ledger observations с timestamps,
-точная 19-row ledger-to-Git reconciliation, права/совместимость restore identity и real
-restore на disposable PG17.6. Подтверждённый extension inventory необходимо
-повторно сверить с production: его состав или версии могли измениться. Не считать выбранный scope завершённым backup до
-успешного реального restore и внешней encrypted copy.
+На момент первоначального audit оставались непроверенными: повторная
+актуальность ACL inventory, large-object inventory, catalog dependency
+observations, timestamped counts/ledger и ledger-to-Git reconciliation. Позднее
+оператор подтвердил первый production archive и encrypted offsite copy; ниже
+зафиксирован отдельный local restore smoke этого archive. Это не подтверждает
+полноту source ACL или точное соответствие всех ledger versions текущему Git.
+Изменение production inventory после зафиксированного preflight не исключено.
 
 ## Проверенная схема зашифрованного хранения (synthetic test)
 
@@ -565,12 +570,12 @@ Custom archive может содержать пользовательские п
 
 ## Restore validation только в отдельную disposable БД
 
-Production restore не входит в текущий этап и не должен выполняться в source
-Supabase. Restore validation выбранного custom archive требует отдельного
-разрешения, новой пустой disposable PostgreSQL 17 DB и отдельного операторского
-плана. Target host/database должен быть подтверждён как локальный и отличный от
-production. Совместимость PostgreSQL version, extensions, ACL principals,
-ownership, grants, RLS и triggers должна быть разобрана заранее. Не используйте
+Production restore в Supabase запрещён и не выполнялся. Локальная restore
+validation выбранного custom archive выполнена отдельным runner ниже; повторный
+прогон создаёт новую пустую disposable PostgreSQL 17 DB. Target проверяется как
+изолированный Docker container без сети и портов. Совместимость PostgreSQL
+version, extensions, ACL principals, ownership, grants, RLS и triggers должна
+быть разобрана заранее. Не используйте
 `local-test-db.sh reset`: он пересоздаёт schema по migrations, а не проверяет
 production archive. При неизвестных grants, необходимости credential changes
 или ослаблении RLS — **STOP**.
@@ -593,26 +598,83 @@ production archive. При неизвестных grants, необходимос
   этот режим с `--no-acl` не восстанавливает и не подтверждает ACL. До признания
   restore полной ACL principals отдельно сверены с target, при
   неизвестном/отсутствующем principal операция остановлена до решения;
-  placeholders автоматически не создаются. `app_runtime` пересоздан с
-  least-privilege attributes и grants перепроверены существующими verifier
-  scripts; production credentials не переносились;
-- нет ошибок чтения ключевых application records и связанных записей.
+  placeholders автоматически не создаются. `app_runtime` создан в disposable
+  контейнере с least-privilege attributes; после локального replay актуальных
+  migrations текущие application grants/verifier прошли, см. ниже;
+- runner не читает и не выводит пользовательские записи или тексты сообщений;
+  используются агрегаты и inventory системного каталога.
 
-В репозитории есть только mock-tested local smoke для структуры и synthetic row;
-production restore validator и manifest format отсутствуют. Этот checklist —
-план проверки: production restore считается непроверенным до disposable
-восстановления реального backup и фиксации результатов оператором.
+Локальный runner для production archive находится в
+`apps/backend/scripts/local-production-backup-restore-smoke.py`; его targeted
+tests используют mock/fake manifest, а фактический повторный прогон ниже прошёл.
+Повторная команда из `apps/backend`:
+
+```sh
+uv run python scripts/local-production-backup-restore-smoke.py
+```
+
+Runner проверяет SHA-256 по manifest, custom/public scope, PostgreSQL 17 major,
+читабельность archive, затем использует уникальный Docker container с
+`--network=none`, без опубликованных портов и с отдельной пустой database. Сначала
+он проверяет ровно архивные 19 migrations и 18 функций, затем применяет в этой
+disposable DB repository migrations, которых нет в manifest. После этого
+повторяет только `REVOKE ... FROM PUBLIC` statements, явно записанные в migration
+SQL, запускает structural/RLS inventory, текущий grant script и read-only
+verifier. Новые роли, функции и migration files не создаются и не изменяются.
+`supabase_migrations` ledger не восстанавливается и не изменяется.
+Печатаются только агрегаты. Контейнер удаляется в cleanup; исходные archive и
+manifest открываются только для чтения.
+
+Фактический запуск 2026-10-18: SHA-256/scope/format прошли; локальные
+server/client major равны 17; `pg_restore --no-owner --no-acl --exit-on-error`
+успешно восстановил schema/data в отдельную пустую DB. В архивной схеме прошли
+17/17 таблиц, schema-only dump equality, 93 constraints, 36 indexes, 3 triggers,
+18 functions, RLS на 17/17 таблицах, 17 policies и 133 aggregate rows в restored
+database. Source counts не сравнивались.
+Production archive manifest содержит 19 migration records; все версии и имена
+сопоставились с repository migration filenames. В checkout есть четыре более
+поздние migration files, которые runner применил только в disposable database;
+после них inventory содержит 20 functions. В архиве нет определения
+`public.bootstrap_telegram_login(bigint,text,text,text,text,text)` и
+`public.chat_participant_public_profile(uuid,uuid)`, которые добавляются
+соответственно `20260924100000_session_lifecycle_baseline.sql` и
+`20261003090000_chat_participant_public_profile.sql`. Текущий backend вызывает
+первую в `apps/backend/src/travel_friend_backend/auth/service.py`, вторую в
+`apps/backend/src/travel_friend_backend/routers/chats.py`; обе функции нужны
+действующему приложению и не являются устаревшими остатками.
+
+Для schema-only equality сравниваются весь custom archive и повторный dump
+восстановленной `public` schema после исключения ownership/ACL. В сравнительных
+файлах удаляются только `\\restrict` / `\\unrestrict` строки PostgreSQL 17 и
+точные pg_dump metadata comments (`-- PostgreSQL database dump`, `-- Dumped ...`,
+`-- Name:`, `-- Type:`, `-- Schema:`, `-- Owner:`). SQL statements, включая
+`COMMENT ON`, сравниваются строго; сами dump/SQL contents не выводятся.
+
+Первый прогон grants остановился на двух функциях, отсутствовавших в архиве.
+После проверки их migration и application происхождения runner в новом
+контейнере применил четыре уже имеющиеся repository migrations, затем 25
+migration-declared `PUBLIC EXECUTE` revokes, production app_runtime grant script
+и read-only verifier. Application grants прошли для восстановленной и
+forward-migrated disposable schema. Это отдельная локальная проверка прав,
+заданных Git migrations и grant script; она не импортирует и не подтверждает
+source ACL из архива.
+
+Локальный schema/data restore, current-schema structural/RLS checks и
+`app_runtime` grants/verifier подтверждены. Production restore в Supabase не
+выполнялся. Даже успешные локальные application grants с `--no-acl` не
+подтверждают перенос production ACL: owners, ACL principals и все source grants
+остаются самостоятельной непроверенной областью.
 
 ## RPO / RTO, STOP criteria и решения
 
-**RPO:** не установлен и сейчас не гарантируется. Scheduled backup и PITR
-недоступны на подтверждённом тарифе, а текущего восстановимого backup нет.
-После появления manual backup фактический RPO будет зависеть от утверждённой
-частоты и времени последней успешной копии.
+**RPO:** не установлен и не гарантируется. Scheduled backup и PITR недоступны
+на подтверждённом тарифе. Первый production archive и зашифрованная offsite copy
+подтверждены оператором, но cadence и время следующей копии не утверждены.
+Фактический RPO зависит от частоты и времени последнего успешного backup.
 
-**RTO:** не измерен и не гарантируется. Локальный synthetic restore прошёл, но
-production restore не запускался; длительность,
-совместимость версий/roles/extensions и post-restore validation не проверены.
+**RTO:** не измерен и не гарантируется. Schema/data restore и application grants
+после локального replay migrations прошли, но длительность полного recovery и
+полный production ACL restore не проверены.
 
 **STOP**, если target или backup identity не подтверждены; нет явного разрешения
 на production DB operation; нет approved encrypted local/offsite storage; у
@@ -621,27 +683,25 @@ backup неполная read/role coverage; `pg_dump`/`pg_restore` major version
 manifest/hash не совпадает или data window неприемлем; disposable restore target
 не пустой, не изолирован или похож на production; несовместимы PostgreSQL
 version/extensions/roles; обнаружен неизвестный или отсутствующий ACL principal
-без отдельного решения о его обработке; restore/validation завершились ошибкой;
+без отдельного решения о его обработке; ledger не сопоставляется с repository,
+есть migration gap, локальный replay или grants/verifier завершается ошибкой;
 либо требуются непроверенные DDL/grants, изменение credentials/providers или
 обход RLS. Отсутствие общего exported snapshot само по себе не является STOP для
 первого MVP backup; при этом точное сравнение source/restore counts запрещено.
 
-Открытые решения оператора перед первым backup: выбрать approved encrypted
-offsite store, доступ/ключи и retention; определить cadence и допустимые RPO/RTO;
-утвердить существующую DB identity и доказательства её schema/data/roles
-coverage без изменения grants; утвердить consistency window и способ
-timestamped фиксации отдельных counts/ledger observations;
-подтвердить extension, large object, ACL principal и non-public schema inventory,
-migration history scope и нулевые Auth/Storage/Vault inventories; проверить
-PostgreSQL 17 client tools и передачу `PGSSLMODE=require`/`PGPASSWORD` через
-environment без DSN в argv; подготовить изолированную disposable PG17.6 restore
-target и validation plan. Если любого обязательного решения нет — разрешение на
-первый production dump пока не выдавать. Реализованный runner предусматривает
+Открытые решения для следующих production backups и полноценного recovery:
+утвердить cadence, retention и допустимые RPO/RTO; периодически подтверждать DB
+identity и schema/data/roles coverage без изменения grants; определить consistency
+window и timestamped counts/ledger observations; повторно сверять extensions,
+large objects, ACL principals, non-public schemas, migration history и
+Auth/Storage/Vault inventories. Для будущей схемы повторять проверку grants;
+production ACL требует отдельной процедуры и не подтверждён этим smoke.
+Реализованный runner предусматривает
 SAFE PREVIEW, явное интерактивное подтверждение export, private no-overwrite
 directory, custom archive, timestamped counts/ledger observations без требования
-общего exported snapshot, SHA-256 manifest, Keychain read и redacted errors; эти
-production checks ещё не выполнялись. Общая exported snapshot coordination может
-быть будущим улучшением.
+общего exported snapshot, SHA-256 manifest, Keychain read и redacted errors.
+Проверка archive restore не подтверждает повторяемость production backup. Общая
+exported snapshot coordination может быть будущим улучшением.
 Любые production
 connection, queries или dump требуют отдельного явного разрешения перед
 выполнением. Этот этап не реализует №22 rollback/forward-fix.
