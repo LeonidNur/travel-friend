@@ -55,7 +55,7 @@ scripts и документации; production preflight facts ниже пре�
 | Functions, triggers, constraints, indexes | Да: auth/session bootstrap, projections, onboarding, Discover, chat/message и trip capabilities; триггеры поддерживают chat invariants. | `auth/service.py`; backend routers; `supabase/migrations/20260901130000_chat_persistence.sql`; остальные migrations. | Да: все требуемые application definitions и их зависимости. | Определения находятся в migrations; применение и соответствие production должны быть проверены отдельно. | Полный production catalog drift и все runtime dependencies не подтверждены. |
 | RLS policies, grants, ownership | Да: RLS и точные права — часть runtime security boundary. | `docs/backend/security.md`; migrations; `apps/backend/scripts/grant-production-app-runtime-privileges.sql`; supplied preflight: RLS на 17/17, `app_runtime` без BYPASSRLS, `postgres` владеет таблицами и имеет SELECT. | Да: сохранить policies, ownership/grants и минимальные role attributes как отдельную recovery dependency. | Policies и часть grants есть в migrations; role provisioning/grants scripts в Git. Реальные пароли, membership, owners и полное ACL состояние нельзя считать восстановленными из Git. | Preflight не устанавливал полный grants/ownership catalog вне 17 таблиц или безопасный restore всех ролей. |
 | PostgreSQL roles | Да: backend подключается как `app_runtime`; operator backup identity — `postgres`. | `db.py`, `config.py`; `provision-production-app-runtime-role.sql`; production grants script; operator preflight. | Отдельно пересоздать только `app_runtime` и нужный ACL surface. Не переносить полный cluster roles dump. | Атрибуты роли и grants описаны в scripts; production password и полное membership/ACL состояние не восстанавливаются из Git. | ACL principals в текущем production public catalog нужно сверить при разрешённом preflight. |
-| Extensions / PostgreSQL version | Явных `CREATE EXTENSION` / `ALTER EXTENSION` в app migrations не найдено; PostgreSQL runtime — зависимость. | Поиск в `supabase/migrations/`; supplied preflight: PostgreSQL 17.6. | Включить inventory имён/версий и нужных расширений в recovery manifest; обеспечить совместимую версию на target. | Приложенческие migrations не задают extensions. | Production extension inventory и зависимости объектов на extensions не проверены. |
+| Extensions / PostgreSQL version | Явных `CREATE EXTENSION` / `ALTER EXTENSION` в app migrations не найдено; PostgreSQL runtime — зависимость. | Operator read-only SQL preflight: PostgreSQL 17.6; `plpgsql 1.0`, `pgcrypto 1.3`, `uuid-ossp 1.1`, `pg_stat_statements 1.11`, `supabase_vault 0.3.1`. | Сохранить полный inventory отдельно от фактических extension dependencies объектов `public`; обеспечить только нужные совместимые extensions на restore target. | Приложенческие migrations не задают extensions. | Production inventory подтверждён на момент preflight; его актуальность и direct object dependencies повторно проверить перед export. |
 | Supabase Auth (`auth`) | Кодовой зависимости не найдено: MVP проверяет Telegram `initData` и хранит identities/sessions в `public`; оператор подтвердил 0 Auth users. | Backend auth source; операторский production inventory. | Auth rows сейчас не входят в backup scope. Provider settings остаются отдельной recovery dependency. | Не восстанавливается приложенческими migrations. | Повторно сверить нулевой inventory перед первым backup; настройки provider не входят в PostgreSQL archive. |
 | Supabase Storage / внешние файлы | Upload/download в MVP не реализованы; оператор подтвердил 0 Storage objects. | `docs/backend/backend-contracts.md`, app source search, операторский inventory. | Object export сейчас не требуется по подтверждённому inventory; `profile_photos.storage_key` сам файл не содержит. | Нет: файлы/buckets не восстанавливаются из Git migrations или `public` archive. | Повторно проверить objects перед первым backup; bucket/provider configuration отдельно. |
 | Supabase Vault (`vault`) | Кодовой или migration зависимости не найдено; оператор подтвердил 0 Vault secrets. | Search по app code/migrations/config; операторский inventory. | Vault data сейчас не входит в backup scope; секреты не класть в архив. | Не восстанавливается приложенческими migrations. | Повторно сверить inventory и consumers перед первым backup. |
@@ -75,7 +75,8 @@ archive checksum. Это не переносит cluster roles, пароли, ma
 
 Считать этот набор достаточным для приложения можно только после разрешения
 открытых проверок по non-public schemas, Storage buckets/objects, Vault usage,
-Auth configuration/users, migration ledger и extensions. Если inventory находит
+Auth configuration/users, migration ledger и актуальности extension inventory.
+Если inventory находит
 нужные файлы или custom objects вне `public`, scope расширяется отдельной
 зашифрованной копией и проверенным restore шагом до запуска backup. Нельзя
 считать `public` archive полным backup всего Supabase project.
@@ -99,9 +100,10 @@ provider state. Эти конфигурационные secrets не должн�
   создают backup и не выполняют restore.
 - Production deployment runbook упоминает №21 как recovery prerequisite, но
   backup/restore команды и storage/retention procedure там не определены.
-- Production backup/restore scripts, CI steps или существующий recoverable
-  artifact в репозитории не обнаружены. Локальный smoke не создаёт сохраняемый
-  production backup и не интегрирован в CI.
+- Добавлен macOS manual production backup runner; он не запускался против
+  production. Restore automation, CI backup steps и существующий recoverable
+  production artifact отсутствуют. Локальный smoke создаёт только временный
+  synthetic backup.
 
 ## Проверки, которых пока нет
 
@@ -234,9 +236,9 @@ database identity, RLS bypass или read coverage нужен production DB quer
 как взаимозаменяемые DB credentials: DB connection требует именно проверенную
 PostgreSQL identity. Не хранить connection URL в Git, `.env`, shell history,
 backup manifest или обычном логе. Не передавать password/URI в argv. CLI login
-token сам по себе не заменяет DB password/identity. Для прямого `pg_dump`
-будущий runner должен получать пароль из Keychain и передавать его через
-`PGPASSWORD`; production operation всё равно требует отдельного разрешения.
+token сам по себе не заменяет DB password/identity. Manual runner получает пароль
+из Keychain и передаёт его через `PGPASSWORD`; production operation всё равно
+требует отдельного разрешения.
 
 ### Локальная проверка production connection settings на macOS
 
@@ -269,10 +271,114 @@ coverage требуют отдельных разрешённых проверо
 не выводить URI для передачи в shell history, logs или Codex. Helper не выдаёт
 URI вызывающему процесс и не является разрешением на production connection.
 
+### Manual PostgreSQL backup runner (macOS, не запускался на production)
+
+Для локального SAFE PREVIEW из `apps/backend`:
+
+```sh
+uv run python scripts/production-backup-runner.py
+```
+
+Preview проверяет Keychain item, фиксированный target, абсолютные PostgreSQL 17
+client tools (major version 17), Git revision и доступность backup-каталога. Он печатает
+план без пароля/URI, не подключается к сети и не создаёт каталог или backup
+artifact. Требуется локально установленный Homebrew PostgreSQL 17; при иной
+конфигурации или версии запуск остановится.
+
+Для отдельного production read-only preflight запустить из `apps/backend`:
+
+```sh
+uv run python scripts/production-backup-runner.py --preflight-only
+```
+
+Режим выполняет те же read-only checks, что используются перед export, без
+`pg_dump` и без создания backup directory/artifacts. Он требует TTY и отдельное
+интерактивное подтверждение `PREFLIGHT travel-friend-dev`, затем собирает
+metadata inventories, отдельные table counts и migration ledger. При успехе
+выводит безопасную сводку: PostgreSQL version, число public tables, результат
+RLS/read coverage, ACL inventory, extension inventory, число migration records
+и обнаруженные STOP conditions. Пользовательские записи, SQL results,
+credentials и URI не выводятся. При любой неуспешной проверке он завершится с
+STOP и не запускает export. Отказ/отсутствие интерактивного подтверждения не
+устанавливает DB connection. Этот режим сам по себе не изменяет production.
+
+Режим export существует отдельно (`--export`) и требует интерактивный терминал
+и точный ввод `BACKUP travel-friend-dev`. Перед первым production use необходимо
+отдельное явное разрешение на подключение/query/export; в рамках реализации и её
+проверок этот режим не запускался против production. До `pg_dump` runner выполняет
+read-only preflight: проверяет target identity, major version сервера 17, серверную role
+`postgres` с `BYPASSRLS`, owner `postgres`, RLS и SELECT для точного набора 17
+public tables; отдельно инвентаризирует ACL principals по relations, functions,
+types, schema и default ACL; сверяет полный extension inventory и версии с
+операторским read-only preflight от 2026-10-18; вычисляет direct catalog-tracked
+extension dependencies объектов `public`; считает large objects и
+catalog-tracked зависимости вне `public`; читает migration ledger и counts; и
+проверяет нулевые `auth.users`, `storage.objects` и `vault.secrets`. Любая ошибка,
+неизвестный ACL principal, неизвестный extension или изменение его версии, large
+object, обнаруженная catalog-tracked non-public dependency, ненулевая
+Auth/Storage/Vault запись или расхождение с ожидаемым migration/table inventory
+приводит к STOP. ACL inventory включает grantors, grantees и owners relations,
+functions, types и schema; owners перечисляются независимо от ACL rows, чтобы
+пустой ACL не скрывал владельца. Default ACL учитывают глобальные записи и
+записи для `public`. Runner не создаёт роли, не
+выполняет DDL и не добавляет placeholders.
+
+Подтверждённый extension inventory: `plpgsql 1.0`, `pgcrypto 1.3`,
+`uuid-ossp 1.1`, `pg_stat_statements 1.11` и `supabase_vault 0.3.1`. Это полный
+ожидаемый inventory для preflight, а не инструкция устанавливать все эти
+extensions при restore. Полный inventory сохраняется в manifest. Restore
+dependencies вычисляются отдельно по прямым `pg_depend` ссылкам публичных
+объектов на объекты, принадлежащие extensions; обнаруженные ссылки сохраняются
+как observations для последующего restore planning. Неизвестный extension или
+другая версия требуют новой операторской проверки.
+
+Проверка non-public dependencies следует прямым `pg_depend` записям для
+relations, functions, types, view rewrite rules, constraints, triggers, column
+defaults и RLS policies; среди referenced objects она разрешает только
+`pg_class`, `pg_proc` и `pg_type`. Другие классы ссылок, например operators и
+collations, этим запросом не инвентаризируются. PostgreSQL не фиксирует надёжно
+все ссылки из строковых тел PL/pgSQL/SQL функций, динамического SQL или внешнего
+runtime; это не полная проверка dependency closure функций или проекта. Пустой
+результат означает отсутствие обнаруженных запросом ссылок, а не доказательство
+отсутствия runtime dependencies. Перед экспортом остаётся обязательным
+сопоставление с migrations и операторская проверка найденных особенностей.
+
+Для вызовов libpq runner передаёт минимальное environment с фиксированными
+`PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`, `PGPASSWORD` и `PGSSLMODE=require`;
+все унаследованные `PG*` настройки отбрасываются, включая service files,
+host-address, passfile и TLS overrides. Другие унаследованные DB variables также
+не передаются дочерним процессам. До подключения проверяется только major version
+17; фактические полные server и client versions сохраняются в manifest.
+
+После успешного preflight runner делает один `pg_dump --format=custom
+--schema=public` с Keychain password только в `PGPASSWORD`, а параметры target
+передаёт через `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE` и `PGSSLMODE=require`.
+В архиве есть согласованный snapshot самого `pg_dump`; counts и migration ledger
+снимаются отдельными read-only наблюдениями с собственными timestamps и не
+объявляются snapshot-equivalent архиву. После dump проверяются ненулевой размер,
+`pg_restore --list` и SHA-256; в manifest записываются target без секрета,
+фактические полные server/client versions, scope, Git revision и проверенные
+metadata без пользовательских значений. Успешный результат означает только
+создание и локальную проверку archive; успешное восстановление этим не
+подтверждается.
+
+Выход создаётся как уникальная приватная директория под
+`~/.local/share/travel-friend/backups`, вне repository; существующий путь не
+перезаписывается. При ошибке оставшиеся файлы не удаляются автоматически и
+каталог остаётся помеченным файлом `INCOMPLETE.txt`. Manifest без marker
+подтверждает только создание и локальную проверку archive, но не успешный restore.
+Runner не шифрует и не загружает archive, не выполняет restore и не настраивает
+расписание: оператору нужно отдельно
+обеспечить approved encryption/offsite storage и сохранить ключ по ранее
+проверенной процедуре. Успешный SAFE PREVIEW или mock tests не подтверждают
+production connectivity, preflight completeness, наличие production archive или
+recoverability. Если preflight не может достоверно проверить любой пункт, export
+останавливается до отдельного решения оператора.
+
 ## Direct PostgreSQL 17 backup scope audit (2026-10-18)
 
-Это выбранная схема будущего ручного backup вместо трёх Supabase CLI exports;
-она описывает scope, но не является runner и не подтверждает production dump.
+Это выбранная схема ручного backup вместо трёх Supabase CLI exports; локальный
+runner реализован, но не подтверждает production dump.
 Аудит основан на текущих migrations/scripts и подтверждённом оператором
 production inventory. К production не подключались.
 
@@ -382,15 +488,16 @@ PostgreSQL server 17.6 и client tools 17.11 имеют совместимый m
 `pg_dump` 17.11 может читать 17.6, а восстановление следует тестировать на
 PostgreSQL 17.x. Это не доказывает production restore; для максимально близкой
 валидации нужен disposable server той же minor version 17.6. Перед export
-проверять точный `pg_dump`/`pg_restore` version, фиксированный host/database и
+проверять major version 17 у `pg_dump`/`pg_restore`, фиксированный host/database и
 `sslmode=require`; пароль передавать через `PGPASSWORD` environment (не URI в
 argv, временный plaintext или shell history). Ни один из этих production шагов
 в этом аудите не запускался.
 
-До runner остаются открытыми: production ACL principal inventory, extension и
-large-object inventory, counts/ledger observations с timestamps, точная 19-row
-ledger-to-Git reconciliation, права/совместимость restore identity и real
-restore на disposable PG17.6. Не считать выбранный scope завершённым backup до
+Перед первым production export остаются непроверенными: ACL principal и
+large-object inventory, прямые catalog dependency observations, counts/ledger observations с timestamps,
+точная 19-row ledger-to-Git reconciliation, права/совместимость restore identity и real
+restore на disposable PG17.6. Подтверждённый extension inventory необходимо
+повторно сверить с production: его состав или версии могли измениться. Не считать выбранный scope завершённым backup до
 успешного реального restore и внешней encrypted copy.
 
 ## Проверенная схема зашифрованного хранения (synthetic test)
@@ -505,11 +612,12 @@ migration history scope и нулевые Auth/Storage/Vault inventories; про
 PostgreSQL 17 client tools и передачу `PGSSLMODE=require`/`PGPASSWORD` через
 environment без DSN в argv; подготовить изолированную disposable PG17.6 restore
 target и validation plan. Если любого обязательного решения нет — разрешение на
-первый production dump пока не выдавать. Будущему runner нужны SAFE PREVIEW,
-явное подтверждение реального export, private no-overwrite output directory,
-custom archive, timestamped counts/ledger observations без требования общего
-exported snapshot, SHA-256 manifest, Keychain read и redacted output/error
-handling. Общая exported snapshot coordination может быть будущим улучшением.
+первый production dump пока не выдавать. Реализованный runner предусматривает
+SAFE PREVIEW, явное интерактивное подтверждение export, private no-overwrite
+directory, custom archive, timestamped counts/ledger observations без требования
+общего exported snapshot, SHA-256 manifest, Keychain read и redacted errors; эти
+production checks ещё не выполнялись. Общая exported snapshot coordination может
+быть будущим улучшением.
 Любые production
 connection, queries или dump требуют отдельного явного разрешения перед
 выполнением. Этот этап не реализует №22 rollback/forward-fix.
