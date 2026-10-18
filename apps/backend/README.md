@@ -99,9 +99,12 @@ uv run --python 3.12 --group dev pytest --cov
 ```
 
 Скрипт создаёт только контейнер `travel-friend-test-postgres` с label
-disposable test DB, публикует порт только на `127.0.0.1:55432` и использует БД
-`travel_friend_test`; `reset` и `stop` откажутся менять контейнер без этого
-label. Сам workflow не принимает внешний DB target: он передаёт pytest
+`com.travel-friend.disposable-test-db=true`, публикует порт только на
+`127.0.0.1:55432` и использует БД `travel_friend_test`. Перед destructive
+`reset` и `stop` скрипт проверяет точное имя контейнера, label, единственные
+ожидаемые `POSTGRES_DB` / `POSTGRES_USER` и единственный loopback port binding.
+При ошибке inspect или несовпадении конфигурации команда завершается до сброса
+схемы или удаления контейнера. Сам workflow не принимает внешний DB target: он передаёт pytest
 `TEST_DATABASE_URL` owner-роли и `DATABASE_URL` runtime-роли, оба для этой
 локальной БД. Поэтому утверждение, что `DATABASE_URL` удаляется из окружения
 pytest, неверно: скрипт явно переопределяет его безопасным локальным runtime URL.
@@ -121,6 +124,11 @@ runbook](../../docs/backend/production-security-migrations-runbook.md), а
 общие security boundaries — в [backend security](../../docs/backend/security.md).
 Локальный SQL-файл runtime role не является hosted Supabase migration и не
 предназначен для запуска на удалённой БД.
+
+Для нового production rollout используйте отдельный
+[production deployment runbook](../../docs/backend/production-deployment-runbook.md).
+Этот README не повторяет rollout-процедуру; завершённый исторический security
+cutover описан отдельно в production security migrations runbook.
 
 Для production runbook использует migrations из `supabase/migrations/`,
 `grant-production-app-runtime-privileges.sql`, read-only
@@ -144,6 +152,76 @@ production-операции.
   окружением deployment и не зашита в репозиторий. Production `DATABASE_URL` — секрет
   runtime-роли `app_runtime`. История и preconditions migrations/grants/gate
   описаны в [production runbook](../../docs/backend/production-security-migrations-runbook.md).
+
+## Устранение неполадок
+
+### Docker Desktop / Engine недоступен
+
+- **Возможная причина:** Docker CLI отсутствует, daemon остановлен или выбран
+  недоступный Docker context.
+- **Безопасная диагностика:** выполните `docker context show`, затем
+  `docker info`; эти команды показывают выбранный context и доступность Engine,
+  не меняя контейнеры.
+- **Допустимое действие:** запустите Docker Desktop / локальный Docker Engine и
+  убедитесь, что выбран ожидаемый локальный context. После этого повторите
+  `./scripts/local-test-db.sh start`.
+
+### Контейнер существует, но остановлен
+
+- **Возможная причина:** контейнер был остановлен вручную или Engine был
+  перезапущен. `local-test-db.sh start` проверяет существующий контейнер и ждёт
+  PostgreSQL, но сам не запускает остановленный контейнер.
+- **Безопасная диагностика:** проверьте только точный контейнер командой
+  `docker container ls -a --filter name=travel-friend-test-postgres`, затем
+  сверьте его статус и конфигурацию в Docker Desktop. Не выводите все env
+  variables контейнера в общий лог.
+- **Допустимое действие:** запускайте его через Docker Desktop только после
+  подтверждения, что это локальный disposable контейнер с ожидаемыми name,
+  label, `POSTGRES_DB`, `POSTGRES_USER` и loopback binding. После запуска
+  выполните `./scripts/local-test-db.sh start`, чтобы проверить доступность БД.
+
+### Проверка конфигурации контейнера завершилась отказом
+
+- **Возможная причина:** имя занято другим контейнером либо не совпадает label,
+  database/user setting или port binding. Скрипт намеренно не сообщает детали
+  неизвестной конфигурации.
+- **Безопасная диагностика:** используйте `docker container ls -a` и Docker
+  Desktop Inspect для проверки только ожидаемых параметров. Не публикуйте полный
+  `docker inspect` output: он может содержать environment variables.
+- **Допустимое действие:** не запускайте `reset` или `stop` и не удаляйте
+  неизвестный контейнер. Установите его назначение и владельца; после
+  согласованного освобождения имени создайте disposable DB командой
+  `./scripts/local-test-db.sh start`.
+
+### Backend `/ready` возвращает 503
+
+- **Возможная причина:** backend не может установить соединение с PostgreSQL или
+  выполнить `SELECT 1` через свой `DATABASE_URL`. `/health` проверяет только
+  процесс и может при этом возвращать 200.
+- **Безопасная диагностика:** для local backend повторите
+  `curl --fail --show-error --silent http://127.0.0.1:8000/ready` и проверьте
+  backend logs около этого времени; для production используйте Render Service
+  Logs. Не выводите `DATABASE_URL` или другие секреты.
+- **Допустимое действие:** для local environment проверьте состояние локальной
+  БД и используйте её `runtime-url`; для production следуйте
+  [production deployment runbook](../../docs/backend/production-deployment-runbook.md).
+  Не меняйте credentials без установленной причины и отдельной процедуры.
+
+### Тесты не подключаются к PostgreSQL
+
+- **Возможная причина:** Engine или контейнер недоступен, PostgreSQL ещё не
+  готов, либо `127.0.0.1:55432` занят другим процессом.
+- **Безопасная диагностика:** выполните
+  `docker container ls -a --filter name=travel-friend-test-postgres`, затем
+  `./scripts/local-test-db.sh start`. Скрипт проверит контейнер и ограниченно
+  подождёт PostgreSQL readiness. Если порт занят, установите владельца процесса;
+  не останавливайте неизвестный сервис.
+- **Допустимое действие:** после успешного `start` запустите
+  `./scripts/local-test-db.sh test`. При ошибке readiness изучите локальные
+  PostgreSQL logs и разрешите причину в local/test environment перед повтором.
+
+Эти troubleshooting шаги не означают сброс production БД, удаление неизвестных
+контейнеров или изменение секретов как универсальное восстановление.
 
 FastAPI middleware ограничивает raw request body значением 256 KiB
 (262144 bytes) и возвращает `413` при превышении; детали HTTP-контрактов — в

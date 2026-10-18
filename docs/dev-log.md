@@ -1,5 +1,17 @@
 # Дневник разработки
 
+## 2026-10-18 — №20 Backend runbook/README
+
+### Что сделали
+
+- Сверили backend README с текущими скриптами, CI и security/deployment runbooks; уточнили проверки disposable DB контейнера и добавили диагностику local/test/runtime readiness проблем с безопасными действиями оператора.
+- Добавили ссылку на существующий manual deployment runbook, отметили №20 как implemented; application code, scripts, CI и production configuration не менялись.
+
+### Что проверили
+
+- Сверили описанные команды с `local-test-db.sh`, порядок CI cleanup и контракт `/health` / `/ready`.
+- Проверили относительные markdown links и выполнили `git diff --check`.
+
 ## 2026-10-18 — №19 Local test DB hygiene
 
 ### Что сделали
