@@ -34,11 +34,11 @@ DB operation.
   runtime deployment gate решают задачи ролей и security checks, а не сохраняют
   данные. CI запускает local test workflow и cleanup; production backup/restore
   tooling в репозитории не найдено.
-- Supabase CLI export ниже создаёт раздельные schema, data и roles SQL files.
-  CLI исключает Supabase-managed schemas (в частности `auth`, `storage` и
-  schemas расширений) и reserved roles; этот export не является образом всего
-  Supabase project. Обычный schema/data dump не включает cluster globals,
-  project settings/secrets или Storage objects.
+- Supabase CLI export был рассмотрен, но не выбран из-за неподтверждённой
+  передачи `sslmode=require` в `pg_dump`. Текущий аудит рассматривает прямые
+  PostgreSQL 17 tools и только `public`; это также не является образом всего
+  Supabase project и не включает managed schemas, cluster roles, provider state
+  или Storage objects.
 - Logical dump будет содержать персональные данные и содержимое сообщений и
   должен обрабатываться как чувствительная пользовательская информация.
 
@@ -54,31 +54,31 @@ scripts и документации; production preflight facts ниже пре�
 | `public` tables и строки | Да: `users`, `telegram_identities`, `user_settings` и остальные активные данные используются backend напрямую или capability functions. `profile_photos` и `chat_summaries` есть в схеме, но security docs указывают, что MVP их не использует. | `docs/database-schema.md`; `apps/backend/src/travel_friend_backend/{auth/service.py,routers/me.py,routers/discover.py,routers/chats.py,routers/trips.py}`; `docs/backend/security.md`; operator preflight подтвердил 17 таблиц, RLS и ownership `postgres`. | Да: schema и все строки всех 17 таблиц, включая dormant tables, пока production inventory не докажет иное. | DDL — из `supabase/migrations/`; текущие строки не восстанавливаются из Git. | Фактические row counts, полнота чтения и согласованность снимка не перепроверялись в этом аудите. |
 | Functions, triggers, constraints, indexes | Да: auth/session bootstrap, projections, onboarding, Discover, chat/message и trip capabilities; триггеры поддерживают chat invariants. | `auth/service.py`; backend routers; `supabase/migrations/20260901130000_chat_persistence.sql`; остальные migrations. | Да: все требуемые application definitions и их зависимости. | Определения находятся в migrations; применение и соответствие production должны быть проверены отдельно. | Полный production catalog drift и все runtime dependencies не подтверждены. |
 | RLS policies, grants, ownership | Да: RLS и точные права — часть runtime security boundary. | `docs/backend/security.md`; migrations; `apps/backend/scripts/grant-production-app-runtime-privileges.sql`; supplied preflight: RLS на 17/17, `app_runtime` без BYPASSRLS, `postgres` владеет таблицами и имеет SELECT. | Да: сохранить policies, ownership/grants и минимальные role attributes как отдельную recovery dependency. | Policies и часть grants есть в migrations; role provisioning/grants scripts в Git. Реальные пароли, membership, owners и полное ACL состояние нельзя считать восстановленными из Git. | Preflight не устанавливал полный grants/ownership catalog вне 17 таблиц или безопасный restore всех ролей. |
-| PostgreSQL roles | Да: backend подключается как `app_runtime`; operator backup identity — `postgres`. | `db.py`, `config.py`; production role scripts; supplied preflight. | Зафиксировать необходимые custom role definitions, attributes, memberships и grants. Пароли хранить/выпускать отдельно через approved secret store. | Частично: provisioning/grants scripts описывают `app_runtime`; production role state и credentials из Git не восстанавливаются. | Полный список custom roles, memberships, role passwords и права CLI role export неизвестны. Supabase reserved roles не следует считать переносимыми. |
+| PostgreSQL roles | Да: backend подключается как `app_runtime`; operator backup identity — `postgres`. | `db.py`, `config.py`; `provision-production-app-runtime-role.sql`; production grants script; operator preflight. | Отдельно пересоздать только `app_runtime` и нужный ACL surface. Не переносить полный cluster roles dump. | Атрибуты роли и grants описаны в scripts; production password и полное membership/ACL состояние не восстанавливаются из Git. | ACL principals в текущем production public catalog нужно сверить при разрешённом preflight. |
 | Extensions / PostgreSQL version | Явных `CREATE EXTENSION` / `ALTER EXTENSION` в app migrations не найдено; PostgreSQL runtime — зависимость. | Поиск в `supabase/migrations/`; supplied preflight: PostgreSQL 17.6. | Включить inventory имён/версий и нужных расширений в recovery manifest; обеспечить совместимую версию на target. | Приложенческие migrations не задают extensions. | Production extension inventory и зависимости объектов на extensions не проверены. |
-| Supabase Auth (`auth`) | Кодовой зависимости не найдено: MVP проверяет Telegram `initData` и хранит собственные identities/sessions в `public`. | `apps/backend/src/travel_friend_backend/auth/telegram.py`, `auth/service.py`; searches по app code/contracts/migrations; supplied preflight подтвердил наличие schema. | Не включать содержимое managed schema в app logical dump без отдельного решения. Перед исключением проверить dashboard users/providers и интеграции. | Не восстанавливается приложенческими migrations. Provider configuration и credentials отдельно от DB backup. | Фактические Auth users, provider settings и возможные ручные/внешние зависимости не инвентаризированы. |
-| Supabase Storage / внешние файлы | Upload/download не реализованы в текущем MVP; `profile_photos` есть как dormant table, поле `storage_key` не доказывает наличие файлов. | `docs/backend/backend-contracts.md` (storage mechanism undecided), `docs/feature-list.md`, migration `20260826084844_core_identity.sql`; app-code search без upload/download/storage API. | Включать object backup только если инвентарь подтвердит используемые production objects. Если объекты нужны, нужен отдельный object export и mapping к `profile_photos`; SQL dump файлы не содержит. | Нет: объекты и buckets не восстанавливаются из Git migrations. | Bucket/object inventory, содержимое `profile_photos`, внешние URL/файлы и связи не проверялись. |
-| Supabase Vault (`vault`) | Кодовой или migration зависимости не найдено. | Search по app code/migrations/config; supplied preflight сообщил о schema `vault`. | Не включать managed schema в обычный CLI dump. До исключения проверить, не хранятся ли там используемые проектом secrets/keys. | Не восстанавливается приложенческими migrations; секреты нельзя класть в backup artifact. | Наличие секретов, их consumers и отдельный provider recovery путь неизвестны. |
-| `supabase_migrations` history | Backend не читает migration ledger; операционная история нужна для provenance/повторного применения миграций. | Search по backend code; `supabase/migrations/`; production security migration runbook предписывает не менять ledger вручную. | Сохранить зафиксированный список применённых production migration versions и соответствие Git revision; решение об отдельном history export принять до полного recovery plan. | SQL definitions восстанавливаются из Git, но фактическая production applied-history и соответствие версии из Git не гарантируются. | Полный production ledger не проверялся в этой задаче; нельзя вручную редактировать его для восстановления. |
-| Остальные schemas / provider state | Приложенческой зависимости в найденных исходниках нет. | Supplied preflight сообщил о `auth`, `storage`, `supabase_migrations`, `vault` и других schemas; CLI docs/runbook описывают исключения managed schemas. | До первого backup составить inventory user-managed objects вне `public`; явно включить нужные custom schemas или записать обоснованное исключение. Provider settings, secrets и Storage objects — отдельные recovery dependencies. | Не полностью: application migrations охватывают только проектные definitions, а не hosted/provider state. | Имена, owners, объекты, данные и consumers прочих schemas неизвестны. |
+| Supabase Auth (`auth`) | Кодовой зависимости не найдено: MVP проверяет Telegram `initData` и хранит identities/sessions в `public`; оператор подтвердил 0 Auth users. | Backend auth source; операторский production inventory. | Auth rows сейчас не входят в backup scope. Provider settings остаются отдельной recovery dependency. | Не восстанавливается приложенческими migrations. | Повторно сверить нулевой inventory перед первым backup; настройки provider не входят в PostgreSQL archive. |
+| Supabase Storage / внешние файлы | Upload/download в MVP не реализованы; оператор подтвердил 0 Storage objects. | `docs/backend/backend-contracts.md`, app source search, операторский inventory. | Object export сейчас не требуется по подтверждённому inventory; `profile_photos.storage_key` сам файл не содержит. | Нет: файлы/buckets не восстанавливаются из Git migrations или `public` archive. | Повторно проверить objects перед первым backup; bucket/provider configuration отдельно. |
+| Supabase Vault (`vault`) | Кодовой или migration зависимости не найдено; оператор подтвердил 0 Vault secrets. | Search по app code/migrations/config; операторский inventory. | Vault data сейчас не входит в backup scope; секреты не класть в архив. | Не восстанавливается приложенческими migrations. | Повторно сверить inventory и consumers перед первым backup. |
+| `supabase_migrations` history | Backend не читает migration ledger; оператор подтвердил 19 production records. | `supabase/migrations/`; operator-provided production ledger count. | Сохранить версии/имена, Git revision и timestamp read-only observation в sidecar manifest; не включать ledger в `public` archive и не писать в production ledger. | SQL definitions восстанавливаются из Git; ledger records — только из read-only inventory/manifest. | Имена/shape ledger columns и точное соответствие 19 production records текущему Git revision требуют повторного сверения. |
+| Остальные schemas / provider state | Приложенческой зависимости в найденных исходниках нет. | Supplied preflight сообщил о `auth`, `storage`, `supabase_migrations`, `vault` и других schemas. | До первого backup составить inventory user-managed objects вне `public`; явно включить нужные custom schemas или записать обоснованное исключение. Provider settings и secrets — отдельные recovery dependencies. | Не полностью: application migrations охватывают только проектные definitions, а не hosted/provider state. | Имена, owners, объекты и consumers прочих schemas неизвестны. |
 
 ### Минимальный достаточный backup для текущей application data
 
-После разрешённого read-only preflight рекомендуемый минимум — полный логический
-экспорт schema и всех строк `public` (включая все 17 таблиц), поддерживаемые
-object definitions и явный inventory PostgreSQL version/extensions; отдельный
-role/grant recovery record для `app_runtime` и других необходимых custom roles;
-manifest с exact project/database, timestamp/window, CLI/PG versions, scope,
-Git revision миграций и checksums. Roles export не доказывает переносимость
-Supabase reserved roles, безопасное восстановление LOGIN passwords или полный
-provider state. Секреты и connection credentials в dump/manifest не помещать.
+После разрешённого read-only preflight рекомендуемый минимум — один custom-format
+archive всей схемы `public` со всеми её rows и объектами; отдельно восстановить
+`app_runtime`/grants и сохранить migration ledger metadata. Manifest содержит
+exact project/database, timestamp/window, PostgreSQL server/client versions,
+scope, Git revision migration files, timestamped table-count observations и
+archive checksum. Это не переносит cluster roles, пароли, managed schemas или
+полный provider state.
+Секреты и connection credentials в dump/manifest не помещать.
 
 Считать этот набор достаточным для приложения можно только после разрешения
 открытых проверок по non-public schemas, Storage buckets/objects, Vault usage,
 Auth configuration/users, migration ledger и extensions. Если inventory находит
 нужные файлы или custom objects вне `public`, scope расширяется отдельной
 зашифрованной копией и проверенным restore шагом до запуска backup. Нельзя
-объявлять обычные Supabase CLI schema/data/roles exports полным backup проекта.
+считать `public` archive полным backup всего Supabase project.
 
 Recovery также зависит от доступного `supabase/migrations/` revision,
 совместимого PostgreSQL/extension environment, отдельно восстановленных role
@@ -110,7 +110,9 @@ provider state. Эти конфигурационные secrets не должн�
 - Не выбраны и не проверены внешнее зашифрованное хранилище, ограничение доступа,
   retention и независимая проверка checksum после переноса.
 - Нет утверждённого manifest с версией source schema, backup scope и
-  consistency/row-count evidence.
+  timestamped counts/ledger observations. Общий exported snapshot для этих
+  observations не требуется для MVP; без него нельзя делать точное сравнение
+  source/restore counts.
 - Локальный smoke подтвердил restore только в disposable PostgreSQL текущего
   запуска; он не проверяет production backup completeness, внешнее хранение,
   ownership/privileges, application data или provider state.
@@ -187,35 +189,39 @@ scope, место хранения, срок хранения и ответст�
    `travel-friend-dev` (`tlgprfsecdasloqnuyjo`), регион/endpoint и database name
    `postgres`. Нельзя полагаться только на сохранённый CLI link или старую
    запись provenance.
-2. Проверяет актуальные `supabase --version`, `supabase db dump --help`, Docker
-   Engine и официальные CLI backup docs. CLI запускает `pg_dump` в Docker
-   container; если команда/флаги отличаются от примера ниже либо требуют
-   `db push`, `db reset`, migration или DDL — **STOP**.
+2. Проверяет локальные `pg_dump --version`, `pg_restore --version`, `psql --version`,
+   PostgreSQL 17 client tools и возможность задать `sslmode=require`; если major
+   version или ожидаемые flags не совпадают — **STOP**. Не выполнять `db push`,
+   `db reset`, migration или DDL.
 3. Получает через Dashboard Connect direct connection или Supavisor **session**
    pooler connection (не transaction pooler); сверяет host, port, database,
    username и TLS с целевым project. Direct connection может требовать IPv6;
    выбирать transport по фактической сети оператора.
 4. Утверждает существующую DB identity, которая может читать все нужные
-   user-managed schemas и все rows, а также выгрузить нужные custom roles.
+   application rows и обходить RLS без изменения grants. `app_runtime` для
+   полной выгрузки не подходит; роли из cluster-wide dump не экспортировать.
    PostgreSQL `pg_dump` по умолчанию выставляет `row_security=off` для полной
    выгрузки; если identity не может обойти RLS, dump должен завершиться ошибкой.
    Нельзя использовать `--enable-row-security` как обход: это создаст частичный
-   dump. См. [pg_dump RLS behavior](https://www.postgresql.org/docs/current/app-pgdump.html#PG-DUMP-OPTIONS)
-   и [PostgreSQL row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html).
+   dump. См. [pg_dump RLS behavior](https://www.postgresql.org/docs/17/app-pgdump.html#PG-DUMP-OPTIONS)
+   и [PostgreSQL row security](https://www.postgresql.org/docs/17/ddl-rowsecurity.html).
    `app_runtime` (`NOBYPASSRLS`, ограниченные application grants) не считать
    подходящей без доказанной read coverage. Не менять grants/roles для backup
    в рамках этой процедуры; при нехватке прав — **STOP**.
-5. Утверждает consistency window. Три файла создаются отдельными CLI вызовами
-   и не образуют единый общий snapshot. Если за время экспорта возможны записи,
-   требуется согласованное операторское решение по временному write pause либо
-   приемлемости такого окна; не переключать production в read-only самостоятельно.
+5. Утверждает consistency window. `pg_dump` обеспечивает согласованность
+   собственного archive. Counts и migration ledger, полученные отдельными
+   read-only запросами, являются наблюдениями на другое время; сохранить для них
+   отдельные timestamps и не выдавать за общий snapshot. Для первого MVP backup
+   общий exported snapshot не требуется. Не переключать production в read-only
+   самостоятельно.
 6. Подтверждает свободное место, приватный временный каталог на зашифрованном
    устройстве, процедуру шифрования и approved offsite destination с доступом,
    retention и восстановлением ключа. Сейчас эти настройки не подтверждены.
 7. Утверждает ожидаемые schema/data/role coverage, обработку migration history,
    custom объектов в managed schemas и tables, которые могут требовать
-   исключения. Сопоставить каталог таблиц со scope до запуска; неизвестное или
-   намеренное исключение — **STOP** до фиксации решения.
+   исключения. Сопоставить каталог таблиц со scope до запуска; неизвестный или
+   отсутствующий ACL principal, неизвестное либо намеренное исключение —
+   **STOP** до отдельного решения о его обработке.
 
 Эти предварительные пункты — Dashboard/local checks. Если для подтверждения
 database identity, RLS bypass или read coverage нужен production DB query,
@@ -228,9 +234,9 @@ database identity, RLS bypass или read coverage нужен production DB quer
 как взаимозаменяемые DB credentials: DB connection требует именно проверенную
 PostgreSQL identity. Не хранить connection URL в Git, `.env`, shell history,
 backup manifest или обычном логе. Не передавать password/URI в argv. CLI login
-token сам по себе не заменяет DB password/identity. До появления runner, который
-безопасно использует Keychain и принудительно задаёт `sslmode=require`, production
-CLI command не запускать.
+token сам по себе не заменяет DB password/identity. Для прямого `pg_dump`
+будущий runner должен получать пароль из Keychain и передавать его через
+`PGPASSWORD`; production operation всё равно требует отдельного разрешения.
 
 ### Локальная проверка production connection settings на macOS
 
@@ -263,83 +269,129 @@ coverage требуют отдельных разрешённых проверо
 не выводить URI для передачи в shell history, logs или Codex. Helper не выдаёт
 URI вызывающему процесс и не является разрешением на production connection.
 
-## Ручной production backup через Supabase CLI — STOP до устранения TLS-блокера
+## Direct PostgreSQL 17 backup scope audit (2026-10-18)
 
-Production runner не реализован, и команды ниже не являются инструкцией к
-экспорту. Проверка [CLI reference](https://supabase.com/docs/reference/cli/supabase-link)
-и [исходника db dump](https://github.com/supabase/cli/blob/develop/apps/cli/src/commands/db/dump/dump.handler.ts)
-показала, что пароль можно передать без URI в argv: CLI документирует
-`SUPABASE_DB_PASSWORD`, а [builder environment для pg_dump](https://github.com/supabase/cli/blob/develop/apps/cli/src/command-internal/pg-dump.env.ts)
-передаёт пароль как `PGPASSWORD`. Это не доказывает, что секрет
-невидим другим процессам того же macOS account или администраторам локального
-Docker Engine; права на Mac и Docker daemon остаются частью модели доступа.
+Это выбранная схема будущего ручного backup вместо трёх Supabase CLI exports;
+она описывает scope, но не является runner и не подтверждает production dump.
+Аудит основан на текущих migrations/scripts и подтверждённом оператором
+production inventory. К production не подключались.
 
-Обнаружен отдельный блокирующий вопрос по обязательному `sslmode=require`.
-В исходниках Supabase CLI builder для `db dump` формирует `PGHOST`, `PGPORT`,
-`PGUSER`, `PGPASSWORD` и `PGDATABASE`, но не передаёт `sslmode` в environment
-контейнера `pg_dump`. Хотя parser CLI распознаёт `sslmode` в DB URL, рассмотренный
-путь dump не сохраняет это поле в передаваемых параметрах `pg_dump`. Поэтому
-нельзя считать достаточными ни `SUPABASE_DB_PASSWORD` с `--linked`, ни URI без
-пароля с `--db-url`: по проверенному пути не подтверждено принудительное
-TLS-подключение именно с `sslmode=require`. Не запускать production export, пока
-CLI не предоставит и не подтвердит для используемой версии способ задать и
-проверить `PGSSLMODE=require` внутри процесса `pg_dump` без включения пароля в
-argv, plaintext-файл или shell history. Не обходить этот блокер wrapper-ом,
-который меняет CLI/container internals.
+### Состав архива и исключения
 
-Потенциальный будущий runner должен получать пароль напрямую из существующей
-Keychain-записи, валидировать зафиксированный project ref и target, передавать
-секрет только через environment, отключать telemetry/debug, подавлять сырые
-stdout/stderr CLI и использовать три раздельных вызова:
-`--role-only`, schema dump, затем `--data-only --use-copy`. До получения
-подтверждённого механизма `sslmode=require` такой runner не должен создавать
-SQL-файлы или выполнять сетевые операции. На этом этапе безопасен только
-отдельный локальный connection check выше; он не является preview экспорта.
+Минимальный artifact: один custom-format archive, сформированный PostgreSQL 17
+`pg_dump` с выбором всей схемы `public` (`--format=custom --schema=public`). Не
+перечислять отдельные таблицы флагами: schema-wide выбор включает все 17 текущих
+таблиц и не теряет новые public tables при последующем изменении MVP:
+`users`, `telegram_identities`, `profiles`, `profile_photos`, `user_settings`,
+`user_activity_states`, `travel_intents`, `user_sessions`,
+`discover_interest_decisions`, `matches`, `chats`, `chat_participants`,
+`messages`, `chat_summaries`, `trips`, `trip_participants`, `trip_stops`.
 
-После снятия блокера и отдельного явного разрешения оператора будущая процедура
-должна создавать новую приватную директорию с отказом при коллизии, проверять
-наличие и ненулевой размер `roles.sql`, `schema.sql`, `data.sql`, записывать
-SHA-256 manifest без credentials и сохранять неполный результат при ошибке для
-ручного разбора — автоматически удалять SQL нельзя. Только тогда следует
-утвердить consistency window, encrypted/offsite storage, schema/data/role
-coverage и ограничения Supabase-managed schemas. CLI exports не являются полным
-backup Supabase project; зафиксировать CLI version и отдельно решить вопрос
-`supabase_migrations` history и прочих user-managed schemas.
+Archive охватывает определения объектов и строки таблиц в `public`: функции,
+trigger function/trigger, RLS enablement и policies, indexes, constraints,
+defaults, types и schema/object ACL. В текущем repo migrations определяют
+application functions/policies, chat trigger и constraints/indexes. `pg_dump`
+не включает cluster roles, Supabase-managed schemas, server/provider settings,
+внешние Storage objects или migration ledger. `--schema=public` также пропускает
+database-wide large objects и не пытается автоматически добавить зависимости
+из других schemas; до первого backup проверить эти зависимости и подтвердить,
+что за пределами `public` не осталось нужных app objects.
 
-Только после снятия TLS-блокера и отдельного разрешения, при появлении будущего
-runner, проверить до признания набора кандидатом backup:
+**Формат:** custom archive выбран вместо plain SQL: его можно проверить через
+`pg_restore --list`, он поддерживает выборочное восстановление и остановку на
+первой ошибке. Plain SQL проще читать и подавать через `psql`, но не даёт
+`pg_restore` TOC/selective restore/error controls. Archive сохраняет исходные
+ownership/ACL metadata. Для disposable restore применять `pg_restore
+--no-owner --exit-on-error --single-transaction`: ownership назначится локальному
+restore operator, ACL останутся в archive. До restore перечислить ACL principals.
+Если archive ссылается на неизвестный или отсутствующий ACL principal, **STOP**
+до отдельного решения о его обработке; автоматически создавать `NOLOGIN`
+placeholders запрещено. Не импортировать все Supabase cluster roles/role
+password hashes. Затем создать `app_runtime` с
+least-privilege attributes и переприменить точный grant surface по
+`apps/backend/scripts/grant-production-app-runtime-privileges.sql`; не запускать
+production provisioning script против источника.
 
-- присутствуют все три regular files, они не пустые и находятся в ожидаемой
-  новой директории с закрытыми правами; SQL-файлы не печатать и не открывать в
-  незакрытом окружении;
-- CLI exit statuses сохранены, в защищённом журнале отмечены время начала/конца,
-  версии Supabase CLI и database server, project/database identity, scope и
-  ожидаемое число файлов;
-- оператор в защищённой среде проверил schema/table/role inventory и ожидаемые
-  признаки data output без вывода пользовательских значений; отсутствие
-  нужного объекта/строк означает **STOP**;
-- посчитан SHA-256 каждого файла и создан manifest без DSN, паролей, PII или
-  содержимого SQL; manifest включает timestamp, project ref/database, версии,
-  миграционный ориентир, scope/исключения, размеры и хэши;
-- каждый файл и manifest зашифрованы утверждённым средством до передачи.
-  Перенести только ciphertext в approved storage **вне Supabase** с ограниченным
-  доступом, retention и восстановимым ключом; получить файлы обратно в закрытую
-  временную область и сверить хэши. Удалять plaintext только после проверенного
-  offsite copy и по утверждённой cleanup policy.
+Границы schema-wide dump и archive/restore options сверены с официальными
+[PostgreSQL 17 pg_dump](https://www.postgresql.org/docs/17/app-pgdump.html) и
+[pg_restore](https://www.postgresql.org/docs/17/app-pgrestore.html) docs.
 
-Минимальные локальные проверки файлов и checksum (в той же закрытой директории):
+Миграции указывают `app_runtime` как policy/grant principal; backend не требует
+Supabase `anon`, `authenticated` или `service_role` для DB access. Однако
+полный production ACL catalog не подтверждён этим аудитом, поэтому наличие иных
+ACL principals — preflight check. В migrations нет `CREATE EXTENSION`; прямой
+зависимости MVP от Supabase Auth, Storage или Vault data не выявлено. Оператор
+подтвердил 0 Auth users, 0 Storage objects и 0 Vault secrets. Повторить эти
+inventory checks перед backup; provider configuration остаётся отдельным
+recovery dependency.
 
-```sh
-test -s "$BACKUP_DIR/roles.sql"
-test -s "$BACKUP_DIR/schema.sql"
-test -s "$BACKUP_DIR/data.sql"
-shasum -a 256 "$BACKUP_DIR/roles.sql" "$BACKUP_DIR/schema.sql" \
-  "$BACKUP_DIR/data.sql" > "$BACKUP_DIR/files.sha256"
-shasum -a 256 -c "$BACKUP_DIR/files.sha256"
-```
+### Migration history, полнота и consistency
 
-Если любой файл отсутствует/пустой или checksum verification не проходит —
-**STOP**; не шифровать и не передавать этот набор как backup.
+Оператор подтвердил 19 production migration ledger records. `public` archive не
+включает `supabase_migrations`. Сохранить в sidecar manifest фактические
+production migration version IDs (и доступные names), число записей, Git commit и
+соответствие version IDs файлам `supabase/migrations/`. Получать ledger только
+read-only запросом в рамках будущего разрешённого backup, не редактировать
+production ledger и не импортировать его в recovery target автоматически.
+
+Manifest должен содержать target/database identity, UTC window, PostgreSQL
+server/client versions, выбранные options/scope, список public tables, counts
+по 17 таблицам, policy/function/trigger inventory, extension inventory,
+migration versions/revision, размер и SHA-256 archive. Не включать credentials,
+пользовательские значения или содержимое SQL. `pg_dump` обеспечивает
+согласованность собственного archive, в том числе при concurrent writes.
+Отдельные table counts и migration ledger — наблюдения на другое время; runner
+должен фиксировать для них timestamp и явно обозначать это в manifest. Точное
+сравнение source/restore counts без общего snapshot недопустимо. Для первого MVP
+backup exported snapshot coordination не требуется; это возможное будущее
+улучшение, а не блокер.
+
+По RLS `pg_dump` по умолчанию выключает row security, чтобы выгрузить все строки;
+при недостаточных правах он должен упасть. Не включать `--enable-row-security`
+для backup: результат может быть частичным. Ранее подтверждённые `postgres`
+`LOGIN/BYPASSRLS`, ownership всех 17 public tables и SELECT позволяют считать
+эту identity кандидатом для полной выгрузки; перед первым запуском повторно
+проверить target и read coverage отдельным разрешённым preflight.
+
+### Restore только в disposable PostgreSQL
+
+1. Проверить SHA-256 manifest, `pg_restore --list`, scope и version metadata.
+2. Создать новое локальное disposable PostgreSQL 17 и уникальную пустую database
+   из `template0`; подтвердить localhost/server identity и точное имя target,
+   отличное от production. Не применять `--create` или `--clean`.
+3. До schema restore проверить ACL principals в archive. При неизвестном или
+   отсутствующем principal остановиться до отдельного решения об обработке; не
+   создавать placeholders автоматически. Затем создать `app_runtime` с
+   `LOGIN`, `NOINHERIT`, `NOBYPASSRLS`, `NOSUPERUSER`, `NOCREATEDB`,
+   `NOCREATEROLE`, `NOREPLICATION` и случайным локальным disposable password.
+   Убедиться, что target новый и изолированный.
+4. В свежей DB проверить `public` schema. Если она уже создана template, удалять
+   её разрешается только после подтверждения точного target и факта, что DB
+   создана текущим restore запуском; это повторяет guard local smoke. Затем
+   восстановить archive в эту DB с `--no-owner --exit-on-error
+   --single-transaction`, без `--clean`.
+5. Запустить grant script и read-only role/grants verifier на disposable target.
+   Сверить table/object inventory, записать восстановленные row counts, проверить
+   RLS/policies, functions/triggers, indexes/constraints, hashes и 19 ledger
+   versions из sidecar manifest; выполнить `ANALYZE`. Точное сравнение
+   source/restore counts разрешено только при доказанном общем snapshot; без него
+   counts остаются отдельными временными наблюдениями и equality assertion не
+   выполнять. Не выполнять restore или DDL на Supabase source.
+
+PostgreSQL server 17.6 и client tools 17.11 имеют совместимый major version:
+`pg_dump` 17.11 может читать 17.6, а восстановление следует тестировать на
+PostgreSQL 17.x. Это не доказывает production restore; для максимально близкой
+валидации нужен disposable server той же minor version 17.6. Перед export
+проверять точный `pg_dump`/`pg_restore` version, фиксированный host/database и
+`sslmode=require`; пароль передавать через `PGPASSWORD` environment (не URI в
+argv, временный plaintext или shell history). Ни один из этих production шагов
+в этом аудите не запускался.
+
+До runner остаются открытыми: production ACL principal inventory, extension и
+large-object inventory, counts/ledger observations с timestamps, точная 19-row
+ledger-to-Git reconciliation, права/совместимость restore identity и real
+restore на disposable PG17.6. Не считать выбранный scope завершённым backup до
+успешного реального restore и внешней encrypted copy.
 
 ## Проверенная схема зашифрованного хранения (synthetic test)
 
@@ -376,49 +428,43 @@ backup не создавался. Поэтому проверена схема �
 identity, но не шифрование/хранение реального production backup, его полнота,
 доступы и retention в рабочем цикле.
 
-Файлы могут содержать все пользовательские профили, Telegram identifiers,
-сообщения и trip data; `roles.sql` также считать чувствительным. Role export не
-следует считать источником восстанавливаемых паролей custom login roles.
-`pg_dump`-читаемость и hashes подтверждают лишь целостность файлов, не полноту
-rows или восстанавливаемость. Локальный 2026-10-18 synthetic smoke не проверял
-реальные production files.
+Custom archive может содержать пользовательские профили, Telegram identifiers,
+сообщения и trip data. Считать его чувствительным. Archive readability и SHA-256
+подтверждают целостность, но не полноту rows или восстанавливаемость. Локальный
+2026-10-18 synthetic smoke не проверял production archive.
 
 ## Restore validation только в отдельную disposable БД
 
 Production restore не входит в текущий этап и не должен выполняться в source
-Supabase. Supabase CLI даёт plain SQL files, поэтому их нельзя передавать в
-`pg_restore`; для SQL format нужен `psql`. Restore validation требует отдельного
-разрешения, новой пустой disposable PostgreSQL/Supabase DB и отдельного
-операторского плана. Target project/host/database должен быть проверен как
-отличный от production. Совместимость PostgreSQL version, extensions, роли,
-ownership, grants, RLS и триггеров должна быть разобрана заранее. Не используйте
-`local-test-db.sh reset`: он пересоздаёт схему по migrations, а не проверяет эти
-production SQL files. Если проверка требует production role scripts, неизвестных
-grants, изменения credentials или ослабления RLS — **STOP**.
-
-Доступная документация Supabase описывает restore трёх SQL files через `psql`,
-но роли и privileges могут быть несовместимы между project environments;
-custom `LOGIN` role passwords требуют отдельного безопасного provisioning.
-Некоторые проекты требуют особой обработки triggers/encrypted columns. Эти
-действия пока не проверены для Travel Friend и не должны выполняться по слепому
-копированию generic commands. Подготовить отдельную disposable-only procedure,
-проверить target identity read-only и остановиться при любом неясном SQL или
-role ownership.
+Supabase. Restore validation выбранного custom archive требует отдельного
+разрешения, новой пустой disposable PostgreSQL 17 DB и отдельного операторского
+плана. Target host/database должен быть подтверждён как локальный и отличный от
+production. Совместимость PostgreSQL version, extensions, ACL principals,
+ownership, grants, RLS и triggers должна быть разобрана заранее. Не используйте
+`local-test-db.sh reset`: он пересоздаёт schema по migrations, а не проверяет
+production archive. При неизвестных grants, необходимости credential changes
+или ослаблении RLS — **STOP**.
 
 После restore сохранить результат и проверить:
 
-- `psql` восстановил все утверждённые SQL files без ошибок в disposable target;
-  checksum полученных source files соответствует external manifest;
+- SHA-256 archive совпадает с external manifest; `pg_restore --list` читается;
+  `pg_restore --exit-on-error --single-transaction --no-owner` завершился без
+  ошибок в disposable target;
 - application table/object inventory соответствует ожидаемой миграционной
   версии; все ожидаемые 17 application tables присутствуют;
 - зафиксированы row counts по application tables без вывода пользовательских
-  значений; сравнение с source допустимо только при заранее определённом
-  consistent snapshot method и manifest. Такой метод пока не утверждён;
-- constraints, indexes, sequences, functions, triggers и RLS policies
+  значений и с timestamp; это отдельные временные наблюдения. Точное сравнение
+  source/restore counts без общего snapshot недопустимо; без него equality
+  assertion не выполнять. Общая exported snapshot coordination не является
+  требованием MVP и может быть добавлена позднее;
+- constraints, indexes, defaults, functions, triggers и RLS policies
   присутствуют; RLS enabled там, где его требует текущая schema;
-- owners, ACL/grants и runtime role attributes сверены отдельно: `roles.sql`
-  содержит только доступные CLI custom roles, reserved roles фильтруются, а
-  passwords custom `LOGIN` roles требуют отдельного provisioning;
+- restore ownership назначен disposable restore identity; ACL principals
+  сверены, при неизвестном/отсутствующем principal restore останавливается до
+  отдельного решения (placeholders автоматически не создаются); `app_runtime`
+  пересоздан с least-privilege attributes, grants
+  перепроверены существующими verifier scripts; production credentials не
+  переносились;
 - нет ошибок чтения ключевых application records и связанных записей.
 
 В репозитории есть только mock-tested local smoke для структуры и synthetic row;
@@ -439,21 +485,31 @@ production restore не запускался; длительность,
 
 **STOP**, если target или backup identity не подтверждены; нет явного разрешения
 на production DB operation; нет approved encrypted local/offsite storage; у
-backup неполная read/role coverage; CLI version/flags не сверены; любой dump
-завершился ошибкой, один из трёх файлов отсутствует/пустой, scope непонятен,
+backup неполная read/role coverage; `pg_dump`/`pg_restore` major version не
+сверены; dump завершился ошибкой, archive отсутствует/пустой, scope непонятен,
 manifest/hash не совпадает или data window неприемлем; disposable restore target
 не пустой, не изолирован или похож на production; несовместимы PostgreSQL
-version/extensions/roles; restore/validation завершились ошибкой; либо требуются
-непроверенные DDL/grants, изменение credentials/providers или обход RLS.
+version/extensions/roles; обнаружен неизвестный или отсутствующий ACL principal
+без отдельного решения о его обработке; restore/validation завершились ошибкой;
+либо требуются непроверенные DDL/grants, изменение credentials/providers или
+обход RLS. Отсутствие общего exported snapshot само по себе не является STOP для
+первого MVP backup; при этом точное сравнение source/restore counts запрещено.
 
 Открытые решения оператора перед первым backup: выбрать approved encrypted
 offsite store, доступ/ключи и retention; определить cadence и допустимые RPO/RTO;
 утвердить существующую DB identity и доказательства её schema/data/roles
-coverage без изменения grants; решить consistency window и допустимый write
-pause; подтвердить managed/custom schema и table exclusions, migration history
-scope и Storage object export; проверить CLI version, Docker, exact command flags
-и способ не раскрывать DB URL в shared process list; подготовить изолированную
-disposable restore target и validation plan. Если любого обязательного решения
-нет — разрешение на первый production dump пока не выдавать. Любые production
+coverage без изменения grants; утвердить consistency window и способ
+timestamped фиксации отдельных counts/ledger observations;
+подтвердить extension, large object, ACL principal и non-public schema inventory,
+migration history scope и нулевые Auth/Storage/Vault inventories; проверить
+PostgreSQL 17 client tools и передачу `PGSSLMODE=require`/`PGPASSWORD` через
+environment без DSN в argv; подготовить изолированную disposable PG17.6 restore
+target и validation plan. Если любого обязательного решения нет — разрешение на
+первый production dump пока не выдавать. Будущему runner нужны SAFE PREVIEW,
+явное подтверждение реального export, private no-overwrite output directory,
+custom archive, timestamped counts/ledger observations без требования общего
+exported snapshot, SHA-256 manifest, Keychain read и redacted output/error
+handling. Общая exported snapshot coordination может быть будущим улучшением.
+Любые production
 connection, queries или dump требуют отдельного явного разрешения перед
 выполнением. Этот этап не реализует №22 rollback/forward-fix.
