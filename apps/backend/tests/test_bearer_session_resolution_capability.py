@@ -19,6 +19,7 @@ from integration_database import (
 
 
 FUNCTION_SIGNATURE = "public.resolve_bearer_session(text)"
+IDENTITY_FUNCTION_SIGNATURE = "public.resolve_bearer_session_with_identity(text)"
 
 
 @pytest.fixture
@@ -52,6 +53,10 @@ def create_session(
     hashed_token = hashlib.sha256(raw_token.encode()).hexdigest()
     with psycopg.connect(database_url) as connection:
         user_id = connection.execute("INSERT INTO public.users DEFAULT VALUES RETURNING id").fetchone()[0]
+        connection.execute(
+            "INSERT INTO public.telegram_identities (user_id, telegram_user_id) VALUES (%s, %s)",
+            (user_id, 7654321),
+        )
         session_id = connection.execute(
             "INSERT INTO public.user_sessions (user_id, token_hash, expires_at, revoked_at) "
             "VALUES (%s, %s, %s, CASE WHEN %s THEN now() ELSE NULL END) RETURNING id",
@@ -146,6 +151,84 @@ def test_capability_has_only_the_audited_return_shape_and_grants(database_url: s
         assert "public.users" in function_definition
         assert "EXECUTE" not in function_definition
         assert "format(" not in function_definition
+
+
+def test_versioned_capability_resolves_session_and_only_numeric_telegram_identity(
+    database_url: str, runtime_database_url: str
+) -> None:
+    session_id, user_id, session_hash = create_session(
+        database_url,
+        raw_token="identity-resolution-token",
+        expires_at=datetime.now(UTC) + timedelta(minutes=1),
+    )
+
+    with psycopg.connect(runtime_database_url) as connection:
+        result = connection.execute(
+            "SELECT * FROM public.resolve_bearer_session_with_identity(%s)",
+            (session_hash,),
+        )
+        assert [column.name for column in result.description] == [
+            "session_id", "user_id", "telegram_user_id"
+        ]
+        assert result.fetchone() == (session_id, user_id, 7654321)
+        assert connection.execute(
+            "SELECT * FROM public.resolve_bearer_session_with_identity(%s)",
+            ("unknown-hash",),
+        ).fetchone() is None
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            connection.execute("SELECT telegram_user_id FROM public.telegram_identities")
+
+
+def test_versioned_capability_has_only_the_required_runtime_execute_grant(
+    database_url: str,
+) -> None:
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute(
+            "SELECT has_function_privilege(%s, %s, 'EXECUTE')",
+            (APP_RUNTIME_ROLE, IDENTITY_FUNCTION_SIGNATURE),
+        ).fetchone()[0] is True
+        for api_role in ("anon", "authenticated", "service_role"):
+            assert connection.execute(
+                "SELECT has_function_privilege(%s, %s, 'EXECUTE')",
+                (api_role, IDENTITY_FUNCTION_SIGNATURE),
+            ).fetchone()[0] is False
+        assert connection.execute(
+            "SELECT NOT EXISTS ("
+            "SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode("
+            "COALESCE(p.proacl, acldefault('f', p.proowner))) AS privilege "
+            "WHERE p.oid = %s::regprocedure AND privilege.grantee = 0 "
+            "AND privilege.privilege_type = 'EXECUTE'"
+            ")",
+            (IDENTITY_FUNCTION_SIGNATURE,),
+        ).fetchone()[0] is True
+        function_definition = connection.execute(
+            "SELECT pg_get_functiondef(%s::regprocedure)",
+            (IDENTITY_FUNCTION_SIGNATURE,),
+        ).fetchone()[0]
+        assert "SECURITY DEFINER" in function_definition
+        assert "SET search_path TO 'pg_catalog'" in function_definition
+        assert "public.telegram_identities" in function_definition
+        assert "username" not in function_definition
+
+
+def test_versioned_capability_fails_closed_without_matching_telegram_identity(
+    database_url: str, runtime_database_url: str
+) -> None:
+    _, user_id, session_hash = create_session(
+        database_url,
+        raw_token="identity-less-session-token",
+        expires_at=datetime.now(UTC) + timedelta(minutes=1),
+    )
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "DELETE FROM public.telegram_identities WHERE user_id = %s", (user_id,)
+        )
+
+    with psycopg.connect(runtime_database_url) as connection:
+        assert connection.execute(
+            "SELECT * FROM public.resolve_bearer_session_with_identity(%s)",
+            (session_hash,),
+        ).fetchone() is None
 
 
 def test_runtime_cannot_read_session_table_or_change_capability(

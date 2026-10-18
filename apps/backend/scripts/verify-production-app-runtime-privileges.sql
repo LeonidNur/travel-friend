@@ -159,6 +159,7 @@ WITH capability_signatures (function_signature) AS (
   VALUES
     ('public.current_authenticated_user_id()'),
     ('public.resolve_bearer_session(text)'),
+    ('public.resolve_bearer_session_with_identity(text)'),
     ('public.bootstrap_telegram_login(bigint,text,text,text,text,text)'),
     ('public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamp with time zone,timestamp with time zone)'),
     ('public.discover_eligible_travel_intents()'),
@@ -186,6 +187,32 @@ SELECT
 FROM required_capabilities
 ORDER BY function_signature;
 
+-- The admission resolver is a backend-only capability. Supabase API roles
+-- must exist, but must not have effective EXECUTE through a direct ACL or role
+-- membership.
+WITH api_roles (role_name) AS (
+  VALUES ('anon'), ('authenticated'), ('service_role')
+), resolved_roles AS (
+  SELECT api_roles.role_name, roles.oid AS role_oid
+  FROM api_roles
+  LEFT JOIN pg_roles AS roles ON roles.rolname = api_roles.role_name
+), resolver AS (
+  SELECT to_regprocedure('public.resolve_bearer_session_with_identity(text)') AS function_oid
+)
+SELECT
+  resolved_roles.role_name,
+  resolved_roles.role_oid IS NOT NULL AS is_present,
+  COALESCE(has_function_privilege(
+    resolved_roles.role_oid, resolver.function_oid, 'EXECUTE'
+  ), false) AS unexpected_execute,
+  resolved_roles.role_oid IS NOT NULL
+    AND NOT COALESCE(has_function_privilege(
+      resolved_roles.role_oid, resolver.function_oid, 'EXECUTE'
+    ), false) AS is_exact
+FROM resolved_roles
+CROSS JOIN resolver
+ORDER BY resolved_roles.role_name;
+
 -- This is an effective-rights check, not merely a direct ACL inspection. Any
 -- row is a failure: a PUBLIC grant or role membership is still executable by
 -- app_runtime and must be resolved separately before production cutover.
@@ -193,6 +220,7 @@ WITH capability_signatures (function_signature) AS (
   VALUES
     ('public.current_authenticated_user_id()'),
     ('public.resolve_bearer_session(text)'),
+    ('public.resolve_bearer_session_with_identity(text)'),
     ('public.bootstrap_telegram_login(bigint,text,text,text,text,text)'),
     ('public.bootstrap_telegram_login(bigint,text,text,text,text,text,timestamp with time zone,timestamp with time zone)'),
     ('public.discover_eligible_travel_intents()'),

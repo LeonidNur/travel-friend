@@ -112,6 +112,19 @@ CREATE ROLE app_runtime
   NOINHERIT
   NOREPLICATION;
 SQL
+  docker exec -i "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'SQL'
+DO $do$
+DECLARE
+  api_role text;
+BEGIN
+  FOREACH api_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = api_role) THEN
+      EXECUTE pg_catalog.format('CREATE ROLE %I NOLOGIN', api_role);
+    END IF;
+  END LOOP;
+END
+$do$;
+SQL
   for migration in "$MIGRATIONS_DIR"/*.sql; do
     docker exec -i "$CONTAINER_NAME" psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" < "$migration"
   done

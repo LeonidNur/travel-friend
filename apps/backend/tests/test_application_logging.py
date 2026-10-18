@@ -14,7 +14,7 @@ os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token-for-application-logging"
 os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-application-logging")
 
 from travel_friend_backend import readiness
-from travel_friend_backend.config import BackendSettings
+from travel_friend_backend.config import AdmissionPolicy, BackendSettings
 from travel_friend_backend.logging_config import (
     APPLICATION_LOGGER_NAME,
     OWNED_HANDLER_ATTRIBUTE,
@@ -25,7 +25,13 @@ from travel_friend_backend.rate_limit import TELEGRAM_LOGIN_POLICY
 
 
 def make_app():
-    return create_app(BackendSettings(telegram_bot_token="test-token", database_url="postgresql://unused"))
+    return create_app(
+        BackendSettings(
+            telegram_bot_token="test-token",
+            database_url="postgresql://unused",
+            admission_policy=AdmissionPolicy(frozenset({123}), frozenset(), False),
+        )
+    )
 
 
 @contextmanager
@@ -145,6 +151,31 @@ def test_429_completion_contains_the_request_id(
     assert len(records) == 1
     assert records[0].status == 429
     assert not [record for record in caplog.records if record.levelno == logging.ERROR]
+
+
+def test_denied_admission_does_not_expose_telegram_id_in_response_or_logs(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    sensitive_telegram_id = 987654321
+    app = make_app()
+
+    class Verifier:
+        def verify(self, _: str) -> object:
+            return type(
+                "Verified",
+                (),
+                {"identity": type("Identity", (), {"telegram_user_id": sensitive_telegram_id})()},
+            )()
+
+    app.state.telegram_init_data_verifier = Verifier()
+    with capture_application_logs(caplog):
+        with TestClient(app) as client:
+            response = client.post("/auth/telegram", json={"init_data": "signed-test-payload"})
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Access is not enabled"}
+    assert str(sensitive_telegram_id) not in response.text
+    assert str(sensitive_telegram_id) not in caplog.text
 
 
 def test_ready_503_completion_contains_the_request_id(

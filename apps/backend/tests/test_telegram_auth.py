@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 import time
+from dataclasses import replace
 from collections.abc import Iterator
 from urllib.parse import urlencode
 from uuid import UUID
@@ -15,7 +16,7 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
-from travel_friend_backend.config import BackendSettings
+from travel_friend_backend.config import AdmissionPolicy, BackendSettings
 from integration_database import (
     IntegrationDatabaseNotConfiguredError,
     get_disposable_test_database_url,
@@ -24,6 +25,7 @@ from integration_database import (
 
 
 TEST_BOT_TOKEN = "test-bot-token-for-telegram-auth"
+TESTER_TELEGRAM_ID = 7654321
 # The module-level FastAPI application is initialized during this import. This
 # test-only value keeps integration tests independent of production secrets.
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", TEST_BOT_TOKEN)
@@ -64,7 +66,17 @@ def clean_database(database_url: str) -> Iterator[None]:
 
 @pytest.fixture
 def client(runtime_database_url: str) -> Iterator[TestClient]:
-    app = create_app(BackendSettings(telegram_bot_token=TEST_BOT_TOKEN, database_url=runtime_database_url))
+    app = create_app(
+        BackendSettings(
+            telegram_bot_token=TEST_BOT_TOKEN,
+            database_url=runtime_database_url,
+            admission_policy=AdmissionPolicy(
+                core_user_ids=frozenset({123456789, 1, 2}),
+                tester_user_ids=frozenset({TESTER_TELEGRAM_ID}),
+                testers_paused=False,
+            ),
+        )
+    )
     with TestClient(app) as test_client:
         yield test_client
 
@@ -137,6 +149,75 @@ def test_deleted_user_cannot_authenticate(client: TestClient, database_url: str)
         with connection.cursor() as cursor:
             cursor.execute("UPDATE public.users SET deleted_at = now()")
     assert login(client).status_code == 403
+
+
+def test_unknown_telegram_identity_is_denied_before_user_or_session_creation(
+    client: TestClient, database_url: str
+) -> None:
+    response = login(client, telegram_user(id=999999999))
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Access is not enabled"}
+    assert "999999999" not in response.text
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute("SELECT count(*) FROM public.users").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM public.user_sessions").fetchone()[0] == 0
+
+
+def test_approved_tester_can_login(client: TestClient) -> None:
+    response = login(client, telegram_user(id=TESTER_TELEGRAM_ID))
+
+    assert response.status_code == 200
+
+
+def test_tester_pause_denies_tester_but_keeps_core_member_access(client: TestClient) -> None:
+    tester_response = login(client, telegram_user(id=TESTER_TELEGRAM_ID))
+    core_response = login(client, telegram_user(id=123456789))
+    assert tester_response.status_code == core_response.status_code == 200
+    settings = client.app.state.backend_settings
+    paused_settings = replace(
+        settings,
+        admission_policy=AdmissionPolicy(
+            core_user_ids=settings.admission_policy.core_user_ids,
+            tester_user_ids=settings.admission_policy.tester_user_ids,
+            testers_paused=True,
+        ),
+    )
+
+    with TestClient(create_app(paused_settings)) as paused_client:
+        assert login(paused_client, telegram_user(id=TESTER_TELEGRAM_ID)).status_code == 403
+        assert paused_client.get(
+            "/auth/test-current",
+            headers=auth_headers(tester_response.json()["access_token"]),
+        ).status_code == 403
+        assert paused_client.get(
+            "/auth/test-current",
+            headers=auth_headers(core_response.json()["access_token"]),
+        ).status_code == 200
+
+
+def test_removed_tester_with_existing_session_is_denied_on_direct_api(
+    client: TestClient,
+) -> None:
+    login_response = login(client, telegram_user(id=TESTER_TELEGRAM_ID))
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+    settings = client.app.state.backend_settings
+    client.app.state.backend_settings = replace(
+        settings,
+        admission_policy=AdmissionPolicy(
+            core_user_ids=settings.admission_policy.core_user_ids,
+            tester_user_ids=frozenset(),
+            testers_paused=False,
+        ),
+    )
+
+    response = client.get("/me/profile", headers=auth_headers(token))
+
+    assert response.status_code == 403
+    assert "Access is not enabled" in response.text
+    assert str(TESTER_TELEGRAM_ID) not in response.text
+    assert token not in response.text
 
 
 @pytest.mark.parametrize("init_data", ["invalid", None])
