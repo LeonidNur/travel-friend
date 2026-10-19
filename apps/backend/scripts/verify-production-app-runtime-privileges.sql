@@ -187,31 +187,67 @@ SELECT
 FROM required_capabilities
 ORDER BY function_signature;
 
--- The admission resolver is a backend-only capability. Supabase API roles
--- must exist, but must not have effective EXECUTE through a direct ACL or role
--- membership.
-WITH api_roles (role_name) AS (
+-- These SQL capabilities are backend-only. Effective API-role checks include
+-- direct ACLs, role membership and PUBLIC grants. PUBLIC itself is checked
+-- from the effective function ACL, including PostgreSQL's default ACL when
+-- proacl is NULL.
+WITH protected_capabilities (function_signature) AS (
+  VALUES
+    ('public.bootstrap_telegram_login(bigint,text,text,text,text,text)'),
+    ('public.chat_participant_public_profile(uuid,uuid)'),
+    ('public.resolve_bearer_session_with_identity(text)')
+), api_roles (role_name) AS (
   VALUES ('anon'), ('authenticated'), ('service_role')
+), resolved_capabilities AS (
+  SELECT
+    protected_capabilities.function_signature,
+    to_regprocedure(protected_capabilities.function_signature) AS function_oid
+  FROM protected_capabilities
 ), resolved_roles AS (
   SELECT api_roles.role_name, roles.oid AS role_oid
   FROM api_roles
   LEFT JOIN pg_roles AS roles ON roles.rolname = api_roles.role_name
-), resolver AS (
-  SELECT to_regprocedure('public.resolve_bearer_session_with_identity(text)') AS function_oid
 )
 SELECT
+  resolved_capabilities.function_signature,
   resolved_roles.role_name,
+  resolved_capabilities.function_oid IS NOT NULL AS function_exists,
   resolved_roles.role_oid IS NOT NULL AS is_present,
   COALESCE(has_function_privilege(
-    resolved_roles.role_oid, resolver.function_oid, 'EXECUTE'
+    'app_runtime', resolved_capabilities.function_oid, 'EXECUTE'
+  ), false) AS app_runtime_execute,
+  COALESCE((
+    SELECT bool_or(acl.privilege_type = 'EXECUTE')
+    FROM pg_proc AS procedures
+    CROSS JOIN LATERAL aclexplode(
+      COALESCE(procedures.proacl, acldefault('f', procedures.proowner))
+    ) AS acl
+    WHERE procedures.oid = resolved_capabilities.function_oid
+      AND acl.grantee = 0
+  ), false) AS public_execute,
+  COALESCE(has_function_privilege(
+    resolved_roles.role_oid, resolved_capabilities.function_oid, 'EXECUTE'
   ), false) AS unexpected_execute,
-  resolved_roles.role_oid IS NOT NULL
+  resolved_capabilities.function_oid IS NOT NULL
+    AND resolved_roles.role_oid IS NOT NULL
+    AND COALESCE(has_function_privilege(
+      'app_runtime', resolved_capabilities.function_oid, 'EXECUTE'
+    ), false)
+    AND NOT COALESCE((
+      SELECT bool_or(acl.privilege_type = 'EXECUTE')
+      FROM pg_proc AS procedures
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(procedures.proacl, acldefault('f', procedures.proowner))
+      ) AS acl
+      WHERE procedures.oid = resolved_capabilities.function_oid
+        AND acl.grantee = 0
+    ), false)
     AND NOT COALESCE(has_function_privilege(
-      resolved_roles.role_oid, resolver.function_oid, 'EXECUTE'
+      resolved_roles.role_oid, resolved_capabilities.function_oid, 'EXECUTE'
     ), false) AS is_exact
 FROM resolved_roles
-CROSS JOIN resolver
-ORDER BY resolved_roles.role_name;
+CROSS JOIN resolved_capabilities
+ORDER BY resolved_capabilities.function_signature, resolved_roles.role_name;
 
 -- This is an effective-rights check, not merely a direct ACL inspection. Any
 -- row is a failure: a PUBLIC grant or role membership is still executable by
@@ -317,3 +353,87 @@ SELECT
   NOT roles.rolreplication AS is_noreplication
 FROM pg_roles AS roles
 WHERE roles.rolname = 'app_runtime';
+
+-- Fail the verifier with a concise, explicit error when any protected
+-- capability boundary is violated. psql honors ON_ERROR_STOP above and exits
+-- non-zero on this exception. The query emits no application data.
+DO $verify_privileges$
+DECLARE
+  failures text[] := ARRAY[]::text[];
+  capability_oid oid;
+  api_role record;
+  protected_signature text;
+  relation_name text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
+    failures := array_append(failures, 'required role app_runtime is missing');
+  END IF;
+
+  FOR protected_signature IN
+    SELECT function_signature
+    FROM (VALUES
+      ('public.bootstrap_telegram_login(bigint,text,text,text,text,text)'),
+      ('public.chat_participant_public_profile(uuid,uuid)'),
+      ('public.resolve_bearer_session_with_identity(text)')
+    ) AS required(function_signature)
+  LOOP
+    capability_oid := to_regprocedure(protected_signature);
+    IF capability_oid IS NULL THEN
+      failures := array_append(failures, 'missing exact function ' || protected_signature);
+      CONTINUE;
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM pg_proc AS procedures
+      CROSS JOIN LATERAL aclexplode(
+        COALESCE(procedures.proacl, acldefault('f', procedures.proowner))
+      ) AS acl
+      WHERE procedures.oid = capability_oid
+        AND acl.grantee = 0
+        AND acl.privilege_type = 'EXECUTE'
+    ) THEN
+      failures := array_append(failures, 'PUBLIC has EXECUTE on ' || protected_signature);
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime')
+      AND NOT has_function_privilege('app_runtime', capability_oid, 'EXECUTE') THEN
+      failures := array_append(failures, 'app_runtime lacks EXECUTE on ' || protected_signature);
+    END IF;
+
+    FOR api_role IN
+      SELECT role_name, roles.oid AS role_oid
+      FROM (VALUES ('anon'), ('authenticated'), ('service_role')) AS required(role_name)
+      LEFT JOIN pg_roles AS roles ON roles.rolname = required.role_name
+    LOOP
+      IF api_role.role_oid IS NULL THEN
+        failures := array_append(failures, 'required API role ' || api_role.role_name || ' is missing');
+      ELSIF has_function_privilege(api_role.role_oid, capability_oid, 'EXECUTE') THEN
+        failures := array_append(
+          failures,
+          'unexpected effective EXECUTE for ' || api_role.role_name || ' on ' || protected_signature
+        );
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  FOREACH relation_name IN ARRAY ARRAY['users', 'telegram_identities'] LOOP
+    IF to_regclass(format('public.%I', relation_name)) IS NULL THEN
+      failures := array_append(failures, 'required relation public.' || relation_name || ' is missing');
+    ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime')
+      AND (
+        has_table_privilege('app_runtime', to_regclass(format('public.%I', relation_name)), 'SELECT')
+        OR has_any_column_privilege(
+          'app_runtime', to_regclass(format('public.%I', relation_name)), 'SELECT'
+        )
+      ) THEN
+      failures := array_append(failures, 'app_runtime has effective SELECT on public.' || relation_name);
+    END IF;
+  END LOOP;
+
+  IF cardinality(failures) > 0 THEN
+    RAISE EXCEPTION 'SQL privilege verification failed: %', array_to_string(failures, '; ')
+      USING ERRCODE = '42501';
+  END IF;
+END
+$verify_privileges$;

@@ -28,6 +28,10 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
     script = GATE_PATH.read_text()
 
     for required_fragment in (
+        "BACKEND_ONLY_FUNCTIONS",
+        "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
+        "public.chat_participant_public_profile(uuid,uuid)",
+        "public.resolve_bearer_session_with_identity(text)",
         "current_user",
         "session_user",
         "rolsuper",
@@ -83,6 +87,13 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "InsufficientPrivilege",
     ):
         assert required_fragment in script
+
+    gate = runpy.run_path(str(GATE_PATH))
+    assert gate["BACKEND_ONLY_FUNCTIONS"] == (
+        "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
+        "public.chat_participant_public_profile(uuid,uuid)",
+        "public.resolve_bearer_session_with_identity(text)",
+    )
 
     for policy_name in (
         "profiles_select_own",
