@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import psycopg
@@ -130,6 +131,14 @@ def test_read_only_verification_checks_effective_privileges_and_role_boundary() 
     assert "PG_ATTRIBUTE" in normalized
     assert "INFORMATION_SCHEMA.COLUMNS" not in normalized
     assert "HAS_FUNCTION_PRIVILEGE" in normalized
+    assert "ACLEXPLODE" in normalized
+    assert "SQL PRIVILEGE VERIFICATION FAILED" in normalized
+    for capability in (
+        "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
+        "public.chat_participant_public_profile(uuid,uuid)",
+        "public.resolve_bearer_session_with_identity(text)",
+    ):
+        assert capability in script
     assert "DELETE" in normalized
     assert "TRUNCATE" in normalized
     assert "REFERENCES" in normalized
@@ -157,6 +166,26 @@ def execute_psql_script(connection: psycopg.Connection, script_path: Path) -> li
             result_sets.append(([column.name for column in cursor.description], cursor.fetchall()))
         if not cursor.nextset():
             return result_sets
+
+
+class _RollbackPrivilegeMutation(Exception):
+    """Roll back one deliberately invalid ACL state after asserting STOP."""
+
+
+def assert_verifier_rejects_mutation(
+    connection: psycopg.Connection,
+    mutation_sql: str,
+    failure_fragment: str,
+) -> None:
+    try:
+        with connection.transaction():
+            connection.execute(mutation_sql)
+            with pytest.raises(psycopg.Error, match=re.escape(failure_fragment)):
+                with connection.transaction():
+                    execute_psql_script(connection, VERIFY_SCRIPT_PATH)
+            raise _RollbackPrivilegeMutation
+    except _RollbackPrivilegeMutation:
+        pass
 
 
 def table_operation_rows(
@@ -193,16 +222,43 @@ def test_production_runtime_grants_and_verifier_execute_against_migrated_schema(
         execute_psql_script(connection, GRANTS_SCRIPT_PATH)
         verification_results = execute_psql_script(connection, VERIFY_SCRIPT_PATH)
 
+        assert_verifier_rejects_mutation(
+            connection,
+            "DROP FUNCTION public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
+            "missing exact function public.bootstrap_telegram_login",
+        )
+        assert_verifier_rejects_mutation(
+            connection,
+            "REVOKE EXECUTE ON FUNCTION public.chat_participant_public_profile(uuid,uuid) FROM app_runtime",
+            "app_runtime lacks EXECUTE on public.chat_participant_public_profile",
+        )
+        assert_verifier_rejects_mutation(
+            connection,
+            "GRANT EXECUTE ON FUNCTION public.chat_participant_public_profile(uuid,uuid) TO anon",
+            "unexpected effective EXECUTE for anon on public.chat_participant_public_profile",
+        )
+        assert_verifier_rejects_mutation(
+            connection,
+            "CREATE ROLE verifier_acl_probe NOLOGIN; "
+            "GRANT EXECUTE ON FUNCTION public.chat_participant_public_profile(uuid,uuid) "
+            "TO verifier_acl_probe; GRANT verifier_acl_probe TO anon",
+            "unexpected effective EXECUTE for anon on public.chat_participant_public_profile",
+        )
+        assert_verifier_rejects_mutation(
+            connection,
+            "GRANT EXECUTE ON FUNCTION public.resolve_bearer_session_with_identity(text) TO PUBLIC",
+            "PUBLIC has EXECUTE on public.resolve_bearer_session_with_identity",
+        )
+
         baseline_table_operations = table_operation_rows(verification_results)
         assert len(baseline_table_operations) == 17 * 7
         assert all(row[3] == row[4] and row[5] is True for row in baseline_table_operations)
 
-        connection.execute("GRANT SELECT (id) ON TABLE public.users TO app_runtime")
-        unexpected_column_results = execute_psql_script(connection, VERIFY_SCRIPT_PATH)
-        assert ("users", "SELECT", True, False) in [
-            (row[0], row[1], row[4], row[5])
-            for row in table_operation_rows(unexpected_column_results)
-        ]
+        assert_verifier_rejects_mutation(
+            connection,
+            "GRANT SELECT (id) ON TABLE public.users TO app_runtime",
+            "app_runtime has effective SELECT on public.users",
+        )
 
         connection.execute("REVOKE SELECT (id) ON TABLE public.user_sessions FROM app_runtime")
         missing_column_results = execute_psql_script(connection, VERIFY_SCRIPT_PATH)
@@ -216,16 +272,21 @@ def test_production_runtime_grants_and_verifier_execute_against_migrated_schema(
         connection.rollback()
 
     assert verification_results
-    api_resolver_acl_rows = next(
+    api_capability_acl_rows = next(
         rows
         for column_names, rows in verification_results
         if {"role_name", "is_present", "unexpected_execute", "is_exact"} <= set(column_names)
     )
-    assert api_resolver_acl_rows == [
-        ("anon", True, False, True),
-        ("authenticated", True, False, True),
-        ("service_role", True, False, True),
+    expected_api_capability_acl_rows = [
+        (signature, role, True, True, True, False, False, True)
+        for signature in (
+            "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
+            "public.chat_participant_public_profile(uuid,uuid)",
+            "public.resolve_bearer_session_with_identity(text)",
+        )
+        for role in ("anon", "authenticated", "service_role")
     ]
+    assert api_capability_acl_rows == expected_api_capability_acl_rows
     boolean_results = [
         value
         for column_names, rows in verification_results

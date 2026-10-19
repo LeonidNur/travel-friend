@@ -12,6 +12,11 @@ import psycopg
 
 
 RUNTIME_ROLE = "app_runtime"
+BACKEND_ONLY_FUNCTIONS = (
+    "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
+    "public.chat_participant_public_profile(uuid,uuid)",
+    "public.resolve_bearer_session_with_identity(text)",
+)
 INTERNAL_DORMANT_TABLES = (
     "users",
     "telegram_identities",
@@ -172,6 +177,7 @@ def check_required_functions(connection: psycopg.Connection) -> None:
 def check_capability_metadata(connection: psycopg.Connection) -> None:
     """Require hardened definer functions and no accidental PUBLIC execution."""
     expected = {
+        "public.bootstrap_telegram_login(bigint,text,text,text,text,text)": True,
         "public.resolve_bearer_session_with_identity(text)": True,
         "public.is_current_active_chat_participant(uuid)": True,
         "public.create_current_group_chat(uuid[])": True,
@@ -194,12 +200,12 @@ def check_capability_metadata(connection: psycopg.Connection) -> None:
             WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
           ) AS public_execute,
           COALESCE(has_function_privilege(current_user, procedure.oid, 'EXECUTE'), false) AS runtime_execute,
-          CASE WHEN signature = 'public.resolve_bearer_session_with_identity(text)' THEN (
+          CASE WHEN signature = ANY(%s::text[]) THEN (
             SELECT count(*) = 3
             FROM pg_roles
             WHERE rolname IN ('anon', 'authenticated', 'service_role')
           ) ELSE true END AS api_roles_present,
-          CASE WHEN signature = 'public.resolve_bearer_session_with_identity(text)' THEN ARRAY(
+          CASE WHEN signature = ANY(%s::text[]) THEN ARRAY(
             SELECT api_role.role_name
             FROM unnest(ARRAY['anon', 'authenticated', 'service_role']::text[]) AS api_role(role_name)
             WHERE EXISTS (SELECT 1 FROM pg_roles WHERE rolname = api_role.role_name)
@@ -210,7 +216,7 @@ def check_capability_metadata(connection: psycopg.Connection) -> None:
         LEFT JOIN pg_proc AS procedure ON procedure.oid = to_regprocedure(expected.signature)
         ORDER BY signature
         """,
-        (list(expected),),
+        (list(BACKEND_ONLY_FUNCTIONS), list(BACKEND_ONLY_FUNCTIONS), list(expected)),
     ).fetchall()
     require(len(rows) == len(expected), "capability catalog lookup was incomplete")
     invalid = [
