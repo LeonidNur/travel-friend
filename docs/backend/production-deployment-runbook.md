@@ -48,6 +48,36 @@ Release считается provenance-complete только когда intended 
 4. `20261003090000_chat_participant_public_profile.sql`
 5. `20261018090000_server_side_tester_admission_session_identity.sql`
 
+### Production preflight — 2026-10-19
+
+**VERIFIED:** Supabase project `travel-friend-dev` (`tlgprfsecdasloqnuyjo`),
+`ACTIVE_HEALTHY`, PostgreSQL 17.6; ledger содержит 19 versions. В `develop` —
+24 migrations, перечисленные выше пять pending migrations. В `profiles` и
+`travel_intents` обнаружено по 3 строки; NULL/blank `profiles.display_name` и
+`travel_intents.destination_label` — по 0. Три текущие SQL capabilities —
+legacy `bootstrap_telegram_login` (8 аргументов),
+`resolve_bearer_session(text)` и
+`chat_participant_profile_projection(uuid)` — принадлежат `postgres`; у
+`app_runtime` есть `EXECUTE`, у `anon`, `authenticated` и `service_role` его нет.
+Для функций в `public`, создаваемых как `postgres`, default ACL не выдаёт
+`EXECUTE` API roles. Default ACL `supabase_admin` отличается и может выдавать
+им `EXECUTE`; поэтому это подтверждение снимает риск только при условии, что
+миграции действительно выполняются ролью `postgres`.
+
+**UNKNOWN:** Полный production schema drift audit не завершён; безопасность и
+влияние DDL locks не доказаны. Фактическое состояние может измениться после
+этого preflight. Эффективные права новых функций после применения ещё не
+проверены.
+
+**BLOCKED:** Production rollout остаётся заблокированным. Непосредственно перед
+любым migration apply повторно подтвердить target, ledger, данные, роль создания
+функций и её default ACL. Если фактическая роль — `supabase_admin`, либо ACL
+неоднозначен, остановиться до отдельного решения. После применения выполнить
+effective-privilege проверку новых функций для `PUBLIC`, `anon`,
+`authenticated`, `service_role` и `app_runtime`; существующий verifier отдельно
+не проверяет API-role запрет для новых 6-аргументного login и Chat profile.
+Этот preflight и локальная репетиция не подтверждают production readiness.
+
 Это подтверждённый migration drift на дату наблюдения, а не подтверждение того, что все остальные schema objects совпадают. Перед rollout ledger нужно получить повторно; за время после read-only snapshot он мог измениться.
 
 Read-only function/permission comparison подтверждает для Render SHA `b25e08d…` наличие и `app_runtime` EXECUTE для его 12 используемых public functions, включая восьмиаргументную `bootstrap_telegram_login` и `chat_participant_profile_projection(uuid)`. Следовательно, проверенная backend↔DB compatibility для этого SHA ограничена его наблюдаемым migration/function/runtime-permission surface; полный schema drift audit не завершён. На текущем repository source используются шестипараметрическая версия `bootstrap_telegram_login`, `chat_participant_public_profile(uuid,uuid)` и `resolve_bearer_session_with_identity(text)`, которых в production на дату проверки нет. Без применения соответствующих migrations текущий source **не совместим с production**: Telegram login, профиль участника чата и все authenticated Bearer requests затронуты. Перед выпуском такого source нужны отдельная migration review/preflight, grants verification и явное разрешение на production migration; migrations не применялись в этом аудите.
@@ -91,9 +121,9 @@ production schema drift и не доказывает идентичность Su
 | Migration | Объекты / поведение | Data, RLS и privilege effects | Совместимость и риск |
 |---|---|---|---|
 | `20260924090000_completed_onboarding_active_travel_intent_invariant.sql` | `CREATE OR REPLACE` для `archive_current_active_travel_intent()`; serializes with completion through `user_activity_states` row. | DML выполняется только при вызове capability; migration сам не backfill-ит данные, не меняет таблицы/policies. Function `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, `app_runtime` execute. | Сигнатура сохранена; приложение должно продолжать передавать активный TravelIntent при завершённом onboarding. Production rows/behavior не перепроверялись. |
-| `20260924100000_session_lifecycle_baseline.sql` | Добавляет canonical шестипараметрический `bootstrap_telegram_login(...)`; заменяет legacy восьмипараметрический overload wrapper-ом в canonical function. | Login capability создаёт/обновляет identity и session только при вызове. Оба overload `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked; grants применяются отдельным runtime grant step. RLS/table definitions не меняются. | Legacy 8-arg signature сохраняет старый Render backend call contract; `created_at`/`expires_at` от старого backend игнорируются, TTL задаёт DB. Новая версия backend требует canonical 6-arg capability. Для нового 6-arg object SQL не отзывает явно `anon`/`authenticated`/`service_role`; default ACL production неизвестны — до migration проверить их и после apply сверить effective EXECUTE. |
+| `20260924100000_session_lifecycle_baseline.sql` | Добавляет canonical шестипараметрический `bootstrap_telegram_login(...)`; заменяет legacy восьмипараметрический overload wrapper-ом в canonical function. | Login capability создаёт/обновляет identity и session только при вызове. Оба overload `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked; grants применяются отдельным runtime grant step. RLS/table definitions не меняются. | Legacy 8-arg signature сохраняет старый Render backend call contract; `created_at`/`expires_at` от старого backend игнорируются, TTL задаёт DB. Новая версия backend требует canonical 6-arg capability. Для нового 6-arg object SQL не отзывает явно `anon`/`authenticated`/`service_role`; preflight 2026-10-19 подтвердил отсутствие их default EXECUTE при создании функцией `postgres`, но не при `supabase_admin`. До apply подтвердить фактическую creator role; после — сверить effective EXECUTE. |
 | `20260924110000_backend_field_domain_limits.sql` | Проверяет legacy blank `profiles.display_name` и `travel_intents.destination_label`, затем добавляет два `CHECK` constraints; заменяет `create_current_group_chat(uuid[])` и `send_current_chat_message(uuid,text)`. | Нет data backfill. При blank legacy values migration останавливается до добавления constraints. Изменённые functions `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, execute — `app_runtime`; RLS/policies не изменяются. | Behavior становится строже: пустые значения / невалидные group-chat inputs и сообщения будут отклоняться. Два `ALTER TABLE ... ADD CONSTRAINT` требуют таблицевых lock и проверки существующих строк; точная длительность/ожидание production неизвестны. Подготовить maintenance window и STOP при legacy rows или неприемлемом lock-рискe. См. [PostgreSQL 17 ALTER TABLE](https://www.postgresql.org/docs/17/sql-altertable.html) и [explicit locking](https://www.postgresql.org/docs/17/explicit-locking.html). |
-| `20261003090000_chat_participant_public_profile.sql` | Добавляет `chat_participant_public_profile(uuid,uuid)` для чтения профиля активного участника общего чата. | Нет table/policy changes. Function `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, execute — `app_runtime`. | Это нужная новая backend capability; архив и production snapshot её не содержали. Старый `chat_participant_profile_projection(uuid)` не удаляется, что поддерживает старый backend contract. Как и для canonical login capability, явного revoke названных API roles в migration нет; проверить production default ACL до apply и effective EXECUTE после. |
+| `20261003090000_chat_participant_public_profile.sql` | Добавляет `chat_participant_public_profile(uuid,uuid)` для чтения профиля активного участника общего чата. | Нет table/policy changes. Function `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, execute — `app_runtime`. | Это нужная новая backend capability; архив и production snapshot её не содержали. Старый `chat_participant_profile_projection(uuid)` не удаляется, что поддерживает старый backend contract. Как и для canonical login capability, явного revoke названных API roles в migration нет; preflight подтвердил отсутствие default EXECUTE при создании функцией `postgres`, но не при `supabase_admin`; creator role проверить перед apply и effective EXECUTE после. |
 | `20261018090000_server_side_tester_admission_session_identity.sql` | Аддитивно добавляет `resolve_bearer_session_with_identity(text)` с `session_id`, `user_id`, Telegram numeric identity. Старый `resolve_bearer_session(text)` оставлен неизменным. | Нет table/policy changes и прямых `app_runtime` SELECT grants на `users`/`telegram_identities`. Function `SECURITY DEFINER`, `search_path=pg_catalog`; `PUBLIC`, `anon`, `authenticated`, `service_role` EXECUTE отзывается если роль есть; runtime grant задаётся существующим grant script. | Новому backend нужна эта capability при каждом Bearer request. Существующие старые sessions сохраняются, однако admission env и runtime behavior должны быть проверены до внешнего допуска. |
 
 Dependency chain: migration 1 использует уже созданные `user_activity_states`,
@@ -116,18 +146,16 @@ DEFINER` и фиксированным `search_path=pg_catalog`; новые capa
 не исключает production drift, нестандартные ACL, дополнительные объекты или
 операторские зависимости Supabase.
 
-**ACL STOP:** подтверждённый production default-ACL inventory содержит
-`anon`, `authenticated` и `service_role`, но предыдущий снимок не зафиксировал
-их default function privileges. Существующий verifier проверяет запрет
-effective EXECUTE для этих ролей на новый Bearer resolver; он не даёт такого
-assertion для новых 6-arg login и Chat profile functions. Локальный rehearsal
-отдельно проверил effective denial трёх новых функций для локальных известных
-API role stubs, однако локальные default ACL не доказывают production ACL. До
-разрешения первого migration apply оператор должен подтвердить identity, от
-которой будут созданы функции, её default ACL и отсутствие effective EXECUTE у
-`anon`/`authenticated`/`service_role` на новых backend-only capabilities; после
-apply повторить это read-only verifier-ом. Неожиданный EXECUTE — **STOP** до
-отдельно reviewed исправления; не применять миграции и не деплоить backend.
+**ACL STOP:** preflight 2026-10-19 подтвердил отсутствие default function
+`EXECUTE` у API roles для новых функций, создаваемых владельцем `postgres` в
+`public`. Для `supabase_admin` default ACL отличаются и могут предоставлять
+API-role `EXECUTE`. Существующий verifier отдельно проверяет запрет effective
+`EXECUTE` для этих ролей на новый Bearer resolver, но не на новый 6-arg login и
+Chat profile functions. Локальная проверка на NOLOGIN stubs не доказывает
+production ACL. До migration apply оператор подтверждает фактическую creator
+role; после apply проверяет effective права всех новых backend-only capabilities
+для `PUBLIC`, API roles и `app_runtime`. Неожиданный `EXECUTE` или неполное
+покрытие verifier — **STOP** до отдельного решения; не деплоить backend.
 
 #### Compatibility matrix
 
