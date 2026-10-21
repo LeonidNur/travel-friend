@@ -516,13 +516,13 @@ target URLs и production env values не подтверждены в репоз
    ожидаются ровно пять versioned migrations в repository order.
 3. Отдельно получить разрешение на DB apply. Убедиться, что CLI `2.114.0`,
    `lock_timeout=5s` и `statement_timeout=120s` заданы в URI для migration
-connection. До dry-run выполнить read-only проверку того же DSN по процедуре
-выше: `current_user=session_user=postgres`, PostgreSQL 17, `lock_timeout=5s`,
-`statement_timeout=120s`. Затем передать неизменённое значение только через
-явный `--db-url` в pinned CLI. Источники подтверждают этот путь для migration
-connection; если требуется прямая runtime attestation из её физической
-сессии — **STOP до apply**, поскольку CLI не предоставляет pre-migration SQL
-hook.
+   connection. До dry-run выполнить read-only проверку того же DSN по процедуре
+   выше: `current_user=session_user=postgres`, PostgreSQL 17, `lock_timeout=5s`,
+   `statement_timeout=120s`. Затем передать неизменённое значение только через
+   явный `--db-url` в pinned CLI. Источники подтверждают этот путь для migration
+   connection; если требуется прямая runtime attestation из её физической
+   сессии — **STOP до apply**, поскольку CLI не предоставляет pre-migration SQL
+   hook.
    Оператор принимает короткое техническое окно и возможные временные API errors;
    Maintenance Mode/Suspend не включать в этот план.
 4. Применить только согласованный pending suffix через Supabase migration
