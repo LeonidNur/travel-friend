@@ -121,29 +121,54 @@ Frontend↔backend compatibility — **UNKNOWN**: frontend deployed SHA не р�
 | Проверка | Точное действие | Ожидается | STOP / доступ / состояние |
 |---|---|---|---|
 | Supabase target и права | В Supabase Dashboard открыть проект `travel-friend-dev`, сверить ref `tlgprfsecdasloqnuyjo`, статус и Database → Settings → Database. Убедиться, что у назначенного оператора есть отдельно одобренный доступ к read-only preflight и migration role; Dashboard membership сама по себе не доказывает DB privileges. В read-only SQL Editor выполнить `SELECT current_database(), current_user, session_user, current_setting('server_version');`. | `postgres`, ожидаемый ref, база `postgres`, PostgreSQL major 17; роль выполнения migration должна быть отдельно подтверждена как `postgres`. | При другом target, роли, версии или неясной принадлежности **STOP**. Запрос читает metadata и не меняет состояние. Для ledger/migration нужен privileged operator access; реальный credential не записывать в заметки. |
-| Ledger | В доверенном terminal выполнить `supabase migration list --db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN"`, сверить все remote versions, затем выполнить предусмотренный ниже `supabase db push --dry-run` и сравнить полный pending suffix с пятью файлами из §2. Не добавлять `--include-all`, `--include-roles`, `--include-seed` или `migration repair`. Команды перечислены в [Supabase CLI reference](https://supabase.com/docs/reference/cli/supabase-migration-list). | До apply — remote ledger ровно 19 версий без пропусков/лишних записей, а dry-run показывает ровно пять перечисленных pending migrations по порядку. | Любой extra/missing/out-of-order version — **STOP**. Оба действия читают migration history; dry-run не применяет SQL, но требует доступа к production migration endpoint. `--db-url` передаёт DSN процессу через argv; если локальная security policy не допускает этого, не обходить ограничение shell history/временным plaintext-файлом: согласовать защищённый путь либо остановиться. |
+| Ledger | В доверенном terminal выполнить `npx --yes supabase@2.114.0 migration list --db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN"`, сверить все remote versions, затем выполнить pinned `db push --dry-run` из раздела execution ниже. Не добавлять `--include-all`, `--include-roles`, `--include-seed` или `migration repair`. Команды перечислены в [Supabase CLI reference](https://supabase.com/docs/reference/cli/supabase-migration-list). | До apply — remote ledger ровно 19 версий без пропусков/лишних записей, а dry-run показывает ровно пять перечисленных pending migrations по порядку. | Любой extra/missing/out-of-order version — **STOP**. Оба действия читают migration history; dry-run не применяет SQL, но требует доступа к production migration endpoint. `--db-url` передаёт DSN процессу через argv; если локальная security policy не допускает этого, не обходить ограничение shell history/временным plaintext-файлом: согласовать защищённый путь либо остановиться. |
 | Legacy values | В Supabase SQL Editor выполнить только агрегаты, не возвращающие строки: `SELECT count(*) FILTER (WHERE display_name IS NULL OR btrim(display_name) = '') AS blank_display_names FROM public.profiles;` и отдельно `SELECT count(*) FILTER (WHERE destination_label IS NULL OR btrim(destination_label) = '') AS blank_destinations FROM public.travel_intents;`. | Оба результата `0`; 2026-10-19 такие агрегаты дали ноль на снимке из трёх строк каждой таблицы. | Ненулевое значение — **STOP**. Не показывать строки, не backfill-ить и не редактировать данные в рамках rollout preparation. Read-only aggregate. |
-| Schema drift | Сверить production catalog с migration history и approved schema contract по отдельно reviewed, read-only процедуре. Текущие backup preflight и grant verifier проверяют ограниченные inventories, но не выполняют полный schema-drift diff. | Иметь reviewed результат полного сравнения, зафиксированный без PII/secret values. | Полный production schema drift сейчас `UNKNOWN`; пока нет проверенной процедуры и результата, **STOP до apply**. Не трактовать счётчик таблиц/функций или backup manifest как доказательство полного совпадения. |
-| Creator role / default ACL | Запустить описанный в [backup runbook](backup-restore-runbook.md) `--preflight-only` только после отдельного разрешения на read-only connection; безопасная сводка сверяет target, RLS/read coverage, ACL principal inventory и расширения. Фактическую `current_user`/`session_user` проверить тем же connection mechanism, что будет использоваться при migration apply. | Для пяти функций роль-создатель подтверждена как `postgres`; ожидаемый inventory совпадает с операторским baseline 2026-10-19. | Если apply исполнится как `supabase_admin` или другая роль, остановиться и заново проверить default ACL: её default privileges отличаются. Preflight-only читает production, не создаёт artifacts и не пишет в DB; это всё равно требует отдельного read-only approval. |
+| Schema drift | Для текущих пяти migrations сверить затрагиваемые таблицы/колонки/constraints/indexes, функции/dependencies, RLS/policies/triggers и роли с approved migration plan по reviewed read-only процедуре. | Зафиксировать targeted review result для этого suffix; не называть его полным schema audit. | Targeted review для указанных migrations сообщён как **GO**. Неожиданный drift на затронутом объекте — **STOP**. Более широкий production schema drift остаётся отдельным риском; счётчики и backup manifest не доказывают полного совпадения. |
+| Creator role / default ACL | Запустить описанный в [backup runbook](backup-restore-runbook.md) `--preflight-only` только после отдельного разрешения на read-only connection; безопасная сводка сверяет target, RLS/read coverage, ACL principal inventory и расширения. Для apply использовать прямой `--db-url`, не linked target; перед ним проверить точный DSN read-only способом по процедуре ниже. | Reviewed ACL допускает apply только при `postgres`; CLI 2.114.0 передаёт direct URL в DB resolver и использует полученную сессию для migrations. Production verifier после apply проверит effective grants. | Ошибка read-only проверки identity/timeout или любое изменение CLI version/connection target — **STOP**. Если apply будет под `supabase_admin`/другой ролью, default ACL требуют нового review. Preflight-only и описанная проверка читают production, не создают artifacts и не пишут в DB. |
 | Backup и local restore | Сверить дату/target/checksum актуального production archive и encrypted offsite copy по [backup runbook](backup-restore-runbook.md); убедиться, что последний isolated restore result доступен и относится к текущей процедуре. | Есть проверяемый checksum, восстановимый локальный архив и успешный локальный schema/data + application grants restore; эти проверки не означают production recovery/ACL verification. | Нет актуального архива, manifest/ciphertext checksum, recovery key access или последнего restore evidence — **STOP**. Не запускать production backup/restore без отдельного разрешения; не раскрывать и не копировать ключ. |
-| Render SHA и controls | В Render Dashboard переключиться в подтверждённый workspace, открыть service `travel-friend-api` → Deploys и Settings. Записать полный SHA live deploy и service branch; в Settings проверить Auto-Deploy `Off`. В Billing проверить workspace plan, included usage, текущий usage, payment method, alerts/limits и оплачиваемые add-ons; на service подтвердить доступность Suspend/Resume и полномочия оператора. | Текущий SHA известен, целевой SHA существует и review/CI для него прошли; Auto-Deploy Off; стоимость и stop control понятны. | Старый известный live SHA `b25e08dce158b7fe7ea6d17b40d96c3e893330fa` — только исторический baseline, не автоматический rollback target. Текущий billing/permissions не подтверждены; не начинать deploy без сверки. Только чтение Dashboard. См. [Render billing/dashboard](https://render.com/docs/render-dashboard). |
+| Render SHA и controls | В Render Dashboard открыть service `travel-friend-api` → Deploys и Settings. Записать полный live SHA и service branch; проверить Auto-Deploy `Off`, права оператора и ручную возможность deploy конкретного commit. | Текущий SHA известен, целевой SHA существует и review/CI для него прошли; Auto-Deploy Off. | Старый известный live SHA `b25e08dce158b7fe7ea6d17b40d96c3e893330fa` — только исторический baseline, не автоматический rollback target. Выбранный rollout не использует Suspend/Maintenance Mode; API errors в коротком окне явно приняты оператором. Только чтение Dashboard. |
 | Vercel project, revision, API origin | В Vercel Dashboard выбрать правильную team и project `travel-friend-mini-app`, Production environment; сверить production alias/deployment ID и Git SHA в deployment details. В project Settings → Environment Variables проверить фактический production `BACKEND_API_ORIGIN` приватно и сравнить с независимо подтверждённым Render origin; значение не копировать в shell history, отчёт или issue. | Известны точный deployed frontend SHA, ожидаемый target и соответствие `BACKEND_API_ORIGIN` backend target. | На preflight SHA frontend и фактический `BACKEND_API_ORIGIN` были `UNKNOWN`. Пока оба не подтверждены, backend/frontend compatibility остаётся `UNKNOWN`, rollout **STOP**. Dashboard inspection не меняет состояние; env value не включать в release record. |
 | Telegram accounts / admission | Ответственный оператор вне репозитория подтверждает доступность 3 core и планируемых tester Telegram accounts; сверяет `TELEGRAM_CORE_USER_IDS`, `TELEGRAM_TESTER_USER_IDS`, `TELEGRAM_TESTERS_PAUSED` непосредственно в закрытой Render Environment, не записывая ID. | Все три настройки присутствуют и допустимы; для первого cutover testers paused (`true`), команда остаётся в core allowlist. | Не выводить IDs в screenshots/logs/Codex/tickets. Недоступный account или некорректная конфигурация — **STOP**. Environment change и его применение — отдельное разрешённое production действие; при этой проверке ничего не менять. |
 
-Проверка identity именно того privileged connection, который будет использоваться
-с Supabase CLI, должна пройти до dry-run. Это read-only команда из уже принятого
-operator workflow; значение DSN должно быть задано в закрытом operator context,
-не вставлено literal в историю:
+Для проверки migration connection использовать прямой `--db-url` с тем же
+закрытым DSN, который будет передан `db push`; не выбирать `--linked` и не
+опускать target flag. В CLI 2.114.0 явный `--db-url` идёт через прямой resolver
+(он не запускает Management API mint временной login-role). Для удалённой роли с
+именем `postgres.<project-ref>` CLI применяет `SET SESSION ROLE postgres`; это
+меняет `current_user`, но не `session_user`. Поэтому отдельная read-only проверка
+должна подтвердить оба значения как `postgres`, а не только ожидаемый `current_user`.
+Это подтверждается [исходным кодом CLI 2.114.0](https://github.com/supabase/cli/tree/v2.114.0/apps/cli/src/legacy).
+
+Перед применением выполнить read-only проверку с тем же DSN-переменным
+значением, которое будет использовано для dry-run и apply. DSN должен включать
+ожидаемые host/ref, port, database, username, `sslmode=require` и `options` из
+раздела timeouts. Не вставлять DSN literal в shell history:
 
 ```sh
-psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PRODUCTION_MIGRATOR_DSN" \
-  -c "SELECT current_database(), current_user, session_user, current_setting('server_version');"
+psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PRODUCTION_MIGRATOR_DSN_WITH_TIMEOUTS" \
+  -c "RESET ALL; SELECT current_database(), current_user, session_user, current_setting('server_version'), current_setting('lock_timeout'), current_setting('statement_timeout'), current_setting('lock_timeout')::interval = interval '5 seconds' AS lock_timeout_ok, current_setting('statement_timeout')::interval = interval '120 seconds' AS statement_timeout_ok;"
 ```
 
-Ожидаются database `postgres`, `current_user=session_user=postgres` и server
-major 17. Эта проверка сама по себе не подтверждает Supabase project ref:
-сверять его отдельно в Dashboard. Если process-list protection для DSN не
-подтверждена, остановиться до подключения.
+Ожидаются database `postgres`, `current_user=session_user=postgres`, server
+major 17 и обе колонки `*_ok=true`. `RESET ALL` намеренно повторяет сброс CLI
+перед migration: PostgreSQL определяет RESET default по session startup
+configuration, включая startup options. CLI 2.114.0 подтверждает, что query
+параметры `--db-url` сохраняются resolver-ом и передаются драйвером как startup
+options; одна физическая `psql` session сама по себе не доказывает состояние
+другого backend.
+
+Source-backed assurance для `db push` состоит из неизменённого exact DSN,
+прямого `--db-url` target, передачи resolved connection в push core и одной
+DB session для чтения ledger и применения migrations. Перед каждой migration
+CLI выполняет `RESET ALL`, затем применяет SQL в этой же сессии. См. [resolver](https://github.com/supabase/cli/blob/v2.114.0/apps/cli/src/legacy/shared/legacy-db-config.layer.ts), [PostgreSQL driver connection setup](https://github.com/supabase/cli/blob/v2.114.0/apps/cli/src/legacy/shared/legacy-db-connection.sql-pg.layer.ts), [migration apply path](https://github.com/supabase/cli/blob/v2.114.0/apps/cli/src/legacy/shared/legacy-migration-apply.ts) и описание PostgreSQL [`RESET`](https://www.postgresql.org/docs/17/sql-reset.html).
+
+Затем выполнить `db push --dry-run` с тем же exact DSN и сверить пять
+миграций и их порядок. Для отдельно разрешённого apply использовать DSN
+неизменным. Это гарантирует параметры по source-reviewed connection path, но
+не является SQL-отчётом из физической migration session: если release policy
+требует именно такой runtime-отчёт, а не source-backed гарантию подключения,
+**STOP** — CLI не предоставляет pre-migration SQL hook. Если process-list
+protection для DSN не подтверждена, остановиться до подключения.
 
 Команда ограниченного read-only backup preflight (запускается в будущем только
 после отдельного разрешения на production read-only connection; во время этой
@@ -160,11 +185,38 @@ Runner должен запросить интерактивное подтвер
 ожидаемый inventory, но не заменяет отдельную проверку полного migration ledger
 и exhaustive schema drift.
 
-Текущая disposition остаётся **BLOCKED**: frontend SHA/origin неизвестны; полный
-schema drift не проверен; lock/statement timeout controls для выбранного
-migration execution path не подтверждены; verifier gap по API-role EXECUTE
-описан ниже; live health/readiness не подтверждались. Закрыть все пункты можно
-только повторным preflight непосредственно перед отдельным approval.
+### Обновление подготовки rollout — 2026-10-21
+
+Этот dated update supersedes для планируемого rollout отдельные historical
+dispositions из preflight 2026-10-19; он не переписывает тогдашние наблюдения.
+
+По предоставленным результатам оператора локальная репетиция пяти migrations
+пройдена; targeted production schema-drift review и production ACL review имеют
+статус **GO** при подтверждённой migration identity `postgres`. Verifier gap
+закрыт локально; production verifier всё равно должен пройти после apply. Это
+не заменяет повторный production preflight, свежую резервную копию, проверку
+live SHA или отдельное разрешение на rollout.
+
+Для текущего Render Free service запланировано короткое техническое окно;
+временные API errors во время последовательности DB → grants/verifier/runtime
+gate → Render deploy приняты оператором. Длительность окна не гарантируется.
+Maintenance Mode и Suspend не используются. Старый backend может обслуживать запросы до
+завершения нового deploy, поэтому ошибки в этом окне являются известным риском.
+Если окно, target или согласованные проверки не укладываются в план, **STOP**;
+не считать Render rollback откатом схемы БД.
+
+**Текущие STOP gates:** непосредственно перед apply заново проверить project/ref,
+ledger, data invariants, backup и checksum, exact CLI/timeout configuration,
+фактическую Render revision и согласованный target SHA. Способ подтвердить
+`current_user=session_user=postgres` и оба timeout на том же exact DSN через
+read-only precheck ниже; применить только pinned CLI 2.114.0 с явным
+`--db-url`. CLI source подтверждает, как этот DSN превращается в migration
+session и как per-migration `RESET ALL` обрабатывает startup settings. Отдельный
+`psql` connection не является самостоятельным доказательством о другом
+backend; если release policy требует именно runtime-отчёт из физической
+migration session, а не source-backed гарантию, **STOP**. Frontend SHA/API origin и live
+health/readiness остаются отдельными проверками, если затрагивается frontend
+или они требуются release record.
 
 ### Production migration readiness audit: pending migrations и rollout gate
 
@@ -201,40 +253,37 @@ DEFINER` и фиксированным `search_path=pg_catalog`; новые capa
 не исключает production drift, нестандартные ACL, дополнительные объекты или
 операторские зависимости Supabase.
 
-**ACL STOP:** preflight 2026-10-19 подтвердил отсутствие default function
-`EXECUTE` у API roles для новых функций, создаваемых владельцем `postgres` в
-`public`. Для `supabase_admin` default ACL отличаются и могут предоставлять
-API-role `EXECUTE`. Существующий verifier отдельно проверяет запрет effective
-`EXECUTE` для этих ролей на новый Bearer resolver, но не на новый 6-arg login и
-Chat profile functions. Локальная проверка на NOLOGIN stubs не доказывает
-production ACL. До migration apply оператор подтверждает фактическую creator
-role; после apply проверяет effective права всех новых backend-only capabilities
-для `PUBLIC`, API roles и `app_runtime`. Неожиданный `EXECUTE` или неполное
-покрытие verifier — **STOP** до отдельного решения; не деплоить backend.
+**Production ACL — операторский review 2026-10-21: GO условно.** Принятое
+заключение относится к reviewed privilege inventory и требует выполнения
+migrations под `postgres`. После apply обязательны production verifier и runtime
+gate для всех новых backend-only capabilities. Если фактическая migration role
+не подтверждена как `postgres`, privileges отличаются от reviewed inventory
+или verifier/gate не проходят — **STOP**; не деплоить backend.
 
 #### Применение pending migrations: execution, timeouts и проверки
 
-Для migration apply подтверждённый CLI contract — `supabase db push`: он
-применяет локальные pending migrations в migration-history order и после
-успешного применения каждой добавляет запись в
-`supabase_migrations.schema_migrations`; `--dry-run` только показывает список.
-Использовать только точный repository checkout, без `--include-all`, role/seed
-флагов, `migration repair` или remote reset. [Текущий CLI reference](https://supabase.com/docs/reference/cli/supabase-test-db#supabase-db-push)
-описывает эти свойства. Подтверждённая ранее команда dry-run из
-[исторического cutover runbook](production-security-migrations-runbook.md)
-такова:
+Для migration apply закреплён Supabase CLI **2.114.0**: `db push` применяет
+локальные pending migrations в migration-history order и после успешного файла
+добавляет запись в `supabase_migrations.schema_migrations`; `--dry-run` только
+показывает список. Эта версия и процедура прошли локальную rehearsal, но это не
+production verification. Использовать точный repository checkout, без
+`--include-all`, role/seed флагов, `migration repair` или remote reset. См.
+[CLI reference](https://supabase.com/docs/reference/cli/supabase-db-push).
+
+В защищённом operator terminal использовать только pinned CLI и DSN с timeout
+options из подраздела ниже. Ожидаются ровно пять pending migrations в порядке
+§2:
 
 ```zsh
-supabase db push --db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN" --dry-run
+npx --yes supabase@2.114.0 db push --db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN_WITH_TIMEOUTS" --dry-run
 ```
 
-Для будущего apply используется та же команда без `--dry-run`, но только после
-отдельного approval, повторного preflight и проверки всех STOP gates ниже.
-Это не команда для текущей подготовки. DSN не помещать в командную строку как
-literal, history, log или тикет. `--db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN"`
-раскрывается в process arguments; если среда не защищает этот путь или
-оператор не может подтвердить это, **STOP** — не подменять его guessed env var,
-временным plaintext-файлом или `--password`.
+Любой иной список, target или CLI version — **STOP**. Будущая apply-команда
+та же без `--dry-run`, с `--yes`, только после отдельного approval и закрытия
+всех STOP gates; в рамках этой задачи она не запускалась. Значение DSN не
+вставлять literal в shell history, logs или отчёт. `--db-url` раскрывает DSN в
+process arguments: если process-list/history/log exposure нельзя исключить,
+**STOP**; не подменять его guessed env var, plaintext-файлом или `--password`.
 
 Один `db push` обрабатывает найденный pending suffix последовательно; он не
 предоставляет здесь подтверждённого operator checkpoint для ручной проверки
@@ -245,33 +294,47 @@ literal, history, log или тикет. `--db-url "$SUPABASE_PRODUCTION_MIGRATO
 blind push, не редактировать ledger и не считать отсутствие новой ledger row
 доказательством, что migration не оставила частичный schema effect.
 
-Ни одна из пяти migration не задаёт `lock_timeout` или `statement_timeout`, а
-в текущих repository scripts нет migration wrapper, который выставляет их в
-том же connection. Не считать Dashboard SQL Editor `SET` из отдельной сессии
-ограничением для `db push`. До будущего approval нужно выбрать и на локальной
-rehearsal подтвердить способ задать конечные per-statement/lock limits именно
-в session, исполняющей migrations, и согласовать numeric caps. Значения и
-способ сейчас `UNKNOWN`; пока они не подтверждены, **STOP до apply**. Для
-третьей migration отдельно учитывать table lock на двух `ALTER TABLE ... ADD
-CONSTRAINT`; при lock wait, timeout, неожиданной длительности или error —
-остановиться, traffic не возвращать и не менять значения timeouts наугад.
+Плановые пределы: `lock_timeout=5s`, `statement_timeout=120s`. Миграции не
+задают эти параметры; передать их как connection-startup `options` в exact DSN
+для CLI, а не через отдельный `SET` в SQL Editor/сессии:
+
+```text
+options=-c%20lock_timeout%3D5s%20-c%20statement_timeout%3D120s
+```
+
+Добавить encoded parameter к существующему URI query (`&options=...`, если
+query уже есть; иначе `?options=...`), сохранив подтверждённые target и
+`sslmode=require`. Локальная rehearsal через CLI 2.114.0 подтвердила значения
+из migration session. Исходный код версии 2.114.0 подтверждает production-capable
+путь: parser сохраняет connection-string `options`, driver передаёт их как
+PostgreSQL startup options, а перед каждой migration CLI выполняет `RESET ALL`.
+Оператор подтверждает значения через read-only проверку выше с тем же DSN,
+затем использует только explicit `--db-url`; это source-backed assurance,
+а не наблюдение внутри той же физической сессии. При изменении URI, версии CLI
+или target — **STOP** и повторить preflight. Параметры не меняют роль, grants
+или владельца функций. `lock_timeout` ограничивает ожидание lock,
+`statement_timeout` — отдельный statement, а не весь `db push`. Для двух
+`ALTER TABLE ... ADD CONSTRAINT` в migration 3 при lock wait, timeout,
+неожиданной длительности или ошибке — STOP; не увеличивать значения наугад.
 
 | Порядок / migration | До исполнения и роль | Ожидаемый результат и проверка после полного `db push` | Backend overlap / STOP |
 |---|---|---|---|
 | 1. `20260924090000_completed_onboarding_active_travel_intent_invariant.sql` | Ledger ровно 19 + базовые objects для `user_activity_states`, `travel_intents` и `current_authenticated_user_id()`; проверить `current_user=session_user=postgres` в migration session. | Ledger содержит версию; `archive_current_active_travel_intent()` существует, `SECURITY DEFINER`, `search_path=pg_catalog`, нет `PUBLIC EXECUTE`, у `app_runtime` есть `EXECUTE`. | Сигнатура сохраняется для текущего backend; меняется поведение archive/completion при завершённом onboarding. Остановиться, если prereq/metadata/grant не совпал или production data behavior не оценён. |
-| 2. `20260924100000_session_lifecycle_baseline.sql` | Успешно проверена migration 1 и базовые identity/session/profile/activity tables; creator role `postgres`. | Оба overload `bootstrap_telegram_login` существуют: 6-arg canonical и legacy 8-arg wrapper; оба `SECURITY DEFINER`, фиксированный `search_path`; ledger row есть. Effective `EXECUTE` должен быть только app_runtime для backend contract, без `PUBLIC`/API roles. | Legacy 8-arg сохранён для старого Render backend; новый backend вызывает 6-arg. Неожиданный API-role EXECUTE — STOP; текущий verifier не полностью подтверждает denial для этого overload. |
+| 2. `20260924100000_session_lifecycle_baseline.sql` | Успешно проверена migration 1 и базовые identity/session/profile/activity tables; creator role `postgres`. | Оба overload `bootstrap_telegram_login` существуют: 6-arg canonical и legacy 8-arg wrapper; оба `SECURITY DEFINER`, фиксированный `search_path`; ledger row есть. Effective `EXECUTE` должен быть только app_runtime для backend contract, без `PUBLIC`/API roles. | Legacy 8-arg сохранён для старого Render backend; новый backend вызывает 6-arg. Неожиданный API-role EXECUTE — STOP; production verifier после apply обязателен. |
 | 3. `20260924110000_backend_field_domain_limits.sql` | Повторить агрегаты blank/null перед apply: обе должны оставаться `0`; миграции 1–2 и `profiles`/`travel_intents` существуют; creator `postgres`. | В ledger есть версия; constraints `profiles_display_name_not_blank` и `travel_intents_destination_label_not_blank` существуют и `convalidated=true`; обновлённые функции доступны только по проверенной privilege matrix. | Добавляет два CHECK и заменяет group-chat/message capabilities; старый backend сохраняет сигнатуры, но пустые значения/невалидные inputs начнут отклоняться. Ненулевой legacy count, lock wait, timeout или неизвестное число активных writers — STOP, без backfill/автоматического отката. |
-| 4. `20261003090000_chat_participant_public_profile.sql` | Предыдущие миграции успешны; проверить `chat_participants`, `profiles`, `travel_intents`, `users` и authenticated-user capability; creator `postgres`. | Ledger row есть; `chat_participant_public_profile(uuid,uuid)` существует с `SECURITY DEFINER`, `search_path=pg_catalog`; `PUBLIC` и API roles не executable, `app_runtime` executable. | Старый backend использует сохранённую прежнюю projection function; новый backend требует новую. Проверить effective API-role denial отдельно от текущего verifier, иначе STOP. |
+| 4. `20261003090000_chat_participant_public_profile.sql` | Предыдущие миграции успешны; проверить `chat_participants`, `profiles`, `travel_intents`, `users` и authenticated-user capability; creator `postgres`. | Ledger row есть; `chat_participant_public_profile(uuid,uuid)` существует с `SECURITY DEFINER`, `search_path=pg_catalog`; `PUBLIC` и API roles не executable, `app_runtime` executable. | Старый backend использует сохранённую прежнюю projection function; новый backend требует новую. Production verifier после apply должен подтвердить effective API-role denial. |
 | 5. `20261018090000_server_side_tester_admission_session_identity.sql` | Предыдущие четыре успешно применены; `user_sessions`, `users`, `telegram_identities` присутствуют; creator `postgres`. | Ledger row есть; `resolve_bearer_session_with_identity(text)` существует с `SECURITY DEFINER`, `search_path=pg_catalog`; app_runtime EXECUTE, `PUBLIC`/`anon`/`authenticated`/`service_role` effective EXECUTE отсутствует; прямых runtime SELECT grants на `users`/`telegram_identities` нет. | Старый resolver не меняется; новая версия backend использует новый resolver на каждом bearer request. Неожиданные ACL или прямые grants — STOP; не добавлять их для «быстрого» прохождения. |
 
 После полного suffix считать миграционную часть успешной только если пять новых
 версий присутствуют по порядку, ожидаемые объекты и constraints существуют,
-полный schema-drift audit больше не `UNKNOWN`, grants/verifier проходят, и
-legacy backend compatibility review для фактических deployed SHA завершён.
+targeted schema-drift review для затронутых объектов подтверждён, grants/verifier
+проходят, и compatibility review для фактических deployed SHA завершён. Более
+широкий schema-drift audit остаётся отдельным риском и не считается выполненным
+этим rollout review.
 Production ledger на 2026-10-19 был 19, Git `develop` содержал 24 files;
 эти значения — дата-связанный ориентир, не текущая гарантия.
 
-### Grant apply и закрытие verifier gap
+### Grant apply и статус verifier gap
 
 После миграций и только по отдельному разрешению применить существующий
 `apps/backend/scripts/grant-production-app-runtime-privileges.sql` с approved
@@ -302,18 +365,13 @@ psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PRODUCTION_MIGRATOR_DSN" \
 что `app_runtime` не имеет прямого `SELECT` на `public.users` и
 `public.telegram_identities`.
 
-**Concrete verifier blocker:** grant SQL явно отзывает `anon`,
-`authenticated` и `service_role` у нового session resolver, но не у canonical
-6-argument login и Chat profile function. Migration явно отзывает `PUBLIC`, а
-их ожидаемая creator role `postgres` имеет проверенный безопасный default ACL;
-однако `verify-production-app-runtime-privileges.sql` проверяет effective
-API-role denial только для session resolver. Ни grant verifier, ни
-`production-runtime-deployment-gate.py` не доказывают запрет API-role EXECUTE
-для всех трёх функций. Минимальное закрытие до rollout: отдельное review/update
-read-only verifier с exact-signature `has_function_privilege` для каждого API
-role и прямой ACL inventory `PUBLIC` для трёх функций, затем targeted tests на
-локальной PostgreSQL 17. Пока это не сделано и не проверено, **STOP**; не
-подменять отсутствующую проверку предположением о default ACL.
+**Статус verifier gap: закрыт локально, production verification pending.**
+Обновлённый `verify-production-app-runtime-privileges.sql` проверяет точные
+сигнатуры трёх backend-only функций, effective EXECUTE для `app_runtime`,
+`PUBLIC`, `anon`, `authenticated`, `service_role` и отсутствие прямого runtime
+`SELECT` на `public.users`/`public.telegram_identities`. Перед backend deploy
+production verifier и runtime gate должны пройти на точном project/ref; любое
+расхождение — **STOP**. Локальный результат не доказывает production ACL.
 
 После verifier запустить
 `apps/backend/scripts/production-runtime-deployment-gate.py` через
@@ -445,26 +503,36 @@ target URLs и production env values не подтверждены в репоз
 Каждый шаг — отдельная production operation с собственным approval; этот
 документ не даёт такого approval.
 
-1. Зафиксировать release record: exact target Git SHA, CI/review status,
+1. Зафиксировать release record: target backend SHA
+   `2183708cb86d965cb395f1d6855b4ee038851abc`, CI/review status,
    production project/ref, current ledger, Render live SHA, Vercel live SHA и
    frontend API-origin compatibility. Сейчас Vercel SHA и origin `UNKNOWN`, так
    что начинать rollout нельзя.
-2. Подтвердить успешный backup preflight/evidence и последний isolated restore;
-   проверить отсутствие неизвестных schema/ACL/extension findings. Выполнить
-   exact dry-run из предыдущего раздела; вывод должен быть только пятью
-   versioned migrations в timestamp order.
-3. Получить отдельное разрешение на DB apply, заранее согласовать и rehearsal-
-   проверить lock/statement timeout controls для того же execution session,
-   подтвердить traffic/maintenance plan и `current_user=session_user=postgres`.
-   Если любой факт неизвестен, **STOP**.
+2. Создать запланированную дополнительную production backup по [№21](backup-restore-runbook.md),
+   проверить archive/manifest checksum и доступность зашифрованной offsite copy;
+   не считать старый backup достаточным автоматически. Подтвердить последний
+   isolated restore evidence и отсутствие неизвестных targeted schema/ACL/
+   extension findings. Затем выполнить pinned CLI dry-run из предыдущего раздела;
+   ожидаются ровно пять versioned migrations в repository order.
+3. Отдельно получить разрешение на DB apply. Убедиться, что CLI `2.114.0`,
+   `lock_timeout=5s` и `statement_timeout=120s` заданы в URI для migration
+connection. До dry-run выполнить read-only проверку того же DSN по процедуре
+выше: `current_user=session_user=postgres`, PostgreSQL 17, `lock_timeout=5s`,
+`statement_timeout=120s`. Затем передать неизменённое значение только через
+явный `--db-url` в pinned CLI. Источники подтверждают этот путь для migration
+connection; если требуется прямая runtime attestation из её физической
+сессии — **STOP до apply**, поскольку CLI не предоставляет pre-migration SQL
+hook.
+   Оператор принимает короткое техническое окно и возможные временные API errors;
+   Maintenance Mode/Suspend не включать в этот план.
 4. Применить только согласованный pending suffix через Supabase migration
    workflow. Зафиксировать вывод по каждой migration; после завершения проверить
    полный ledger, объекты/constraints и отсутствие unexpected partial state.
    При первой ошибке не запускать повторно и не восстанавливать ledger вручную.
 5. Отдельно получить approval на ACL изменения, применить runtime grant script,
-   проверить API-role denial для трёх функций (сначала закрыть verifier blocker
-   выше), выполнить grants verifier и runtime gate. До каждого PASS backend не
-   deploy-ить.
+   затем выполнить production privilege verifier и runtime deployment gate.
+   Проверить effective API-role denial для всех трёх функций. До каждого PASS
+   backend не deploy-ить.
 6. В закрытой Render Environment установить/сверить server-side admission:
    все три variables заданы и валидны, tester cohort paused (`true`). Не
    включать testers. Для планового cutover выбрать **Save only**, затем сразу
@@ -475,8 +543,11 @@ target URLs и production env values не подтверждены в репоз
    требует отдельного approval.
 7. В Render Dashboard открыть ровно service `travel-friend-api` → Deploys →
    Manual Deploy → **Deploy a specific commit**, ввести approved full SHA и
-   подтвердить запуск. Не выбирать `Deploy latest commit`. Auto-Deploy оставить
-   Off. После завершения проверить full live SHA, deployment status и logs.
+   подтвердить запуск. Для этого плана approved full SHA —
+   `2183708cb86d965cb395f1d6855b4ee038851abc`; перед нажатием сверить его с
+   release approval. Не выбирать `Deploy latest commit`. Auto-Deploy оставить
+   Off. После завершения проверить, что фактический live SHA точно совпал,
+   deployment status успешен и logs не показывают ошибки.
    Render Dashboard при specific-commit deployment отключает auto-deploy, но
    оператор всё равно повторно проверяет `Off` в Settings.
 8. Выполнить `/health` и `/ready` smoke по exact Render origin, затем
