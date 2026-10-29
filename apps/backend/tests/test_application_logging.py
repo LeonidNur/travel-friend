@@ -8,13 +8,14 @@ import os
 from contextlib import contextmanager
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token-for-application-logging")
 os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-application-logging")
 
 from travel_friend_backend import readiness
-from travel_friend_backend.config import AdmissionPolicy, BackendSettings
+from travel_friend_backend.config import BackendSettings
 from travel_friend_backend.logging_config import (
     APPLICATION_LOGGER_NAME,
     OWNED_HANDLER_ATTRIBUTE,
@@ -29,7 +30,6 @@ def make_app():
         BackendSettings(
             telegram_bot_token="test-token",
             database_url="postgresql://unused",
-            admission_policy=AdmissionPolicy(frozenset({123}), frozenset(), False),
         )
     )
 
@@ -153,7 +153,8 @@ def test_429_completion_contains_the_request_id(
     assert not [record for record in caplog.records if record.levelno == logging.ERROR]
 
 
-def test_denied_admission_does_not_expose_telegram_id_in_response_or_logs(
+def test_deleted_user_denial_does_not_expose_telegram_id_in_response_or_logs(
+    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     sensitive_telegram_id = 987654321
@@ -168,12 +169,17 @@ def test_denied_admission_does_not_expose_telegram_id_in_response_or_logs(
             )()
 
     app.state.telegram_init_data_verifier = Verifier()
+
+    def reject_deleted_user(*_: object) -> None:
+        raise HTTPException(403, "User is deleted")
+
+    monkeypatch.setattr("travel_friend_backend.main.login", reject_deleted_user)
     with capture_application_logs(caplog):
         with TestClient(app) as client:
             response = client.post("/auth/telegram", json={"init_data": "signed-test-payload"})
 
     assert response.status_code == 403
-    assert response.json() == {"detail": "Access is not enabled"}
+    assert response.json() == {"detail": "User is deleted"}
     assert str(sensitive_telegram_id) not in response.text
     assert str(sensitive_telegram_id) not in caplog.text
 

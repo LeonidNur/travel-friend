@@ -1,6 +1,6 @@
 # FinOps и допуск к внешнему MVP-тестированию
 
-> **Статус на 18.10.2026:** аудит и локальная реализация server-side admission завершены; production migration, Render environment и deployment не менялись. Внешнее тестирование по-прежнему STOP: backend migration/grants/configuration не применены в production, account-level billing controls не проверены, а актуальная совместимость deployment отдельно не подтверждена.
+> **Исторический статус на 18.10.2026:** на тот момент описывались server-side admission allowlists и незавершённый production rollout. Последующее продуктовое решение отменило отдельные core/tester admission и tester-pause controls: backend допускает любой валидный Telegram `initData`. Account-level billing controls и актуальная совместимость deployment требуют проверки по текущим provider данным.
 
 Документ описывает найденные зависимости и безопасный порядок допуска ограниченной группы. Он не подтверждает точные счета, не задаёт SLA и не заменяет [deployment runbook](backend/production-deployment-runbook.md), [backup/restore runbook](backend/backup-restore-runbook.md) или [security runbook](backend/security.md). Все цены и квоты ниже — опубликованные условия провайдеров на дату аудита, если не помечены как account-specific. Не считать их фактическим расходом проекта.
 
@@ -141,9 +141,9 @@ Backup is an **Operations** chain: PostgreSQL 17 `pg_dump` → password from Key
 - PostgreSQL grants/RLS/runtime role; backend-only DB access. CI backend uses local disposable PostgreSQL, frontend tests/build run on hosted GitHub runner.
 - `/health` — liveness без DB; `/ready` делает ограниченный `SELECT 1`, но endpoint публичен и не rate-limited.
 
-### P0 — обязательные условия до любого внешнего tester cohort
+### P0 — обязательные условия перед расширением использования
 
-1. **Admission control реализован в repository, но не развернут.** Backend проверяет server-side Telegram-ID allowlists до создания session и повторно для каждого Bearer request, включая действующие сессии; tester pause сохраняет core access. До внешних invites нужно отдельно разрешить и пройти migration/grants/deployment/configuration order, затем проверить exact production target, denied/allowed identities и pause/revoke. Кодовая реализация не означает, что production уже закрыт allowlist.
+1. **Telegram registration открыт для любого валидного initData.** Это принятое продуктовое поведение, а не закрытый cohort. Темп приглашений можно ограничивать организационно, но это не блокирует самостоятельную регистрацию и не отзывает уже выданные sessions. При необходимости ограничить доступ использовать согласованный provider-level stop, а не несуществующую allowlist configuration. Публичный auth ingress и его стоимость остаются частью usage review.
 2. **Публичный `/ready` — DB amplification surface.** Любой интернет-клиент может повторно открыть readiness, каждый раз создавая DB connection/query; IP/global rate cap отсутствует. До внешнего теста нужен отдельный безопасный server/provider control или иной доказанный ограничитель, не сломавший Render `/health` check. Зафиксировать тестом и проверить влияние. Не менять endpoint auth в этом FinOps audit.
 3. **Billing/operator preflight неизвестен для части аккаунтов.** Подтвердить Vercel plan/commercial eligibility/spend controls, Render workspace plan/payment method/usage limits, актуальные Supabase quota balances, Google Drive capacity, GitHub billing controls, Codex auto-reload и Docker Desktop license eligibility. Если существенный plan/limit/payment setting нельзя проверить — STOP, не считать сервис бесплатным.
 4. **Deployment compatibility gate.** Перед tester invite получить подтверждённые frontend/backend deployed revisions и DB compatibility, проверить health/readiness и ручной smoke основной Telegram flow по deployment runbook. Наличие бесплатного тарифа не компенсирует неверный deployment.
@@ -161,26 +161,23 @@ Backup is an **Operations** chain: PostgreSQL 17 `pg_dump` → password from Key
 - Redis/distributed rate limiting, очереди, background workers, custom domains, external APM, paid WAF/observability и AI providers. Они не нужны только ради теоретической экономии; повторно оценивать при измеренном лимите или обоснованном product need.
 - Realtime/polling не реализован; не закладывать ему расход/архитектуру заранее.
 
-Не смешивать эти категории: P0 admission/security controls — не billing settings; тарифные alerts — не backend API protection; local Docker storage — не cloud egress; локальный restore — не production recovery.
+Не смешивать эти категории: Telegram registration policy — не billing setting; тарифные alerts — не backend API protection; local Docker storage — не cloud egress; локальный restore — не production recovery.
 
-## 7. Admission policy для MVP
+## 7. Регистрация и организационное планирование
 
-Предлагаемый первый cohort: **до 5 заранее выбранных тестировщиков**, затем только после review usage/ошибок решать, расширять ли до 10. Это admission cap по людям, а не технический нагрузочный лимит. Нельзя считать приватную ссылку, скрытый URL, CORS или Telegram menu button надёжным запретом для остальных.
+Все пользователи проходят один сценарий: сервер проверяет Telegram `initData`,
+новый пользователь получает обычный onboarding, после чего каждый Bearer
+request проходит session validation, user-scoped authorization и RLS. Отдельных
+core/tester групп, Telegram-ID allowlists и tester pause в backend нет. Старые
+`TELEGRAM_CORE_USER_IDS`, `TELEGRAM_TESTER_USER_IDS` и
+`TELEGRAM_TESTERS_PAUSED` не настраивать: приложение их не использует.
 
-Backend policy использует `TELEGRAM_CORE_USER_IDS` (ровно 3 ID),
-`TELEGRAM_TESTER_USER_IDS` (до 7 ID) и `TELEGRAM_TESTERS_PAUSED` в server-only
-environment; все значения проверяются fail closed. Operator procedure и
-порядок migration/deploy находятся в [security docs](backend/security.md) и
-[deployment runbook](backend/production-deployment-runbook.md). Не помещать ID в
-Git, frontend bundle, публичный документ или Codex материалы. Изменение ID или
-pause действует после ручного deployment/restart, не мгновенно. Tester cohort
-может начинаться с пяти участников; расширять его до 6–7 только после нового
-review usage и других P0 gates.
-
-Остановка tester intake через server-side pause блокирует также активные tester
-Bearer-сессии после применения обновлённой backend configuration; core access
-сохраняется. Отключение приглашений остаётся только организационной мерой. До
-применения новой конфигурации старый процесс продолжает старую policy.
+План приглашений на 3 участников команды и 5–7 внешних тестировщиков может
+использоваться для наблюдаемого старта и cost review, но не ограничивает доступ
+технически. Публичную ссылку, CORS и Telegram menu button нельзя считать
+защитой API. При необходимости полностью остановить приложение следовать
+provider-level процедурам в разделе 8; отдельной мгновенной остановки только
+tester cohort нет.
 
 ## 8. Emergency stop / cost response
 
@@ -188,17 +185,17 @@ Bearer-сессии после применения обновлённой backe
 
 | Событие и trigger | Действие | Воздействие / обратимость | Критерий и STOP |
 |---|---|---|---|
-| Нужно прекратить admission внешних тестировщиков | В защищённой Render environment установить `TELEGRAM_TESTERS_PAUSED=true`, применить изменение контролируемым ручным deploy/restart, затем проверить отказ tester login и уже существующего tester token; core token должен продолжать работать. | Tester API доступ блокируется после запуска процесса с новой конфигурацией; core и DB остаются доступными. Reversible через pause=false и новый deploy/restart. | Переключатель не мгновенный. До подтверждения новой deployed revision считать старую policy активной; остановка приглашений сама по себе не отзывает доступ. |
+| Требуется ограничить новые приглашения без полной остановки приложения | Оператор прекращает рассылку ссылок и сообщает тестовой группе сделать паузу; это организационная мера и не ограничивает регистрацию пользователей, уже имеющих доступ к Mini App. | Backend/API остаются доступны всем, у кого есть валидный Telegram `initData`; существующие sessions продолжают работать. | Не называть это server-side admission или revoke. Если нужна техническая остановка — использовать provider-level controls ниже. |
 | Выросла нагрузка, но сервис ещё отвечает | Сообщить cohort прекратить тест, прекратить новые invites, сохранить timestamps/request IDs, смотреть Render logs/metrics, Vercel usage и Supabase usage. Не проводить повторные тестовые запросы к production для диагностики. | Существующие пользователи могут продолжить requests. Reversible. | Если usage/target неясны, не переключать DB/provider; эскалировать operator owner. |
 | Требуется прекратить Mini App requests через Vercel | Подтвердить team `aicoachtgbot-3038s-projects`, project `travel-friend-mini-app`; у Vercel есть ручная project pause/resume, pause отдаёт 503 production deployment. Действие оператору выполнять в dashboard по exact target, затем проверить недоступность alias и сохранить время/результат. [Pause documentation](https://vercel.com/docs/projects/managing-projects). | Frontend станет недоступен; прямой Render API URL и уже имеющиеся клиенты не блокируются. Resume отдельный reversible action; здесь не проверялся. | Если project/team неоднозначны или действия не видны/не подтверждены — STOP. Не считать pause Vercel полным backend stop. |
 | Требуется остановить прямой backend/API ingress | Render dashboard позволяет suspend/resume service; подтвердить exact service `travel-friend-api`, workspace `My Workspace` и URL. У оператора выбрать service suspend по текущему dashboard, затем проверить API больше не обслуживает `/health`/app requests. [Render dashboard](https://render.com/docs/render-dashboard), [service 503 causes](https://render.com/docs/troubleshooting-deploys). | Frontend останется доступным, но API flow не работает; direct clients тоже получают outage. Resume/recovery позже отдельно проверяется. Suspended free service не удаляет DB. | UI procedure, permissions и service suspension effect на этот Free compute instance не испытывались; если action не однозначен — STOP и не трогать Supabase как замену. |
 | Превышен счет/квота или риск автоматического начисления | Vercel: проверить usage/Spend Management; Hobby pause behavior или для paid plan настроенный spend management/manual pause. Render: Billing usage/payment method, spend limit и alerts; учесть, что лимиты на pipeline/bandwidth не обязательно останавливают весь сервис. Supabase Free: monitor usage/restrictions; не upgrade. Google Drive: stop backup upload, не deleting existing copy. | Возможна недоступность deployment, backend или backup upload. Не удалять данные и не менять тариф без отдельного решения. | Никогда не предполагать, что alert автоматически остановил расходы. Подтвердить actual state в dashboard. |
-| Подозрение на утечку credentials/атака | По incident owner, использовать provider credential rotation/revocation procedure, stop admission, сохранить sanitized incident timeline; отдельно оценить Render API direct ingress и Supabase DB. | Возможна auth outage/DB outage; security incident требует отдельной координации. | Не публиковать credential в отчёте/Codex; не менять production secret в текущем scope без explicit approval. |
+| Подозрение на утечку credentials/атака | По incident owner, использовать provider credential rotation/revocation procedure, задействовать provider-level stop при необходимости и сохранить sanitized incident timeline; отдельно оценить Render API direct ingress и Supabase DB. | Возможна auth outage/DB outage; security incident требует отдельной координации. | Не публиковать credential в отчёте/Codex; не менять production secret в текущем scope без explicit approval. |
 | Potential data corruption | Ограничить новые writes через согласованный operator response, сохранить evidence, оценить масштаб и обратиться к [backup runbook](backend/backup-restore-runbook.md). | Ошибочная остановка DB может ухудшить доступность; restore — отдельная необратимая high-risk операция. | Не выполнять автоматический production restore. Нужны отдельные approval и recovery plan. |
 
 ### Разделение stop actions
 
-- **Stop intake:** останавливает новые invites; штатного tester allowlist пока нет.
+- **Stop invitations:** останавливает новые invites организационно, но не закрывает регистрацию и не отзывает sessions.
 - **Stop Vercel project:** останавливает frontend alias, но не public Render URL.
 - **Stop Render service:** останавливает backend для всех клиентов, но не выключает Vercel/DNS и не меняет Supabase data.
 - **Pause Supabase project:** сильное DB outage действие, не использовать как обычный cost switch. Оно затрагивает recovery/readiness и требует отдельного incident approval.
@@ -215,12 +212,12 @@ Bearer-сессии после применения обновлённой backe
 - [ ] GitHub repo public; Actions не содержит production credentials/deploy steps. Проверены required status checks и отсутствие неожиданных платных runner/add-on.
 - [ ] Drive free capacity позволяет очередные backup archive(s); encrypted ciphertext round-trip и checksum procedure актуальны; private age key не в Drive/GitHub/Codex.
 - [ ] Docker Desktop license eligibility подтверждена; локальные disk limits достаточно свободны для тестовой работы и restore test.
-- [ ] Server-side admission code и локальные tests готовы; approved production migrations/grants, Render allowlist values и tester pause ещё должны быть отдельно применены/проверены. Первая внешняя cohort ограничена 5 приглашёнными.
+- [ ] Проверить актуальные backend/frontend revisions, production migration/grants gate и health/readiness. План приглашений может начинаться с небольшой группы для cost review, но backend не ограничивает регистрацию по Telegram ID.
 - [ ] Известны baseline usage, выбранные dashboard metrics, ежедневная cadence проверки и конкретные stop thresholds с ответственным оператором.
 - [ ] Оператор знает, что `/ready` публичен и выполняет DB probe; пока это не исправлено/ограничено отдельной задачей, не проводить неограниченный публичный или scripted test.
 - [ ] Зафиксированы время UTC, состав cohort без публичного PII, baseline/errors/usage, maximum допустимый денежный расход и сценарий возврата к known-good по deployment runbook.
 
-Любой незаполненный обязательный gate, неизвестный payment/overage control, неподтверждённая migration/deployment compatibility или отсутствие admission control означает **STOP — внешний тест не начинать**.
+Любой незаполненный обязательный gate, неизвестный payment/overage control или неподтверждённая migration/deployment compatibility означает **STOP — внешний тест не начинать**.
 
 ## 10. Открытые вопросы / следующие решения
 
@@ -230,8 +227,8 @@ Bearer-сессии после применения обновлённой backe
 4. Каковы GitHub account plan, Actions/cache usage и configured budgets? Public standard runner no-charge не описывает все product billing settings.
 5. Каковы free bytes remaining в Google Drive и фактический Apple iCloud plan/recovery status? Необходима ли закупка места — отдельное operator решение, не предполагать.
 6. Достаточно ли Docker Desktop license free-tier условий для фактического коммерческого статуса и размера организации?
-7. Кто вводит и поддерживает allowlist в Render environment и имеет право на ручной deploy/restart, а также кто может выполнить Render suspend/Vercel pause? Код не хранит или выводит реальные IDs.
+7. Кто отвечает за ручные приглашения, мониторинг и имеет право выполнить Render suspend/Vercel pause? Backend не поддерживает индивидуальный admission/revoke по Telegram ID.
 8. Каковы согласованные лимиты тестирования по времени, числу действий на пользователя, database rows/storage, egress и максимальному денежному ущербу? Задать их до первого invite по фактическим dashboard quota.
 9. Провести повторный deployment provenance/compatibility preflight: на дату прошлого audit frontend SHA был неизвестен, current repository backend требовал DB functions, отсутствовавшие в production, а HTTP `/health` smoke имел network timeout.
 
-До подтверждения этих данных документ не утверждает, что использование полностью бесплатное, расходы ограничены hard cap, emergency stop проверен, production admission активен или внешнее тестирование безопасно.
+До подтверждения этих данных документ не утверждает, что использование полностью бесплатное, расходы ограничены hard cap, emergency stop проверен или внешнее тестирование безопасно.

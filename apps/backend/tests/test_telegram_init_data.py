@@ -12,8 +12,6 @@ from travel_friend_backend.auth.telegram import (
     TelegramInitDataVerifier,
 )
 from travel_friend_backend.config import (
-    AdmissionConfigurationError,
-    AdmissionPolicy,
     BackendSettings,
     DatabaseUrlNotConfiguredError,
     TelegramBotTokenNotConfiguredError,
@@ -263,90 +261,19 @@ def test_rejects_missing_bot_token_configuration() -> None:
         get_backend_settings({})
 
 
-def test_loads_server_side_admission_configuration_without_exposing_ids() -> None:
+def test_legacy_admission_variables_are_ignored() -> None:
     settings = get_backend_settings(
         {
             "TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN,
             "DATABASE_URL": "postgresql://unused",
-            "TELEGRAM_CORE_USER_IDS": "1001, 1002,1003",
-            "TELEGRAM_TESTER_USER_IDS": "2001,2002",
-            "TELEGRAM_TESTERS_PAUSED": "false",
+            "TELEGRAM_CORE_USER_IDS": "malformed,legacy,value",
+            "TELEGRAM_TESTER_USER_IDS": "also-invalid",
+            "TELEGRAM_TESTERS_PAUSED": "not-a-boolean",
         }
     )
 
-    assert settings.admission_policy == AdmissionPolicy(
-        core_user_ids=frozenset({1001, 1002, 1003}),
-        tester_user_ids=frozenset({2001, 2002}),
-        testers_paused=False,
-    )
-    assert settings.admission_policy.is_allowed(1001)
-    assert settings.admission_policy.is_allowed(2001)
-    assert not settings.admission_policy.is_allowed(3001)
-
-
-@pytest.mark.parametrize(
-    "environment",
-    [
-        {},
-        {"TELEGRAM_CORE_USER_IDS": "1001"},
-        {
-            "TELEGRAM_CORE_USER_IDS": "1001,1002,1003",
-            "TELEGRAM_TESTER_USER_IDS": "2001",
-        },
-    ],
-)
-def test_missing_admission_configuration_fails_closed(environment: dict[str, str]) -> None:
-    complete_environment = {
-        "TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN,
-        "DATABASE_URL": "postgresql://unused",
-        **environment,
-    }
-    with pytest.raises(AdmissionConfigurationError):
-        get_backend_settings(complete_environment)
-
-
-def test_empty_tester_allowlist_keeps_core_access_and_revokes_all_testers() -> None:
-    settings = get_backend_settings(
-        {
-            "TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN,
-            "DATABASE_URL": "postgresql://unused",
-            "TELEGRAM_CORE_USER_IDS": "1001,1002,1003",
-            "TELEGRAM_TESTER_USER_IDS": "",
-            "TELEGRAM_TESTERS_PAUSED": "false",
-        }
-    )
-
-    assert settings.admission_policy.tester_user_ids == frozenset()
-    assert settings.admission_policy.is_allowed(1001)
-    assert not settings.admission_policy.is_allowed(2001)
-
-
-@pytest.mark.parametrize(
-    ("core_ids", "tester_ids", "paused"),
-    [
-        ("not-an-id", "2001", "false"),
-        ("1001,1001", "2001", "false"),
-        ("1001", "1001", "false"),
-        ("1001,1002,1003,1004", "2001", "false"),
-        ("1001,1002,1003", "2001,2002,2003,2004,2005,2006,2007,2008", "false"),
-        ("1001", "2001", "sometimes"),
-        ("1001", "", "false"),
-        ("9223372036854775808", "2001", "false"),
-    ],
-)
-def test_invalid_admission_configuration_fails_closed(
-    core_ids: str, tester_ids: str, paused: str
-) -> None:
-    with pytest.raises(AdmissionConfigurationError):
-        get_backend_settings(
-            {
-                "TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN,
-                "DATABASE_URL": "postgresql://unused",
-                "TELEGRAM_CORE_USER_IDS": core_ids,
-                "TELEGRAM_TESTER_USER_IDS": tester_ids,
-                "TELEGRAM_TESTERS_PAUSED": paused,
-            }
-        )
+    assert settings.telegram_bot_token == TEST_BOT_TOKEN
+    assert settings.database_url == "postgresql://unused"
 
 
 def test_loads_database_url_from_server_environment() -> None:
@@ -356,9 +283,6 @@ def test_loads_database_url_from_server_environment() -> None:
         {
             "TELEGRAM_BOT_TOKEN": TEST_BOT_TOKEN,
             "DATABASE_URL": database_url,
-            "TELEGRAM_CORE_USER_IDS": "1001,1002,1003",
-            "TELEGRAM_TESTER_USER_IDS": "2001",
-            "TELEGRAM_TESTERS_PAUSED": "false",
         }
     )
 

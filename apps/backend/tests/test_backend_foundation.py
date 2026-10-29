@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from travel_friend_backend import db
 from travel_friend_backend.auth import service
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
-from travel_friend_backend.config import AdmissionPolicy, BackendSettings
+from travel_friend_backend.config import BackendSettings
 from travel_friend_backend.main import create_app
 from travel_friend_backend.routers import me
 from travel_friend_backend.schemas.onboarding import OnboardingPatchRequest
@@ -140,7 +140,7 @@ def test_current_user_returns_a_typed_authenticated_principal(monkeypatch) -> No
             return None
 
         def fetchone(self) -> dict[str, object]:
-            return {"user_id": user_id, "session_id": session_id, "telegram_user_id": 123}
+            return {"user_id": user_id, "session_id": session_id}
 
     class FakeDatabaseConnection:
         def __init__(self) -> None:
@@ -164,12 +164,11 @@ def test_current_user_returns_a_typed_authenticated_principal(monkeypatch) -> No
     assert principal == service.AuthenticatedPrincipal(
         user_id=user_id,
         session_id=session_id,
-        telegram_user_id=123,
     )
     assert connection_instance is not None
     assert connection_instance.cursor_instance.calls == [
         (
-            "SELECT session_id, user_id, telegram_user_id "
+            "SELECT session_id, user_id "
             "FROM public.resolve_bearer_session_with_identity(%s)",
             (hashlib.sha256(b"token").hexdigest(),),
         )
@@ -185,7 +184,6 @@ def test_auth_dependency_reads_settings_and_authorization_header(monkeypatch) ->
                 backend_settings=BackendSettings(
                     telegram_bot_token="test-token",
                     database_url="postgresql://example.test/travel-friend",
-                    admission_policy=AdmissionPolicy(frozenset({0}), frozenset(), False),
                 )
             )
         )

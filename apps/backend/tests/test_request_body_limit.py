@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token-for-request-body-limit")
 os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-request-body-limit")
 
-from travel_friend_backend.config import AdmissionPolicy, BackendSettings
+from travel_friend_backend.config import BackendSettings
 from travel_friend_backend.main import create_app
 from travel_friend_backend.request_body_limit import (
     REQUEST_BODY_LIMIT_BYTES,
@@ -228,7 +228,6 @@ def test_valid_telegram_auth_request_reaches_verifier_and_login(monkeypatch) -> 
         BackendSettings(
             telegram_bot_token="test-token",
             database_url="postgresql://unused",
-            admission_policy=AdmissionPolicy(frozenset({123}), frozenset(), False),
         )
     )
     verified_values: list[str] = []

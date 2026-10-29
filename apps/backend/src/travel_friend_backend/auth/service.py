@@ -16,7 +16,6 @@ class AuthenticatedPrincipal:
 
     user_id: UUID
     session_id: UUID
-    telegram_user_id: int = 0
 
 
 def token_hash(token: str) -> str:
@@ -58,7 +57,7 @@ def current_user(
         raise HTTPException(401, "Authentication required")
     with database_connection(database_url) as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT session_id, user_id, telegram_user_id "
+            "SELECT session_id, user_id "
             "FROM public.resolve_bearer_session_with_identity(%s)",
             (token_hash(authorization[7:].strip()),),
         )
@@ -68,7 +67,6 @@ def current_user(
     return AuthenticatedPrincipal(
         user_id=row["user_id"],
         session_id=row["session_id"],
-        telegram_user_id=row["telegram_user_id"],
     )
 
 
@@ -79,7 +77,4 @@ def auth_dependency(
     settings = request.app.state.backend_settings
     if not settings.database_url:
         raise HTTPException(503, "Database is not configured")
-    principal = current_user(settings.database_url, authorization)
-    if not settings.admission_policy.is_allowed(principal.telegram_user_id):
-        raise HTTPException(403, "Access is not enabled")
-    return principal
+    return current_user(settings.database_url, authorization)
