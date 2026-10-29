@@ -1,5 +1,13 @@
 # Дневник разработки
 
+## 2026-10-29 — Production rollout завершён
+
+- Production Supabase rollout завершён: ledger 19 → 24, пять migrations применены по порядку, runtime grants, privilege verifier и deployment gate — PASS. Migration/grant повторный запуск не требуется.
+- Render `travel-friend-api`: deployment `dep-dbhk59om7kps73f4e39g`, live SHA `67eae892886cabac7408857c8a1b24af1728d2cf`; `/health` и `/ready` = 200, startup errors нет, Auto-Deploy Off.
+- Vercel Production deployment `dpl_DjcqzYmZQhDJS9FFzNSk2Scb7J41` READY на `travel-friend-mini-app.vercel.app`; snapshot SHA `15c0d761fb54670b3987f743ebaca5df353f3972`, `/api/backend/health` = 200 и связь с Render подтверждена.
+- Инфраструктурный smoke дал ожидаемые 200 и 401. Авторизованный Telegram E2E не проводился; внешнее тестирование не завершено. Открыты риски API-role grants/default EXECUTE ACL, Free-tier ограничений, abuse/AI расходов и полного Supabase recovery. Render Suspend останавливает весь backend, а не отдельного пользователя.
+- Обновлены [production deployment runbook](backend/production-deployment-runbook.md), [technical hardening backlog](technical-hardening-backlog.md) и [CHANGELOG](../CHANGELOG.md); исторические preflight записи оставлены как снимки своих дат.
+
 ## 2026-10-18 — Server-side tester admission
 
 - Добавлен fail-closed admission policy с тремя server-only настройками: core Telegram IDs, tester Telegram IDs и tester pause. Проверка стоит до login bootstrap, а общая Bearer dependency перепроверяет Telegram ID каждой активной сессии, включая прямые API requests.

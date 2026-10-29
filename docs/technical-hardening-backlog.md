@@ -9,7 +9,7 @@
 - Roadmap определяет направление; этот документ хранит детальные technical risks и контрольные условия перехода между этапами.
 - Historical `CHANGELOG.md` и `dev-log.md` могут объяснять происхождение риска, но не меняют его актуальный статус.
 
-## Current checkpoint / completed baseline (03.10.2026)
+## Current checkpoint / completed baseline (29.10.2026)
 
 - TEAM E2E completed; mega-review / PRE-TEAM work completed.
 - Systematic authorization / IDOR review completed.
@@ -17,10 +17,12 @@
 - First-login concurrency completed.
 - Least-privileged PostgreSQL role `app_runtime` и authenticated DB context completed: FastAPI устанавливает `app.user_id` только на время transaction.
 - RLS/capability boundary completed для всех 17 application tables; основные write flows onboarding, Discover → Match → Direct Chat, Group Chat, Messages и Trip creation используют контролируемые DB capabilities.
-- Production security cutover completed; production DB применена до `20260901280000`.
-- Production grants verifier, runtime deployment gate, production `/health` и Telegram smoke passed; совместимый security backend deployed.
-- Auto-Deploy remains Off; ручной production deployment workflow описан в №15 и не является решением о включении automation.
-- №15 подготовлен как manual production deployment runbook; это закрывает документационный workflow, но не включает Auto-Deploy и не подтверждает provider settings.
+- Production database rollout завершён 29.10.2026: ledger=24; пять migrations, runtime grants, privilege verifier и database deployment gate прошли.
+- Render `travel-friend-api` live на SHA `67eae892886cabac7408857c8a1b24af1728d2cf`; `/health` и `/ready` = 200, startup errors не обнаружены, Auto-Deploy Off.
+- Vercel Production deployment `dpl_DjcqzYmZQhDJS9FFzNSk2Scb7J41` READY на `travel-friend-mini-app.vercel.app`; Mini App snapshot `15c0d761fb54670b3987f743ebaca5df353f3972`, proxy health = 200.
+- Инфраструктурный smoke прошёл; авторизованный Telegram E2E не проводился, внешнее тестирование не завершено.
+- Auto-Deploy remains Off; успешное ручное исполнение rollout не является решением о включении automation.
+- №15 manual production deployment workflow остаётся документированным в runbook; фактический rollout и provider results зафиксированы в active-stage entries ниже.
 - P0.5 reliability/observability completed. Это не открывает external test автоматически: перед ним обязателен отдельный External Test Cost Guardrails gate.
 
 ## P0 — completed security baseline (historical checkpoint)
@@ -48,22 +50,22 @@ Residual observability risks после закрытия P0.5 уже ведут�
 
 ## Active stage — deployment / CI / reproducibility
 
-15. **Production deployment workflow — DOCS READY.** Операторский manual rollout, compatibility decision matrix, stop criteria и зависимости зафиксированы в [production deployment runbook](backend/production-deployment-runbook.md). Auto-Deploy остаётся Off; этот статус не является разрешением на rollout или включение automation.
-16. **Production deployment provenance/compatibility — PARTIALLY VERIFIED / OPEN (read-only audit, 18.10.2026).** Подтверждены Vercel project `travel-friend-mini-app`; Render `travel-friend-api`, branch `develop`, manual deployment, Auto-Deploy Off; Supabase `travel-friend-dev` (`tlgprfsecdasloqnuyjo`), `ACTIVE_HEALTHY`, PostgreSQL `17.6.1.165`. Render live deployment — `dep-dapvgnlg1s2s73dicitg`, SHA `b25e08dce158b7fe7ea6d17b40d96c3e893330fa`; его 19 migrations совпадают с production ledger. У Vercel READY deployment `dpl_Di21ceCkxg4poxD2Udyfeanar4En` Git SHA отсутствует (`source=cli`, no `gitSource`), поэтому frontend SHA — **UNKNOWN**.
+15. **Production deployment workflow — EXECUTED (2026-10-29).** Manual DB → Render → Vercel sequence зафиксирован в [production deployment runbook](backend/production-deployment-runbook.md). Auto-Deploy остаётся Off. Для будущих rollout всё равно нужны свежий preflight и отдельное разрешение.
+16. **Production deployment provenance / schema drift — ROLLOUT COMPLETE; AUDIT PARTIALLY VERIFIED / OPEN.** На 2026-10-29 production ledger=24; пять migrations, runtime grants, privilege verifier и database gate прошли. Render deployment `dep-dbhk59om7kps73f4e39g`, live SHA `67eae892886cabac7408857c8a1b24af1728d2cf`; Vercel Production `dpl_DjcqzYmZQhDJS9FFzNSk2Scb7J41` READY, snapshot SHA `15c0d761fb54670b3987f743ebaca5df353f3972`, API proxy проверен. Rollout подтверждён, но общий schema-drift/provenance backlog остаётся открытым: Supabase API-role grants шире необходимого, default EXECUTE ACL требует hardening, перед будущими изменениями нужен новый targeted drift review. Подробности — в [production deployment runbook](backend/production-deployment-runbook.md).
 
    В текущем на дату audit `develop` inventory было 24 migrations: 19 подтверждены в production ledger на 2026-10-18, ещё пять после Render SHA отсутствовали в том snapshot. Migration SQL и порядок пяти файлов отдельно reviewed; архив 19 migrations восстановлен и все пять migrations, 26 migration-declared `PUBLIC EXECUTE` revokes, текущие `app_runtime` grants и verifier прошли только в network-isolated disposable PostgreSQL 17.11. Это локальная репетиция, не новое production observation. Production snapshot также подтвердил 17 application tables с RLS, 17 policies, 18 functions; `app_runtime` — `LOGIN`, `NOINHERIT`, `NOBYPASSRLS`, имеет EXECUTE на 16 функциях, `PUBLIC EXECUTE` отсутствует. Для deployed Render SHA проверено наличие его 12 используемых функций и `app_runtime` EXECUTE. На source snapshot требовались отсутствовавшие в production шестипараметрическая `bootstrap_telegram_login` и `chat_participant_public_profile(uuid,uuid)`; сохранённый `resolve_bearer_session_with_identity(text)` был частью DB verifier/gate contract, но не нужен приложению для admission. Никакие production migrations не применялись в рамках audit 18.10.2026.
 
    Frontend↔backend compatibility и фактический `BACKEND_API_ORIGIN` остаются **UNKNOWN**. Попытка read-only smoke завершилась timeout на `GET /health`, поэтому `/ready` не запускался, а live health/readiness не подтверждены. Полный schema drift audit не завершён; совпадение migration ledger не доказывает schema parity. Перед rollout обязателен повторный production ledger/schema/ACL preflight, включая legacy blank value precheck для migration 3 и default/effective ACL check для новых функций 6-arg login и Chat profile; verifier также проверяет сохранённый versioned session resolver capability. Vercel SHA/origin, live health и frontend/backend flows остаются неподтверждёнными. Точный SQL review, compatibility matrix и локальный replay приведены в [production deployment runbook](backend/production-deployment-runbook.md). №16 остаётся открытой; production rollout не готов.
-17. **Deployment smoke chain — IMPLEMENTED (read-only HTTP).** Скрипт [deployment_smoke.py](../apps/backend/scripts/deployment_smoke.py) требует явно указанный backend base URL, последовательно проверяет `GET /health` и `GET /ready` с bounded timeout и fail-closed exit code. Тестируется только через mock HTTP responses. Предварительные проверки, ожидаемые ответы, STOP criteria и ручная граница Telegram E2E зафиксированы в [production deployment runbook](backend/production-deployment-runbook.md). Скрипт не создаёт и не меняет production data; schema/grants checks и Telegram E2E остаются отдельными проверками.
+17. **Deployment smoke chain — IMPLEMENTED; production infrastructure smoke PASS (2026-10-29).** `GET /health` и `/ready` вернули 200, Vercel `/api/backend/health` и `/openapi.json` — 200, защищённые endpoints без Bearer — ожидаемый 401. Скрипт [deployment_smoke.py](../apps/backend/scripts/deployment_smoke.py) остаётся read-only; авторизованный Telegram E2E не проводился и внешнее тестирование не завершено.
 18. **CI with disposable PostgreSQL — IMPLEMENTED.** Backend job запускает существующий `./scripts/local-test-db.sh test`, затем отдельный `if: always()` step вызывает существующий `./scripts/local-test-db.sh stop`; управление локальной БД не менялось. Workflow не передаёт `DATABASE_URL` или secrets; test script использует loopback disposable PostgreSQL, а backend guards проверяют target `travel_friend_test` на `127.0.0.1:55432` и отдельные test roles. Статический regression test проверяет порядок шагов, отсутствие `continue-on-error`, unconditional cleanup и отсутствие DB/secrets references в backend job. Обычная ошибка pytest остаётся failed job result. Граница проверки: hosted GitHub Actions и Docker cleanup при принудительном завершении runner здесь не запускались; `always()` не может очистить контейнер после потери runner.
 19. **Local test DB hygiene — IMPLEMENTED.** Перед `reset` и `stop` `local-test-db.sh` проверяет точное имя контейнера, label `com.travel-friend.disposable-test-db=true`, единственные ожидаемые `POSTGRES_DB` / `POSTGRES_USER` и единственный binding `127.0.0.1:55432 → 5432/tcp`. Несовпадение или ошибка Docker inspect завершают команду до schema reset или удаления контейнера. `test` продолжает использовать только сформированные локальные loopback DSN; существующие backend guards проверяют разрешённые test targets. Regression tests используют Docker CLI stub и проверяют отказ без destructive calls. Реальные PostgreSQL/Docker destructive operations в этих тестах не запускались.
 20. **Backend runbook/README — IMPLEMENTED (documentation).** `apps/backend/README.md` проверен по текущим runtime/scripts/CI и существующим backend runbooks; описание disposable DB guard обновлено для exact name, label, DB/user settings и loopback binding. Добавлены safe troubleshooting steps для Docker availability, stopped/mismatched container, `/ready` 503 и PostgreSQL test connection failures. README разделяет local/test/production и ссылается на manual deployment и historical security migration runbooks; rollout procedure не дублируется. Ограничение: provider runtime settings и direct backend ingress подтверждаются только в текущем provider environment.
-21. **MVP BACKUP/RESTORE POLICY SET; LOCAL RESTORE + CURRENT APPLICATION GRANTS VERIFIED; FULL PROVIDER RECOVERY OPEN (2026-10-18).** Production archive и зашифрованная offsite copy в Google Drive подтверждены; локальная disposable PostgreSQL 17 schema/data restore, structural/RLS checks и current `app_runtime` grants/verifier прошли после локального replay repository migrations. Еженедельная ручная политика, хранение последних четырёх недельных копий, цели RPO ≤7 дней при соблюдении расписания и RTO 24 часа (не измерен) зафиксированы в [backup/restore runbook](backend/backup-restore-runbook.md). Supabase-managed recovery и production ACL не подтверждены; production restore не выполнялся. Migration drift остаётся отдельным риском №16.
-22. **Rollback / forward-fix readiness — OPERATOR RUNBOOK READY (2026-10-18; no production execution).** [Production deployment runbook](backend/production-deployment-runbook.md) now separates frontend rollback, backend rollback, failed-migration forward-fix and potential data-corruption recovery, with exact-target/version checks, backend/DB compatibility gates, explicit approval boundaries and post-recovery validation. Existing backend read-only smoke is documented; provider history/permissions, maintenance/quiesce mechanism, Mini App smoke and full Supabase/production ACL recovery remain UNKNOWN or unverified. No production rollback/deploy/migration/restore was performed.
+21. **MVP BACKUP/RESTORE POLICY SET; LOCAL RESTORE + APPLICATION GRANTS VERIFIED; FULL PROVIDER RECOVERY OPEN.** Production archive и encrypted offsite copy существуют; локальная disposable PostgreSQL 17 schema/data restore, structural/RLS checks и runtime grants/verifier проверены. Weekly manual policy, retention 4, RPO target ≤7 days (при соблюдении schedule), RTO target 24h (не измерен) описаны в [backup/restore runbook](backend/backup-restore-runbook.md). Полное Supabase-managed recovery и production ACL restore не подтверждены.
+22. **Rollback / forward-fix readiness — OPERATOR RUNBOOK READY; NO ROLLBACK EXECUTED.** [Production deployment runbook](backend/production-deployment-runbook.md) separates frontend/backend rollback, failed-migration forward-fix and potential data-corruption recovery, with exact-target/version checks, compatibility gates, approval boundaries and post-recovery validation. Production deployment completed 2026-10-29 (see rollout record); no rollback or production restore was performed. Full Supabase recovery and production ACL restore remain unverified.
 
 ## Mandatory gate — External Test Cost Guardrails
 
-Внешний тест нельзя начинать только потому, что P0.5 или документационный audit завершены. Полный inventory, модель нагрузки, provider-level emergency controls и account-specific open questions находятся в [FinOps & external test guardrails](finops-external-test-guardrails.md). Регистрация допускает любой валидный Telegram `initData`; cohort planning не является auth gate. Findings не меняют application/provider configuration автоматически.
+Внешнее тестирование не считать завершённым: авторизованный Telegram E2E после rollout не проводился. Полный inventory, модель нагрузки, provider-level emergency controls и account-specific open questions находятся в [FinOps & external test guardrails](finops-external-test-guardrails.md). Регистрация допускает любой валидный Telegram `initData`; allowlists/tester pause отсутствуют, cohort planning не является auth gate. До внешнего теста остаются отдельное cost/abuse readiness decision и согласованный авторизованный E2E.
 
 ### Application-side review
 
@@ -102,14 +104,18 @@ Residual observability risks после закрытия P0.5 уже ведут�
 - TravelIntent updates используют last-write-wins; optimistic concurrency остаётся отдельным решением.
 - `destination_country_code` и `destination_place_ref` остаются вне owner UI/API.
 - `GET /chats` требует отдельного review N+1 поведения.
-- Production backend direct exposure требует проверки в External Test Cost Guardrails gate.
-- Production deployed SHA/schema parity требует проверки в External Test Cost Guardrails gate.
+- Supabase API-role grants шире необходимого; default EXECUTE ACL для будущих функций требует hardening. Это не отменяет PASS verifier/gate на применённых capabilities.
+- Production rollout revisions подтверждены 29.10.2026; полный schema drift audit остаётся отдельным открытым риском перед будущими schema changes.
+- Авторизованный Telegram E2E не проводился; внешнее тестирование не завершено.
+- Render Free и Supabase Free ограничивают ресурсы/возможности; открытая Telegram-регистрация требует контроля abuse и будущих AI-расходов.
+- Backup/restore и encrypted offsite copy проверены, но полное Supabase-managed recovery и production ACL restore не подтверждены.
+- Render Suspend останавливает весь API service, а не доступ конкретного пользователя; Vercel pause не закрывает прямой Render API.
 
 ## Control exit
 
-1. Complete active deployment / CI / reproducibility stage.
+1. Deployment / CI / reproducibility rollout completed 2026-10-29; preserve residual risks above.
 2. Complete External Test Cost Guardrails gate and its separately approved implementation scope.
-3. Repeat controlled multi-user E2E as required by those gates.
+3. Run authorized Telegram E2E and controlled multi-user E2E before external testing.
 4. Only then decide whether to proceed to a small external user test.
 
 ## P1 — post-test backlog
