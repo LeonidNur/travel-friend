@@ -1,5 +1,10 @@
 # Журнал изменений
 
+## 2026-10-29
+
+- Production rollout завершён: Supabase ledger 19 → 24, пять migrations применены, runtime grants, privilege verifier и deployment gate прошли. Render `travel-friend-api` live на `67eae892886cabac7408857c8a1b24af1728d2cf`, `/health` и `/ready` = 200. Vercel Production `dpl_DjcqzYmZQhDJS9FFzNSk2Scb7J41` READY; frontend snapshot `15c0d761fb54670b3987f743ebaca5df353f3972`, API proxy health = 200.
+- После PR #37 действует единый Telegram auth flow без allowlists/tester pause; Telegram identity binding и Bearer session checks сохранены. Инфраструктурный smoke прошёл, но авторизованный Telegram E2E не проводился, поэтому внешнее тестирование не завершено. Результаты и оставшиеся deployment/security/cost риски — в [production deployment runbook](docs/backend/production-deployment-runbook.md).
+
 ## 2026-10-18
 
 - Реализован server-side Telegram tester admission: отдельные core/tester allowlists, tester pause, отказ до создания новых сессий и повторная проверка активных Bearer-сессий через additive SECURITY DEFINER resolver. Обновлены local/production grants verifiers и migration rollout documentation; production migration, Render environment и deployment не выполнялись. External test остаётся STOP до согласованного rollout и закрытия других P0 gates.

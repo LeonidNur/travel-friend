@@ -4,7 +4,9 @@
 
 ## Границы и источники
 
-Production состоит из backend-контура Render, frontend Mini App на Vercel и Supabase/PostgreSQL. Реальные project/service IDs, production URLs, provider settings, health-check configuration и точные команды ручного deploy в репозитории не заданы. Оператор сверяет target и использует поддерживаемый ручной механизм в текущем provider UI/CLI; не подставляет guessed IDs, URLs, команды или настройки.
+Production состоит из backend-контура Render, frontend Mini App на Vercel и Supabase/PostgreSQL. Подтверждённые targets и результат последнего rollout приведены ниже. Это запись о выполненном rollout, не гарантия текущего состояния: перед каждым следующим изменением оператор заново сверяет target, live revision и provider status.
+
+**Актуальное состояние:** согласованный production rollout пяти migrations завершён 2026-10-29. Факты и результаты записаны в [результате последнего rollout](#production-rollout-2026-10-29). Датированные preflight-снимки ниже отражают состояние на свои даты; их прежние `UNKNOWN`/`BLOCKED` статусы не описывают текущее состояние. Уже применённые migrations и grants повторно не выполнять.
 
 Auto-Deploy остаётся **Off**. До rollout оператор проверяет в provider settings, что выбранные production services не начнут deploy автоматически от Git события. Не включать Auto-Deploy в рамках этого workflow. Фактическое состояние frontend deployment automation должно быть проверено в provider: репозиторий его не подтверждает.
 
@@ -30,7 +32,7 @@ Auto-Deploy остаётся **Off**. До rollout оператор провер
 
 Release считается provenance-complete только когда intended и actual SHA каждого изменённого приложения совпадают с approved SHA, target подтверждён, а schema/API совместимость проверена. `UNKNOWN` нельзя трактовать как совпадение. Запись о прошлом успешном deployment — кандидат на known-good только после проверки его SHA, совместимости с **текущей** DB/API и доступности у провайдера; rollback не возвращает schema, grants, secrets или provider settings.
 
-### Read-only production snapshot — 2026-10-18
+### Исторический read-only production snapshot — 2026-10-18
 
 Ниже зафиксированы наблюдения аудита на указанную дату. Это снимок, а не гарантия последующего состояния и не разрешение на rollout.
 
@@ -111,12 +113,12 @@ Frontend↔backend compatibility — **UNKNOWN**: frontend deployed SHA не р�
 
 **STOP:** production identity/target не подтверждены; migration history неожиданна; verifier или runtime gate не прошёл; или нужный schema/grants state невозможно проверить. Не исправлять drift через `migration repair`, ручное редактирование migration history, ad-hoc SQL или возврат broad grants.
 
-### Операторский preflight для следующего rollout
+### Исторический operator preflight — 2026-10-19 (не использовать как свежий результат)
 
-Этот checklist готовит будущую отдельную операцию; в ходе подготовки 2026-10-19
-ни один production query, write, migration, deploy или provider change не
-выполнялся. Все результаты ниже нужно обновить непосредственно перед rollout.
-Исторический preflight не является approval и не заменяет новый снимок.
+Этот checklist отражал подготовку rollout до 2026-10-29. Его конкретные значения
+`ledger=19`, пять pending migrations и `UNKNOWN` deployment facts исторические;
+они superseded разделом [Production rollout — 2026-10-29](#production-rollout-2026-10-29).
+Для любых будущих изменений нужен новый preflight, соответствующий их scope.
 
 | Проверка | Точное действие | Ожидается | STOP / доступ / состояние |
 |---|---|---|---|
@@ -218,7 +220,7 @@ migration session, а не source-backed гарантию, **STOP**. Frontend SH
 health/readiness остаются отдельными проверками, если затрагивается frontend
 или они требуются release record.
 
-### Production migration readiness audit: pending migrations и rollout gate
+### Historical production migration readiness audit (pre-rollout)
 
 Аудит SQL пяти файлов выше выполнен статически по Git и локально повторён на
 копии production archive в disposable PostgreSQL 17.11. Это подтверждает
@@ -227,11 +229,11 @@ production schema drift и не доказывает идентичность Su
 
 | Migration | Объекты / поведение | Data, RLS и privilege effects | Совместимость и риск |
 |---|---|---|---|
-| `20260924090000_completed_onboarding_active_travel_intent_invariant.sql` | `CREATE OR REPLACE` для `archive_current_active_travel_intent()`; serializes with completion through `user_activity_states` row. | DML выполняется только при вызове capability; migration сам не backfill-ит данные, не меняет таблицы/policies. Function `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, `app_runtime` execute. | Сигнатура сохранена; приложение должно продолжать передавать активный TravelIntent при завершённом onboarding. Production rows/behavior не перепроверялись. |
+| `20260924090000_completed_onboarding_active_travel_intent_invariant.sql` | `CREATE OR REPLACE` для `archive_current_active_travel_intent()`; serializes with completion through `user_activity_states` row. | DML выполняется только при вызове capability; migration сам не backfill-ит данные, не меняет таблицы/policies. Function `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, `app_runtime` execute. | Сигнатура сохранена; production post-apply checks подтвердили сохранность данных и ожидаемые объекты. Полный пользовательский behavior не проверен без авторизованного E2E. |
 | `20260924100000_session_lifecycle_baseline.sql` | Добавляет canonical шестипараметрический `bootstrap_telegram_login(...)`; заменяет legacy восьмипараметрический overload wrapper-ом в canonical function. | Login capability создаёт/обновляет identity и session только при вызове. Оба overload `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked; grants применяются отдельным runtime grant step. RLS/table definitions не меняются. | Legacy 8-arg signature сохраняет старый Render backend call contract; `created_at`/`expires_at` от старого backend игнорируются, TTL задаёт DB. Новая версия backend требует canonical 6-arg capability. Для нового 6-arg object SQL не отзывает явно `anon`/`authenticated`/`service_role`; preflight 2026-10-19 подтвердил отсутствие их default EXECUTE при создании функцией `postgres`, но не при `supabase_admin`. До apply подтвердить фактическую creator role; после — сверить effective EXECUTE. |
 | `20260924110000_backend_field_domain_limits.sql` | Проверяет legacy blank `profiles.display_name` и `travel_intents.destination_label`, затем добавляет два `CHECK` constraints; заменяет `create_current_group_chat(uuid[])` и `send_current_chat_message(uuid,text)`. | Нет data backfill. При blank legacy values migration останавливается до добавления constraints. Изменённые functions `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, execute — `app_runtime`; RLS/policies не изменяются. | Behavior становится строже: пустые значения / невалидные group-chat inputs и сообщения будут отклоняться. Два `ALTER TABLE ... ADD CONSTRAINT` требуют таблицевых lock и проверки существующих строк; точная длительность/ожидание production неизвестны. Подготовить maintenance window и STOP при legacy rows или неприемлемом lock-рискe. См. [PostgreSQL 17 ALTER TABLE](https://www.postgresql.org/docs/17/sql-altertable.html) и [explicit locking](https://www.postgresql.org/docs/17/explicit-locking.html). |
 | `20261003090000_chat_participant_public_profile.sql` | Добавляет `chat_participant_public_profile(uuid,uuid)` для чтения профиля активного участника общего чата. | Нет table/policy changes. Function `SECURITY DEFINER`, `search_path=pg_catalog`, `PUBLIC` revoked, execute — `app_runtime`. | Это нужная новая backend capability; архив и production snapshot её не содержали. Старый `chat_participant_profile_projection(uuid)` не удаляется, что поддерживает старый backend contract. Как и для canonical login capability, явного revoke названных API roles в migration нет; preflight подтвердил отсутствие default EXECUTE при создании функцией `postgres`, но не при `supabase_admin`; creator role проверить перед apply и effective EXECUTE после. |
-| `20261018090000_server_side_tester_admission_session_identity.sql` | Исторически аддитивно добавляет `resolve_bearer_session_with_identity(text)`; старый `resolve_bearer_session(text)` остаётся неизменным. Текущий backend использует старый resolver и не применяет admission policy. | Нет table/policy changes и прямых `app_runtime` SELECT grants на `users`/`telegram_identities`. Function `SECURITY DEFINER`, `search_path=pg_catalog`; effective EXECUTE контролируется существующими grant/verifier/gate scripts. | Migration и DB rollout contracts остаются частью repository history и deployment gate. Их наличие не означает включение allowlist admission; любой пользователь с валидным Telegram `initData` проходит обычную регистрацию. |
+| `20261018090000_server_side_tester_admission_session_identity.sql` | Исторически добавляет `resolve_bearer_session_with_identity(text)`; старый `resolve_bearer_session(text)` остаётся неизменным. После PR #37 production backend использует identity resolver при Bearer authentication; admission allowlist удалён. | Нет table/policy changes и прямых `app_runtime` SELECT grants на `users`/`telegram_identities`. Function `SECURITY DEFINER`, `search_path=pg_catalog`; effective EXECUTE контролируется grant/verifier/gate scripts. | Migration и DB rollout contracts остаются в repository history и production verifier/gate. Любой пользователь с валидным Telegram `initData` проходит единый auth flow; полный авторизованный E2E отдельно не проверен. |
 
 Dependency chain: migration 1 использует уже созданные `user_activity_states`,
 `travel_intents` и `current_authenticated_user_id()`; migration 2 добавляет
@@ -260,30 +262,32 @@ gate для всех новых backend-only capabilities. Если фактич
 не подтверждена как `postgres`, privileges отличаются от reviewed inventory
 или verifier/gate не проходят — **STOP**; не деплоить backend.
 
-#### Применение pending migrations: execution, timeouts и проверки
+#### CLI 2.114.0 migration path — локальная rehearsal, не production apply
 
-Для migration apply закреплён Supabase CLI **2.114.0**: `db push` применяет
+Для локальной upgrade rehearsal был проверен Supabase CLI **2.114.0**: `db push` применяет
 локальные pending migrations в migration-history order и после успешного файла
 добавляет запись в `supabase_migrations.schema_migrations`; `--dry-run` только
-показывает список. Эта версия и процедура прошли локальную rehearsal, но это не
-production verification. Использовать точный repository checkout, без
+показывает список. Этот вариант проверен локально, но не является production
+apply procedure. В production 29.10.2026 применён отдельный заранее проверенный
+execution package с PostgreSQL 17 `psql`; см. [production rollout record](#production-rollout-2026-10-29).
+Не повторять ни CLI apply, ни bundles для уже применённых версий. Для будущих
+migrations отдельно утвердить execution mechanism и preflight. Локальную
+rehearsal проводили с точным repository checkout, без
 `--include-all`, role/seed флагов, `migration repair` или remote reset. См.
 [CLI reference](https://supabase.com/docs/reference/cli/supabase-db-push).
 
-В защищённом operator terminal использовать только pinned CLI и DSN с timeout
-options из подраздела ниже. Ожидаются ровно пять pending migrations в порядке
-§2:
+Историческая local rehearsal выполнялась только на disposable PostgreSQL. Не
+использовать этот фрагмент для production и не копировать production credentials:
 
 ```zsh
-npx --yes supabase@2.114.0 db push --db-url "$SUPABASE_PRODUCTION_MIGRATOR_DSN_WITH_TIMEOUTS" --dry-run
+npx --yes supabase@2.114.0 db push --db-url "$LOCAL_DISPOSABLE_DATABASE_URL" --dry-run
 ```
 
-Любой иной список, target или CLI version — **STOP**. Будущая apply-команда
-та же без `--dry-run`, с `--yes`, только после отдельного approval и закрытия
-всех STOP gates; в рамках этой задачи она не запускалась. Значение DSN не
-вставлять literal в shell history, logs или отчёт. `--db-url` раскрывает DSN в
-process arguments: если process-list/history/log exposure нельзя исключить,
-**STOP**; не подменять его guessed env var, plaintext-файлом или `--password`.
+Target должен быть disposable и локальным; этот пример только показывает
+проверенный CLI upgrade path и не является production apply инструкцией.
+Production применялся отдельным execution package, описанным в завершённой
+записи выше. Для будущего production suffix требуется новый scoped plan и
+проверенный безопасный механизм передачи credentials.
 
 Один `db push` обрабатывает найденный pending suffix последовательно; он не
 предоставляет здесь подтверждённого operator checkpoint для ручной проверки
@@ -293,6 +297,10 @@ process arguments: если process-list/history/log exposure нельзя ис�
 прочитать текущий ledger и фактические объекты read-only способом. Не повторять
 blind push, не редактировать ledger и не считать отсутствие новой ledger row
 доказательством, что migration не оставила частичный schema effect.
+
+Следующий timeout analysis относится к локальной CLI rehearsal, а не к фактическому
+production apply (для него использовались guards внутри execution bundles,
+описанные выше).
 
 Плановые пределы: `lock_timeout=5s`, `statement_timeout=120s`. Миграции не
 задают эти параметры; передать их как connection-startup `options` в exact DSN
@@ -323,7 +331,7 @@ PostgreSQL startup options, а перед каждой migration CLI выпол�
 | 2. `20260924100000_session_lifecycle_baseline.sql` | Успешно проверена migration 1 и базовые identity/session/profile/activity tables; creator role `postgres`. | Оба overload `bootstrap_telegram_login` существуют: 6-arg canonical и legacy 8-arg wrapper; оба `SECURITY DEFINER`, фиксированный `search_path`; ledger row есть. Effective `EXECUTE` должен быть только app_runtime для backend contract, без `PUBLIC`/API roles. | Legacy 8-arg сохранён для старого Render backend; новый backend вызывает 6-arg. Неожиданный API-role EXECUTE — STOP; production verifier после apply обязателен. |
 | 3. `20260924110000_backend_field_domain_limits.sql` | Повторить агрегаты blank/null перед apply: обе должны оставаться `0`; миграции 1–2 и `profiles`/`travel_intents` существуют; creator `postgres`. | В ledger есть версия; constraints `profiles_display_name_not_blank` и `travel_intents_destination_label_not_blank` существуют и `convalidated=true`; обновлённые функции доступны только по проверенной privilege matrix. | Добавляет два CHECK и заменяет group-chat/message capabilities; старый backend сохраняет сигнатуры, но пустые значения/невалидные inputs начнут отклоняться. Ненулевой legacy count, lock wait, timeout или неизвестное число активных writers — STOP, без backfill/автоматического отката. |
 | 4. `20261003090000_chat_participant_public_profile.sql` | Предыдущие миграции успешны; проверить `chat_participants`, `profiles`, `travel_intents`, `users` и authenticated-user capability; creator `postgres`. | Ledger row есть; `chat_participant_public_profile(uuid,uuid)` существует с `SECURITY DEFINER`, `search_path=pg_catalog`; `PUBLIC` и API roles не executable, `app_runtime` executable. | Старый backend использует сохранённую прежнюю projection function; новый backend требует новую. Production verifier после apply должен подтвердить effective API-role denial. |
-| 5. `20261018090000_server_side_tester_admission_session_identity.sql` | Предыдущие четыре успешно применены; `user_sessions`, `users`, `telegram_identities` присутствуют; creator `postgres`. | Ledger row есть; `resolve_bearer_session_with_identity(text)` существует с `SECURITY DEFINER`, `search_path=pg_catalog`; app_runtime EXECUTE, `PUBLIC`/`anon`/`authenticated`/`service_role` effective EXECUTE отсутствует; прямых runtime SELECT grants на `users`/`telegram_identities` нет. | Старый resolver не меняется; текущая backend Bearer auth использует старый resolver. Неожиданные ACL или прямые grants — STOP; не добавлять их для «быстрого» прохождения. |
+| 5. `20261018090000_server_side_tester_admission_session_identity.sql` | Предыдущие четыре успешно применены; `user_sessions`, `users`, `telegram_identities` присутствуют; creator `postgres`. | Ledger row есть; `resolve_bearer_session_with_identity(text)` существует с `SECURITY DEFINER`, `search_path=pg_catalog`; app_runtime EXECUTE, `PUBLIC`/`anon`/`authenticated`/`service_role` effective EXECUTE отсутствует; прямых runtime SELECT grants на `users`/`telegram_identities` нет. | Старый resolver не меняется; production Bearer auth после PR #37 использует identity resolver. Неожиданные ACL или прямые grants — STOP; не добавлять их для «быстрого» прохождения. |
 
 После полного suffix считать миграционную часть успешной только если пять новых
 версий присутствуют по порядку, ожидаемые объекты и constraints существуют,
@@ -334,7 +342,7 @@ targeted schema-drift review для затронутых объектов под
 Production ledger на 2026-10-19 был 19, Git `develop` содержал 24 files;
 эти значения — дата-связанный ориентир, не текущая гарантия.
 
-### Grant apply и статус verifier gap
+### Historical grant apply procedure (completed 2026-10-29; do not repeat)
 
 После миграций и только по отдельному разрешению применить существующий
 `apps/backend/scripts/grant-production-app-runtime-privileges.sql` с approved
@@ -383,7 +391,11 @@ production и его probes требуют отдельного approval. Про
 backend cutover. Он подтверждает runtime contract, не frontend SHA/origin и не
 полный production schema parity.
 
-#### Compatibility matrix
+#### Historical compatibility matrix (pre-rollout review, 2026-10-19)
+
+The UNKNOWN/BLOCKED findings in this matrix describe the pre-rollout snapshot;
+they were superseded by the verified production rollout recorded above. They
+remain useful as historical reasoning, not as current deployment status.
 
 | Состояние | Вывод | Основание / предел |
 |---|---|---|
@@ -410,8 +422,9 @@ artifact нужно заново подтвердить в provider history. М�
 Новая migration `20261018090000_server_side_tester_admission_session_identity.sql`
 аддитивно добавляет `public.resolve_bearer_session_with_identity(text)` и не
 меняет return contract существующей `resolve_bearer_session(text)`. Это
-сохранённая DB capability; текущий backend использует старую функцию, которая
-возвращает только `session_id` и `user_id`. Backend auth не требует прямых
+сохранённая DB capability; после PR #37 текущий backend использует эту функцию,
+которая связывает bearer session с Telegram identity без прямого доступа к
+identity tables. Backend auth не требует прямых
 `SELECT` grants на `users`/`telegram_identities`, новых RLS policies или
 admission tables.
 
@@ -433,7 +446,8 @@ migrations строго в repository order:
    чтения профиля участника Chat.
 5. `20261018090000_server_side_tester_admission_session_identity.sql` — добавляет
    versioned Bearer resolver после появления базовых identity/session objects;
-   текущий backend продолжает использовать неизменённый старый resolver.
+   production backend после PR #37 использует новый resolver, старый resolver
+   при этом не изменён.
 
 Это dependency order, а не разрешение на production DDL. Перед любым apply
 нужны отдельное explicit operator approval, успешный backup/preflight по
@@ -486,13 +500,99 @@ migrations. Никакая production migration, environment change или deplo
 4. Ручным provider механизмом развернуть backend SHA и затем frontend SHA в порядке, установленном выше. Подтвердить фактически deployed SHA после каждого service rollout. Не менять secrets, DATABASE_URL, network rules, providers или Auto-Deploy как часть этого шага без отдельного scoped approval.
 5. Проверить readiness/smoke. Traffic восстанавливать только после выполнения критериев ниже.
 
-Подтверждены Render Dashboard actions для ручного deployment exact SHA и Render
-Environment; сами project settings, user permissions, Vercel deployment path,
-target URLs и production env values не подтверждены в репозитории и должны быть
-сверены оператором для выбранного проекта перед фактическим rollout. Не
-угадывать target или Vercel sequence.
+Для rollout 2026-10-29 оператор подтвердил Render и Vercel targets и завершил
+описанные ниже действия. Этот исторический факт не подтверждает текущие
+provider permissions/settings для будущего выпуска; перед каждым новым rollout
+повторно сверять targets и использовать поддерживаемый механизм конкретного
+provider. Не угадывать target или последовательность.
 
-### Порядок именно для текущего pending suffix
+## Production rollout 2026-10-29
+
+**Итог: завершён.** Это запись о результате по операторским deployment records,
+а не подтверждение текущего состояния на будущую дату. Пять migrations,
+runtime grants, verifier и database gate уже успешно выполнены. Не повторять их
+в рамках этого rollout.
+
+### Database
+
+- Supabase `travel-friend-dev`, ref `tlgprfsecdasloqnuyjo`; migration ledger
+  изменился с 19 до 24. Пять migrations применены по порядку, с проверкой
+  после каждой:
+  1. `20260924090000_completed_onboarding_active_travel_intent_invariant.sql`
+  2. `20260924100000_session_lifecycle_baseline.sql`
+  3. `20260924110000_backend_field_domain_limits.sql`
+  4. `20261003090000_chat_participant_public_profile.sql`
+  5. `20261018090000_server_side_tester_admission_session_identity.sql`
+- Для production использован подготовленный execution package,
+  PostgreSQL 17 `psql` и Supabase Session Pooler через IPv4, port 5432,
+  с клиентским `sslmode=require`. Успешное соединение проверяло TLS
+  операторский клиент → Pooler. `pg_stat_ssl` показывает Pooler → PostgreSQL
+  и не является проверкой клиентского участка.
+- Bundles содержали target/identity guards (`current_user=session_user=postgres`),
+  `RESET ALL`, `SET LOCAL lock_timeout='5s'` и
+  `SET LOCAL statement_timeout='120s'`; SQL и ledger insert выполнялись
+  атомарно через `psql --single-transaction --set ON_ERROR_STOP=1`.
+- Runtime grants применены один раз после миграций. Privilege verifier и
+  production runtime deployment gate: PASS. Повторно grants/verifier/gate
+  для завершённого rollout не запускать.
+
+### Render backend
+
+- Service `travel-friend-api` (`srv-daaneiajnfac7392ljqg`), deployment
+  `dep-dbhk59om7kps73f4e39g`, live SHA
+  `67eae892886cabac7408857c8a1b24af1728d2cf`.
+- `/health` = 200, `/ready` = 200; startup errors не обнаружены;
+  Auto-Deploy Off.
+
+### Vercel frontend и инфраструктурный smoke
+
+- Production deployment `dpl_DjcqzYmZQhDJS9FFzNSk2Scb7J41` — `READY`:
+  [travel-friend-mini-app.vercel.app](https://travel-friend-mini-app.vercel.app).
+  Snapshot соответствует `apps/mini-app` на SHA
+  `15c0d761fb54670b3987f743ebaca5df353f3972`; при сборке использован
+  `BACKEND_API_ORIGIN=https://travel-friend-api.onrender.com`.
+- Главная страница и `/api/backend/health` вернули 200; связь proxy с Render
+  подтверждена. `/openapi.json` = 200; защищённые endpoints без Bearer вернули
+  ожидаемый 401. Проверки не создавали пользовательские данные.
+- Это infrastructure smoke: deployment, health/readiness, API proxy и ожидаемый
+  unauthenticated отказ. Он не проверяет Telegram login и авторизованные
+  пользовательские сценарии.
+
+### Auth и оставшиеся риски
+
+PR #37 merged: единый Telegram auth flow без core/tester allowlists и tester
+pause. Любой пользователь с валидным Telegram `initData` может зарегистрироваться;
+подпись и срок действия initData, Telegram identity binding, Bearer session
+lifecycle, expired/revoked/deleted-user checks и user-scoped authorization
+сохранены. Backend использует `resolve_bearer_session_with_identity(text)`.
+Отдельных SQL migrations для изменения auth не добавлялось. Авторизованный
+Telegram E2E не проводился; внешнее тестирование не завершено.
+
+Остаются подтверждённые риски:
+
+- Supabase API-role grants шире необходимого; default `EXECUTE` ACL для будущих
+  функций требует отдельного hardening.
+- Render Free и Supabase Free имеют ресурсные и тарифные ограничения. Открытая
+  Telegram-регистрация несёт риск злоупотреблений и будущих AI-расходов; rate
+  limiting/monitoring не заменяют per-user admission.
+- Backup/restore проверены, encrypted offsite copy существует. Полное
+  Supabase-managed recovery и полный production ACL restore не подтверждены.
+- Render Suspend останавливает весь backend service; это не per-user access
+  block. Vercel pause останавливает frontend, но не закрывает прямой Render API.
+
+При ошибке будущего migration apply остановиться и выполнить read-only анализ
+ledger и фактических объектов; не делать blind retry, migration repair или
+автоматический rollback. При failed deployment не повторять deploy автоматически;
+сначала проверить live revision, совместимость с DB и logs, затем следовать
+соответствующему rollback/forward-fix разделу ниже.
+
+### Исторический план rollout (заменён результатом выше)
+
+Следующий список — план до 2026-10-29, не текущие инструкции и не описание
+текущего состояния. Он оставлен как историческая запись; фактический rollout
+зафиксирован в предыдущем разделе.
+
+### Исторический порядок rollout pending suffix (до 2026-10-29)
 
 Эта последовательность применима только после снятия всех BLOCKED gates из §2.
 Каждый шаг — отдельная production operation с собственным approval; этот
@@ -586,7 +686,7 @@ persistent disk, но конкретная текущая конфигураци
 
 ### Ручной Telegram E2E
 
-Полный сценарий Telegram Auth → Profile/TravelIntent → Discover/Match → Chat/Messages → Trips остаётся отдельной ручной проверкой. Его выполняют только по отдельно согласованному сценарию, с разрешённым test account и определёнными правилами тестовых данных. Автоматический read-only smoke не аутентифицируется, не создаёт пользователей/сообщения/чаты/поездки и не заменяет Telegram E2E.
+**Статус на 2026-10-29: не проводился.** Полный сценарий Telegram Auth → Profile/TravelIntent → Discover/Match → Chat/Messages → Trips остаётся отдельной ручной проверкой; внешнее тестирование не завершено. Его выполняют только по отдельно согласованному сценарию, с определённым test account и правилами тестовых данных. Регистрация создаёт user/session state, поэтому production E2E требует отдельного решения оператора. Автоматический инфраструктурный smoke не аутентифицируется, не создаёт пользователей/сообщения/чаты/поездки и не заменяет Telegram E2E.
 
 Зафиксировать observed SHA, migration version, результаты verifier/gate, HTTP smoke и решение о traffic restore в operator deployment record. Provenance самого deployment относится к №16.
 
@@ -633,7 +733,10 @@ per-user revoke через конфигурацию. Прекращение пр
 организационная мера и не отзывает существующие аккаунты/sessions. При
 инциденте, требующем остановить входящий трафик, использовать provider-level
 stop controls ниже; удаление пользователя и его session — отдельная
-согласованная операция, не часть этого emergency checklist.
+согласованная операция, не часть этого emergency checklist. Render Suspend
+останавливает backend service целиком и затрагивает всех пользователей; это не
+эквивалент индивидуальной блокировки. Vercel Pause останавливает frontend, но
+не блокирует прямой Render API origin.
 
 **B. Остановить весь backend.** В Render Dashboard подтвердить workspace,
 service name `travel-friend-api`, live deployment и `onrender.com` target;
