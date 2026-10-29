@@ -16,7 +16,7 @@ os.environ.setdefault("TELEGRAM_BOT_TOKEN", "test-token-for-authenticated-contex
 os.environ.setdefault("DATABASE_URL", "postgresql://unused-for-authenticated-context")
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
-from travel_friend_backend.config import AdmissionPolicy, BackendSettings
+from travel_friend_backend.config import BackendSettings
 from travel_friend_backend.db import authenticated_transaction
 from travel_friend_backend.dependencies import get_authenticated_database_connection
 from travel_friend_backend.main import create_app
@@ -56,11 +56,6 @@ def context_test_app(runtime_database_url: str) -> FastAPI:
         BackendSettings(
             telegram_bot_token=TEST_BOT_TOKEN,
             database_url=runtime_database_url,
-            admission_policy=AdmissionPolicy(
-                core_user_ids=frozenset({1, 2}),
-                tester_user_ids=frozenset({}),
-                testers_paused=False,
-            ),
         )
     )
 

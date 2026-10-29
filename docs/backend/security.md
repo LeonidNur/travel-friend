@@ -67,35 +67,36 @@ Telegram `initData` по-прежнему проверяется только Fa
 
 Bearer session resolution — отдельная pre-auth bootstrap capability. FastAPI извлекает raw Bearer token, вычисляет его hash и передаёт только hash в `public.resolve_bearer_session(text)`. Эта owner-owned `SECURITY DEFINER` capability возвращает только `session_id` и `user_id` активной, неотозванной, неистёкшей сессии не удалённого пользователя; raw token, `token_hash` и business/profile data она не возвращает. Lookup остаётся в отдельном bootstrap connection: authenticated business transaction с `app.user_id` ещё не существует в этот момент.
 
-### Server-side tester admission
+### Telegram authentication and registration
 
-Backend применяет deny-by-default admission после проверки подписанного Telegram
-`initData` и до вызова bootstrap capability, поэтому отклонённый пользователь не
-создаёт `users`, `telegram_identities` или bearer session. На каждом
-authenticated Bearer request общий `auth_dependency` повторно получает
-Telegram numeric ID через additive capability
-`public.resolve_bearer_session_with_identity(text)` и повторно применяет тот же
-policy. Поэтому удаление tester ID из server allowlist и tester pause блокируют
-также уже выданные токены и прямые запросы к Render. Вызов выполняется одним
-DB round trip; backend не читает `users` или `telegram_identities` напрямую.
-Resolver доступен только `app_runtime`: migration отзывает `PUBLIC` и
-`anon`/`authenticated`/`service_role`, а production verifier и deployment gate
-проверяют отсутствие effective EXECUTE у Supabase API roles.
+Любой Telegram account с корректно подписанным и не просроченным raw
+`initData` может начать регистрацию. Backend проверяет подпись и freshness,
+применяет существующий login rate limit и вызывает узкую
+`SECURITY DEFINER` capability `public.bootstrap_telegram_login(...)`.
+Первый вход создаёт пользователя, Telegram identity, bootstrap defaults и
+session; `onboarding_status` начинается с `not_started`. Повторный вход
+обновляет проверенную Telegram metadata и создаёт новую session, не дублируя
+пользователя или identity.
 
-Policy хранится только в process environment backend:
+Списки Telegram ID и tester pause не являются частью backend configuration и
+не ограничивают регистрацию или API. В частности, старые переменные
+`TELEGRAM_CORE_USER_IDS`, `TELEGRAM_TESTER_USER_IDS` и
+`TELEGRAM_TESTERS_PAUSED` не читаются приложением.
 
-- `TELEGRAM_CORE_USER_IDS` — ровно три положительных уникальных numeric IDs;
-- `TELEGRAM_TESTER_USER_IDS` — от нуля до семи положительных уникальных IDs,
-  не пересекающихся с core; явно заданное пустое значение означает, что
-  временно или постоянно не допущен ни один tester;
-- `TELEGRAM_TESTERS_PAUSED` — строго `true` или `false`.
+Для каждого Bearer request общий `auth_dependency` передаёт hash токена в
+`public.resolve_bearer_session(text)`. Существующая
+`SECURITY DEFINER` capability возвращает только `session_id` и `user_id` для
+неотозванной, неистёкшей session пользователя, который не удалён. Raw token,
+`token_hash` и Telegram numeric ID не возвращаются. Business queries выполняются
+отдельно с transaction-local `app.user_id`; RLS и endpoint authorization
+продолжают ограничивать доступ к чужим данным. Проверка действует и при прямом
+запросе к Render API, независимо от frontend.
 
-Core допускается всегда; tester — только при `TELEGRAM_TESTERS_PAUSED=false`;
-остальные получают общий отказ `403 Access is not enabled`. Отсутствующая,
-некорректная, пересекающаяся или превышающая разрешённый размер конфигурация
-прерывает startup; явный пустой tester list допустим. Backend не выводит IDs в
-ответах и логах.
-Telegram IDs не хранятся в Git, frontend bundle, request logs или документации.
+Удалённые пользователи по-прежнему не могут войти или использовать существующую
+session. Ошибки Telegram signature/freshness и неизвестные, истёкшие либо
+отозванные Bearer sessions остаются отказами. Отдельного per-user revoke через
+allowlist и pause для tester cohort больше нет; emergency stop выполняется
+оператором на уровне provider по deployment runbook.
 
 Оператор управляет списками и pause только в защищённой server-side конфигурации
 Render и применяет изменения контролируемым ручным deploy/restart. Auto-Deploy

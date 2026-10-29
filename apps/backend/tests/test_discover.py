@@ -15,7 +15,7 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
-from travel_friend_backend.config import AdmissionPolicy, BackendSettings
+from travel_friend_backend.config import BackendSettings
 from integration_database import (
     IntegrationDatabaseNotConfiguredError,
     get_disposable_test_database_url,
@@ -67,11 +67,6 @@ def client(runtime_database_url: str) -> Iterator[TestClient]:
         BackendSettings(
             telegram_bot_token=TEST_BOT_TOKEN,
             database_url=runtime_database_url,
-            admission_policy=AdmissionPolicy(
-                core_user_ids=frozenset({1, 2, 3, 4}),
-                tester_user_ids=frozenset(),
-                testers_paused=False,
-            ),
         )
     )
     with TestClient(app) as test_client:
