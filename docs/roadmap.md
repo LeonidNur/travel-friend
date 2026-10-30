@@ -37,21 +37,25 @@
 - ✅ persisted direct и group Chats/Messages
 - ✅ Group Chat MVP: создание из existing matched/direct-chat companions, минимум три участника, фиксированный состав
 - ✅ Trips persistence, server Trip creation API из direct/group Chat, frontend CTA и 409 → `GET /trips` navigation, `trip_stops`, Trips List и Trip Detail
-- ✅ TEAM E2E и systematic authorization / IDOR review
+- ✅ Controlled TEAM E2E (до production rollout) и systematic authorization / IDOR review
 - ✅ first-login concurrency и Discover requester eligibility
 - ✅ production security baseline: DB до `20260901280000`, RLS на всех 17 application tables, least-privileged `app_runtime`, transaction-local `app.user_id`, grants verifier и runtime deployment gate
-- ✅ совместимый security backend deployed в production; production `/health` и Telegram smoke пройдены
-- ✅ №15: manual production deployment runbook подготовлен; Auto-Deploy остаётся Off
+- ✅ совместимый security backend deployed в production; production infrastructure smoke пройден
+- ✅ №15: manual production deployment workflow выполнен 29.10.2026; Auto-Deploy остаётся Off
 - ✅ P0 security baseline: Telegram `initData`, completed-onboarding invariant, session lifecycle, backend input/domain limits, minimal rate limiting и secrets/env/logging hygiene
 - ✅ P0.5 reliability/observability: request correlation, frontend read states, Chat → Profile navigation, controlled multi-user Trip Detail coverage, reciprocal Match feedback, active TravelIntent edit, readiness и correlated backend logging
 
 ## Текущий этап
 
-### Дальнейший Technical Hardening Backlog
+### Production checkpoint и дальнейшая работа
 
 Реализованный backend-backed vertical slice: `Telegram Auth → onboarding → Profile → TravelIntent → Discover → reciprocal Match → direct/group Chat → Messages → Trip creation → Trip List/Detail`. Group Chat создаётся из existing matched/direct-chat companions с фиксированным MVP-составом; Trips List/Detail читают persistence.
 
-Ближайший технический этап — закрыть открытые deployment и external-test control gates из [technical hardening backlog](technical-hardening-backlog.md). №16 подтверждает старый Render SHA и 19 migration records на дату прошлого snapshot; в `develop` reviewed 5 последующих migrations и выполнен локальный restore/replay с runtime grants, однако production ledger/schema повторно не проверялись. Vercel SHA и фактический `BACKEND_API_ORIGIN` неизвестны, live `/health` smoke завершился timeout. Server-side tester admission реализован в repository с additive migration, но production migration/grants/configuration/deployment не выполнялись. Внешний тест пока STOP также из-за публичного `/ready` DB amplification, неизвестных account billing controls и неподтверждённой deployment/schema compatibility. Для ручного rollout, provenance и recovery действует [production deployment runbook](backend/production-deployment-runbook.md); №21 сохраняет границы полного provider recovery, №17 даёт read-only backend smoke, №22 описывает operator rollback/forward-fix процедуры без production execution. External test остаётся после необходимых deployment и control gates; детальный порядок hardening остаётся в backlog и не дублируется здесь.
+**Production rollout завершён 29.10.2026.** На дату rollout production Supabase ledger был 24; пять ожидавших migrations применены, runtime grants, privilege verifier и database deployment gate прошли. Render backend работал на SHA `67eae892886cabac7408857c8a1b24af1728d2cf`, Vercel Production был READY на snapshot `15c0d761fb54670b3987f743ebaca5df353f3972`; health/readiness и infrastructure smoke прошли. Это датированный checkpoint, а не утверждение о непрерывной доступности или неизменности production после 29.10. Подробности находятся в [production deployment runbook](backend/production-deployment-runbook.md).
+
+PR #37 установил единую регистрацию любого пользователя с валидным Telegram `initData`; core/tester allowlists и tester pause удалены. Telegram identity binding и Bearer session checks сохранены; отдельной SQL migration для отмены admission-модели не потребовалось.
+
+Controlled TEAM E2E и systematic authorization / IDOR checks завершены до rollout. Production infrastructure smoke после rollout проверил health/readiness, proxy и ожидаемые 401 для защищённых endpoints без Bearer. Полный авторизованный Telegram production E2E **не проводился**; он остаётся отдельным pending шагом. Внешнее пользовательское тестирование не начато и требует отдельного preflight/control gate: cost/abuse readiness, актуальная проверка deployment/schema и согласованный сценарий Telegram E2E. Открыты полный schema-drift/provenance audit, Supabase API-role grants шире нужного и default EXECUTE ACL hardening, provider billing/abuse и operational recovery/stop readiness. Детальные технические риски и gate status находятся в [technical hardening backlog](technical-hardening-backlog.md), operator procedure — в [production deployment runbook](backend/production-deployment-runbook.md).
 
 Последующие самостоятельные work items:
 
@@ -59,7 +63,7 @@
 - Trip write/lifecycle: изменение подтверждённого состояния, stop editor, `start/complete/cancel/leave` и правила версий;
 - invitations, изменение состава, leave, roles/admin/permissions, invite links, сложный membership lifecycle Group Chat и расширенный Trip lifecycle — после отдельного решения.
 
-Auto-Deploy остаётся Off. Production rollout выполняется вручную только после отдельного подтверждения оператора. После несовместимых DB/grants изменений старый backend не является автоматически допустимым rollback target.
+Auto-Deploy остаётся Off. Будущие production rollout выполняются вручную после отдельного подтверждения оператора. После несовместимых DB/grants изменений старый backend не является автоматически допустимым rollback target.
 
 AI/Proposal и provider integrations отложены до подключения второго разработчика. Это не блокер текущего direct-chat MVP и не должно реализовываться в рамках закрытия его persistence flow.
 
@@ -71,9 +75,10 @@ AI/Proposal и provider integrations отложены до подключени�
 
 ## Дальше
 
-1. Продолжить Technical Hardening Backlog с №16 Deployment provenance/environments; №15 закрыт как docs-ready.
-2. Затем пройти required deployment/control gates перед решением об external test.
-3. После этого согласовать и реализовать следующий один Trip lifecycle/write slice; к AI вернуться только после подключения второго разработчика и отдельного Pre-AI FinOps gate.
+1. Завершить текущую ревизию и систематизацию документации.
+2. Подготовить и провести отдельно согласованный авторизованный Telegram production E2E.
+3. После необходимых preflight/control gates принять решение о первом внешнем пользовательском тестировании.
+4. Дальнейшие продуктовые slices вести отдельными задачами.
 
 ## Примечания
 

@@ -116,18 +116,20 @@ Telegram Mini App не отменяет будущую отдельную моб
 - настроен local Supabase CLI workflow и local PostgreSQL/Supabase environment;
 - завершён Core Identity persistence: `users`, `telegram_identities`, `profiles`, `profile_photos`, `user_settings`, `user_activity_states` и `travel_intents` с нужными constraints и indexes;
 - завершён server-side Telegram Auth: проверка raw `initData`, `POST /auth/telegram`, `POST /auth/logout`, Bearer authentication и server-side multiple sessions с opaque token, SHA-256 hash в БД и TTL 30 дней;
+- действует единая регистрация пользователя с валидным Telegram `initData`; core/tester allowlists и tester pause отсутствуют, Telegram identity binding и Bearer session checks сохранены;
 - первый login создаёт базовые User/TelegramIdentity/UserSettings/UserActivityState, повторный использует того же User; revoked, expired и deleted-user sessions отклоняются;
 - `DATABASE_URL` читается и валидируется только в server environment;
 - реализованы Profile + TravelIntent API, onboarding, persistence Discover interest/match, direct/group Chats/Messages и Trip slice с `trip_stops`;
 - Group Chat создаётся с минимум тремя участниками: создатель выбирает existing matched/direct-chat companions, а состав фиксирован для MVP;
 - Trip создаётся из direct или group Chat; все активные ChatParticipant сразу становятся TripParticipant; TripInvitation не используется; Mini App вызывает API и при `409` открывает существующую unfinished Trip через `GET /trips`;
-- production security baseline закрыт: production DB применена до `20260901280000`, RLS включён на всех 17 application tables, FastAPI работает через least-privileged `app_runtime` с transaction-local `app.user_id`; grants verifier, runtime deployment gate, совместимый backend deploy, `/health` и Telegram smoke прошли;
+- production security baseline закрыт: RLS включён на всех 17 application tables, FastAPI работает через least-privileged `app_runtime` с transaction-local `app.user_id`; grants verifier и runtime deployment gate прошли. Production rollout 29.10.2026 дополнительно подтвердил ledger=24, применение пяти ожидавших migrations и готовность Render/Vercel на дату snapshot;
 - закрыт P0 security baseline реализованного MVP: server-side Telegram `initData`, completed-onboarding invariant, session lifecycle, backend input limits, minimal rate limiting и secrets/logging hygiene;
 - закрыт P0.5 reliability/observability: request correlation, GET/read timeout с user-initiated Retry из recoverable error states, explicit loading/empty/error states, Chat → persisted participant Profile, controlled multi-user Trip Detail regression coverage, reciprocal Match feedback, active TravelIntent edit, readiness и correlated backend logging;
-- Auto-Deploy backend остаётся выключенным до отдельной задачи по deployment workflow; после несовместимых DB/grants изменений старый backend не считается автоматически допустимым rollback target;
+- Auto-Deploy backend остаётся выключенным после ручного production rollout; включение автоматизации требует отдельного решения. После несовместимых DB/grants изменений старый backend не считается автоматически допустимым rollback target;
 - realtime, Trip write/lifecycle, invitations, сложный membership lifecycle и AI/Proposal остаются дальнейшими отдельными задачами;
 - AI/Proposal и provider integrations отложены до подключения второго разработчика;
-- ближайший технический этап — deployment / CI reproducibility из [Technical Hardening Backlog](docs/technical-hardening-backlog.md), начиная с №15 Production deployment workflow; external test возможен только после необходимых deployment/control gates.
+- controlled TEAM E2E и systematic authorization / IDOR checks завершены до rollout; infrastructure smoke после rollout проверил health/readiness, proxy и ожидаемые 401 для защищённых endpoints без Bearer;
+- полный авторизованный Telegram production E2E ещё не проводился, внешнее пользовательское тестирование не начато. Следующий этап — подготовить этот E2E, пройти отдельный preflight/control gate и принять решение о готовности к external test. Технические риски и gate status ведутся в [Technical Hardening Backlog](docs/technical-hardening-backlog.md).
 
 ## Идея проекта
 
@@ -401,9 +403,10 @@ Backend/domain/data источники:
 
 Ближайший порядок разработки:
 
-1. Продолжить [Technical Hardening Backlog](docs/technical-hardening-backlog.md) с deployment / CI reproducibility, начиная с №15 Production deployment workflow.
-2. Пройти необходимые deployment/control gates перед решением об external test.
-3. После этого согласовать один Trip write/lifecycle slice; AI остаётся отложенным до подключения второго разработчика и отдельного Pre-AI FinOps gate.
+1. Завершить текущую ревизию и систематизацию документации.
+2. Подготовить и провести отдельно согласованный авторизованный Telegram production E2E.
+3. После необходимых preflight/control gates принять решение о первом внешнем пользовательском тестировании.
+4. Дальнейшие продуктовые slices вести отдельными задачами.
 
 ## Долгосрочное видение
 
