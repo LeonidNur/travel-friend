@@ -22,7 +22,7 @@
 
 Это базовый слой инструкций. Пользователь не обязан каждый раз повторять его в prompt.
 
-Текущая продуктовая рамка: persisted backend-backed slice уже покрывает Telegram Auth, onboarding, Profile/TravelIntent, Discover/Match, direct/group Chats/Messages и создание/чтение Trip. Production RLS/runtime-role, P0 security baseline и P0.5 reliability/observability завершены; compatible backend deployment проверен. Следующий технический этап — deployment / CI reproducibility Technical Hardening Backlog, начиная с №15 Production deployment workflow; external test возможен только после отдельных deployment/control gates. P1 TEAM E2E и самостоятельные slices для Trip lifecycle/write, realtime и safety остаются последующими work items. AI/provider integrations отложены. Current state всегда сверяется с `AGENTS.md`, кодом/tests/migrations и source-of-truth документами, а не со старыми historical records.
+Task protocol описывает рабочий процесс Codex и не дублирует меняющийся статус проекта. Текущие приоритеты и этапы указаны в [roadmap](../roadmap.md), технические риски и gates — в [technical hardening backlog](../technical-hardening-backlog.md). Источники поведения и правила разрешения противоречий перечислены в корневом [AGENTS.md](../../AGENTS.md).
 
 ## Что пользователь указывает в коротком ТЗ
 
