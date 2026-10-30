@@ -8,25 +8,28 @@ Travel Friend — Telegram Mini App MVP для поиска попутчиков
 
 Во время работы Codex держится в пределах задачи, не делает изменения «заодно», не добавляет зависимости без разрешения и не переписывает `README.md` без явного указания. При старте задачи он явно перечисляет прочитанные инструкции, выбранные skills/workflows, неиспользуемые skills и планируемые файлы. Если задача затрагивает существующий flow, он проверяет соседние сценарии; для backend-задач учитывает frontend-flow, но не принимает frontend view models за Supabase-схему. Новые несостыковки фиксируются как TODO/risk, но не исправляются без отдельного разрешения.
 
-## Иерархия источников истины
+## Источники истины
 
-Для implementation questions источники используются в таком порядке:
+Сначала соблюдай границы текущего scope задачи. Для контекста используй один источник, соответствующий вопросу:
 
-1. текущий scope задачи;
-2. текущие code, tests и migrations — источник истины для фактически реализованного поведения;
-3. approved domain / ER / physical-data documentation — источник истины для утверждённых архитектурных решений и инвариантов;
-4. current roadmap и [technical hardening backlog](docs/technical-hardening-backlog.md);
-5. engineering handbook;
-6. `README.md`;
-7. `CHANGELOG.md` и `docs/dev-log.md` — только historical records.
+| Вопрос | Источник |
+|---|---|
+| Что фактически реализовано | Текущие code, tests и migrations |
+| Какие продуктовые требования, MVP-границы и сценарии заданы | [Product Vision](docs/product-vision.md), [MVP Scope](docs/mvp-scope.md), [User Flows](docs/user-flows.md) |
+| Какие архитектурные решения утверждены | [Domain Model](docs/backend/domain-model.md), [Backend Contracts](docs/backend/backend-contracts.md), [ER Model](docs/backend/er-diagram.md), [Physical Data Design](docs/backend/physical-data-design.md) |
+| Каковы текущие приоритеты | [Roadmap](docs/roadmap.md) |
+| Какие технические риски и gates открыты | [Technical Hardening Backlog](docs/technical-hardening-backlog.md) |
+| Как выполнять production-операции | Соответствующие runbooks, включая [Production Deployment Runbook](docs/backend/production-deployment-runbook.md) |
+| Как работать в репозитории | [Engineering Handbook](docs/engineering-handbook/README.md) |
+| Что происходило исторически | `CHANGELOG.md` и `docs/dev-log.md` |
 
-Historical documentation не переопределяет текущую реализацию или актуальные source-of-truth документы. Подробные правила процесса находятся в [engineering handbook](docs/engineering-handbook/README.md).
+Code/tests/migrations описывают фактическое поведение; продуктовые документы задают намерения и scope, а архитектурные документы — утверждённые решения. Future design не считается реализованным. При конфликте документации с реализацией зафиксируй несоответствие для review, не меняя продуктовую логику автоматически. Исторические записи не переопределяют current state. Не поддерживай параллельные списки приоритетов вне roadmap и technical backlog.
 
 После изменений Codex кратко объясняет, что сделал и почему, затем запускает нужные проверки. Для frontend-задач базовая проверка - `npm run check`; для backend-задач она дополняется проверками, которые действительно нужны конкретному изменению. Если задача помечена как `docs-only`, он не меняет код приложения и ограничивается документальными проверками вроде `git diff --check`. В конце он перечисляет оставшиеся риски и TODO, если такие есть.
 
 ## Документация
 
-Документация проекта по умолчанию ведётся на русском языке. `README.md` остаётся главным документом проекта и не должен сокращаться или переписываться радикально без явного разрешения.
+Документация проекта по умолчанию ведётся на русском языке. `README.md` остаётся главной обзорной точкой входа в проект и не должен сокращаться или переписываться радикально без явного разрешения; источники ответов по конкретным вопросам указаны выше.
 
 ## Базовые правила качества
 
