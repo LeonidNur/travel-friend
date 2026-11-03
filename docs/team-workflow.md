@@ -17,11 +17,13 @@ main
 ↓
 develop
 ↓
-feature/*
+task branch
 ↓
-merge в develop
+PR в develop
 ↓
-после проверки merge в main
+review и одобрение → merge в develop
+↓
+отдельное release decision для promotion в main
 ```
 
 ## Правила работы
@@ -37,10 +39,10 @@ merge в develop
 2. Прочитать Engineering Handbook.
 3. Изучить Roadmap.
 4. Получить небольшую задачу.
-5. Создать feature-ветку.
+5. Создать отдельную task branch.
 6. Выполнить задачу.
-7. Обновить документацию.
-8. Выполнить merge в `develop`.
+7. Проверить актуальность документации по правилу ниже.
+8. Передать diff на review; обычные feature/docs PR направляются в `develop` и вливаются после проверки и одобрения.
 
 ## Проверка документации после задачи
 

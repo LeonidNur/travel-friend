@@ -24,7 +24,7 @@ TELEGRAM_WEB_APP_URL=https://your-vercel-url.example
 BACKEND_API_ORIGIN=http://127.0.0.1:8000
 ```
 
-`BACKEND_API_ORIGIN` используется Next.js rewrite для `/api/backend/*`. Он должен указывать на доступный backend environment; production значение остаётся environment-specific и не фиксируется в репозитории. Production security backend уже deployed; его cutover/runbook задокументирован в [production security migrations runbook](backend/production-security-migrations-runbook.md).
+`BACKEND_API_ORIGIN` используется Next.js rewrite для `/api/backend/*`. Он должен указывать на доступный backend environment; production значение остаётся environment-specific и не фиксируется в репозитории. Ручной production rollout backend выполнен на checkpoint 29.10.2026; его cutover/runbook задокументирован в [production security migrations runbook](backend/production-security-migrations-runbook.md). Это датированный checkpoint, а не проверка текущей доступности.
 
 Храните `TELEGRAM_BOT_TOKEN` и `DATABASE_URL` только в environment backend-процесса, например:
 
