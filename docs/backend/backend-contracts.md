@@ -6,9 +6,9 @@
 
 API проектируется вокруг пользовательских и domain actions, а не как CRUD поверх каждой ER-сущности. Frontend не может напрямую создавать внутренние сущности `Match`, `ChatParticipant`, `TripParticipant`, `Proposal` и system `Message`. Backend/domain является доверенной точкой применения инвариантов, авторизации и атомарных domain-операций.
 
-## Реализованные HTTP contracts (`develop`, 2026-09-29)
+## Реализованные HTTP contracts (текущая реализация репозитория)
 
-Все кроме `GET /health` и `GET /ready` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
+Все кроме `GET /health`, `GET /ready` и `POST /auth/telegram` требуют `Authorization: Bearer <opaque session token>`. `POST /auth/telegram` принимает только raw Telegram `init_data`; backend проверяет подпись и freshness, а не доверяет `initDataUnsafe`.
 
 `GET /health` — unauthenticated process liveness: всегда возвращает `200 {"status":"ok"}` и не обращается к PostgreSQL. `GET /ready` — unauthenticated DB-backed readiness: открывает новое соединение через runtime `DATABASE_URL` и выполняет только `SELECT 1`; success — `200 {"status":"ready"}`, недоступность DB dependency — `503 {"detail":"Service unavailable"}` без diagnostics. Probe ограничен fixed `connect_timeout` 3 seconds и PostgreSQL `statement_timeout` 2000 ms; он не проверяет schema, migrations, RLS/capabilities, Telegram или business flows.
 
@@ -16,7 +16,7 @@ API проектируется вокруг пользовательских и 
 
 ### Minimal in-process rate limiting
 
-MVP применяет только небольшой per-process fixed-window limiter к следующим write operations: `POST /auth/telegram` — `12 / 10 minutes` по verified Telegram user ID; `PUT /discover/decisions/{targetUserId}` — `90 / minute`; `POST /chats/{chatId}/messages` — `40 / minute`; `POST /chats/groups` и `POST /chats/{chatId}/trips` — по `5 / 10 minutes` каждый. Все authenticated policies keyed by backend-authenticated user ID; buckets Group и Trip независимы.
+MVP применяет только небольшой per-process fixed-window limiter к следующим write operations: `POST /auth/telegram` — `12 / 10 minutes` по verified Telegram user ID; `PUT /discover/decisions/{target_user_id}` — `90 / minute`; `POST /chats/{chat_id}/messages` — `40 / minute`; `POST /chats/groups` и `POST /chats/{chat_id}/trips` — по `5 / 10 minutes` каждый. Все authenticated policies keyed by backend-authenticated user ID; buckets Group и Trip независимы.
 
 Для Telegram сначала выполняется cryptographic verification raw `init_data`, затем limiter, и только затем DB login/session bootstrap; invalid `init_data` bucket не создаёт. Для authenticated writes limiter запускается после resolution active Bearer session и до business DB transaction/capability. GET endpoints, `/health`, profile/travel-intent/onboarding mutations и logout не throttled.
 
@@ -42,31 +42,43 @@ MVP применяет только небольшой per-process fixed-window 
 | `GET` | `/health` | process liveness, без DB probe |
 | `GET` | `/ready` | DB-backed readiness (`SELECT 1`) |
 | `POST` | `/auth/telegram` | verify raw `init_data`, login/create identity and session, вернуть bootstrap flags |
+| `GET` | `/auth/test-current` | вернуть `user_id` текущей Bearer session (служебный/test endpoint) |
 | `POST` | `/auth/logout` | revoke только текущую session, `204` |
 | `GET` / `PATCH` | `/me/profile` | получить/изменить профиль текущего пользователя |
 | `GET` / `PUT` / `DELETE` | `/me/travel-intent` | active TravelIntent; `DELETE`: `204` или `409` для completed user с active intent |
 | `PATCH` | `/me/onboarding` | переход только в `in_progress` или `completed`; completed нельзя понизить |
 | `GET` | `/discover/candidates` | eligible candidates без решений текущего пользователя |
-| `PUT` | `/discover/decisions/{targetUserId}` | финальное `interested` / `rejected`; reciprocal interest создаёт Match и direct Chat |
+| `PUT` | `/discover/decisions/{target_user_id}` | финальное `interested` / `rejected`; reciprocal interest создаёт Match и direct Chat |
 | `GET` | `/chats` | direct и group Chats текущего активного участника |
 | `POST` | `/chats/groups` | создать Group Chat из минимум двух eligible direct-chat companions инициатора |
-| `GET` / `POST` | `/chats/{chatId}/messages` | история / новое текстовое сообщение доступного direct или group Chat |
-| `POST` | `/chats/{chatId}/trips` | создать одну `forming` Trip из доступного direct или group Chat |
+| `GET` / `POST` | `/chats/{chat_id}/messages` | история / новое текстовое сообщение доступного direct или group Chat |
+| `GET` | `/chats/{chat_id}/participants/{user_id}/profile` | публичный профиль другого текущего участника Chat |
+| `POST` | `/chats/{chat_id}/trips` | создать одну `forming` Trip из доступного direct или group Chat |
 | `GET` | `/trips` | Trip текущего участника |
-| `GET` | `/trips/{tripId}` | detail Trip с route stops и активными participants |
+| `GET` | `/trips/{trip_id}` | detail Trip с route stops и активными participants |
+
+Path-параметры в FastAPI объявлены как `target_user_id`, `chat_id`, `user_id` и `trip_id`; фактические URL path segments показаны в таблице. Все endpoints, кроме `GET /health`, `GET /ready` и `POST /auth/telegram`, требуют активную Bearer session; отсутствие, недействительность или истечение сессии даёт `401`. Валидация path/body и запрещённых дополнительных полей даёт `422`, если ниже не указан более конкретный ответ.
+
+`POST /auth/telegram` принимает JSON `{ "init_data": "<raw Telegram initData>" }`; успешный ответ содержит `access_token`, `token_type`, `expires_at`, `user.id`, `onboarding.status`, `profile_exists` и `travel_intent_exists`. Некорректная/устаревшая Telegram-аутентификация даёт `401`, удалённая identity — `403`, ненастроенная DB — `503`. `GET /auth/test-current` возвращает `{ "user_id": "<uuid>" }`. `GET /me/profile` и `GET /me/travel-intent` возвращают `null`, если текущей записи нет; `PATCH /me/profile` принимает только whitelisted поля и может создать профиль только при наличии непустого `display_name`. `PUT /me/travel-intent` принимает полный активный intent `{destination, date_from?, date_to?}`. `PATCH /me/onboarding` принимает только `{ "status": "in_progress" | "completed" }`; завершение требует Profile и active TravelIntent, иначе `409`; переход из `completed` обратно в `in_progress` также даёт `409`.
+
+`GET /discover/candidates` возвращает массив кандидатов только для пользователя с completed onboarding, Profile и active TravelIntent; иначе `403`. `PUT /discover/decisions/{target_user_id}` принимает `{ "decision": "interested" | "rejected" }`; собственный ID даёт `422`, недоступная цель — `404`, попытка изменить уже финальное решение — `409`. Повтор той же финальной decision идемпотентен. Успешный ответ содержит `decision`, `match_created` и nullable `match_id`.
+
+`GET /chats` возвращает массив direct/group read models. `POST /chats/groups` принимает `{ "user_ids": ["<uuid>", ...] }`, возвращает `201` и начальный набор участников; требуется 2–20 уникальных ID подходящих пользователей с существующим matched direct Chat инициатора, сам инициатор добавляется backend. Невалидный набор/eligibility даёт `422`. `GET /chats/{chat_id}/participants/{user_id}/profile` возвращает Discover-проекцию профиля только другого текущего участника; отсутствующий профиль или отсутствие такого членства скрывается единым `404`. `GET /chats/{chat_id}/messages` возвращает все доступные текущему участнику сообщения по sequence order без cursor/limit; неизвестный Chat и отсутствие активного членства дают одинаковый `404`. `POST` принимает только `{ "content_text": "..." }`, нормализует `trim`, возвращает `201`; blank/свыше 4000 символов — `422`, недоступный Chat — `404`.
+
+`POST /chats/{chat_id}/trips` не принимает body, возвращает `201` с начальным Trip snapshot; отсутствующий или недоступный инициатору Chat даёт `404`, уже существующий unfinished Trip в Chat — `409`. `GET /trips` возвращает только Trips, где пользователь является текущим участником; `GET /trips/{trip_id}` возвращает persisted snapshot, упорядоченные `route_stops` и текущих участников. Для отсутствующего Trip, бывшего участника и постороннего пользователя detail одинаково отвечает `404`.
 
 Текущие ограничения реализации:
 
 - `GET /chats/{chatId}`, message cursor pagination, read/unread API и realtime не реализованы.
 - Completed onboarding требует Profile и active TravelIntent. `DELETE /me/travel-intent` возвращает `409`, если completed user пытается архивировать active intent; оба состояния остаются неизменными.
 - TODO/RISK: существующий audit finding для `PATCH /me/onboarding` в `in_progress` не исправляется этим work item.
-- Group Chat создаётся инициатором с минимум двумя unique eligible companions; eligible означает existing matched direct Chat с инициатором. Инициатор добавляется автоматически, а состав после создания не редактируется в MVP.
+- Group Chat создаётся инициатором с 2–20 unique eligible companions; eligible означает existing matched direct Chat с инициатором. Инициатор добавляется автоматически, а состав после создания не редактируется в MVP.
 - Backend field limits применяются после нормализации `trim` и считаются в Unicode characters: `Profile.display_name` обязателен, nonblank и максимум 100; optional `city` максимум 100 (blank нормализуется в `null`), optional `bio` максимум 1000. `travel_style` и `interests` содержат не более 20 nonblank unique-after-trim strings длиной до 100 каждый. `birth_date` не может быть позже текущей даты backend. Новые taxonomy для gender, budget_level и comfort_level этим контрактом не вводятся.
 - Active TravelIntent требует nonblank `destination` до 200 characters после `trim`; `date_to >= date_from` сохраняется. Ограничения прошлых дат, planning horizon и длительности поездки не вводятся.
-- `POST /chats/{chatId}/messages` принимает nonblank `content_text` до 4000 characters после `trim`; `POST /chats/groups` принимает от 2 до 20 unique companion IDs. Existing no-self и matched direct-chat prerequisite сохраняются. Это field/domain limits, а не общий HTTP request-body byte limit.
-- `POST /chats/{chatId}/trips` разрешает только один незавершённый (`forming`/`active`) Trip на Chat и отвечает `409` при повторе.
+- `POST /chats/{chat_id}/messages` принимает nonblank `content_text` до 4000 characters после `trim`; `POST /chats/groups` принимает от 2 до 20 unique companion IDs. Existing no-self и matched direct-chat prerequisite сохраняются. Это field/domain limits, а не общий HTTP request-body byte limit.
+- `POST /chats/{chat_id}/trips` разрешает только один незавершённый (`forming`/`active`) Trip на Chat и отвечает `409` при повторе.
 - Trip создаётся из direct или group Chat. Backend в одной transaction читает всех активных ChatParticipant и сразу создаёт столько же `TripParticipant`; `TripInvitation` в этом MVP flow не создаётся и не используется.
-- `GET /trips` и `GET /trips/{tripId}` — read contracts. Нет Trip/stop write API, start/complete/cancel/leave, invitation или Proposal endpoints. Mini App при `409` использует `GET /trips`, чтобы найти unfinished Trip того же Chat и открыть её.
+- `GET /trips` и `GET /trips/{trip_id}` — read contracts. Нет Trip/stop write API, start/complete/cancel/leave, invitation или Proposal endpoints. Mini App при `409` использует `GET /trips`, чтобы найти unfinished Trip того же Chat и открыть её.
 - Actual Discover не использует `DiscoverImpression`, отдельные Like records, filters или ranking: решение хранится как `discover_interest_decisions` с `interested`/`rejected`.
 
 ## Логические contracts future design
