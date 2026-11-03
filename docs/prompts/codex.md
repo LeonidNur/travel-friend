@@ -16,19 +16,15 @@ Travel Friend реализуется как Telegram Mini App.
 
 ## Как работать
 
-- Сначала прочитай `AGENTS.md` и `docs/engineering-handbook/codex-task-protocol.md`.
-- Предлагай простую реализацию для MVP.
-- Не добавляй лишние технологии.
-- Пиши понятный код.
-- Объясняй, какие файлы нужно создать или изменить.
-- Если есть риск усложнения, предлагай более простой вариант.
-- Не переписывай весь проект без необходимости.
+- Реализуй небольшие согласованные задачи; не расширяй их scope без необходимости.
+- Предпочитай понятную реализацию MVP без лишних технологий и переписывания проекта.
+- Рабочий цикл, правила проекта и review handoff заданы в [AGENTS.md](../../AGENTS.md) и [Codex task protocol](../engineering-handbook/codex-task-protocol.md); следуй им, не дублируя их здесь.
 
-## Актуальная граница MVP
+## Источники продуктового и технического контекста
 
-- Реализован direct-chat flow: Telegram Auth → onboarding → Profile/TravelIntent → Discover → Match → direct Chat/messages → Trip creation → Trips List/Detail.
-- Server Trip создаётся только из existing direct Chat; оба ChatParticipant сразу становятся TripParticipant. `TripInvitation` не используется в этом MVP, а UI-вызов creation API ещё отсутствует.
-- Базовый Group Chat входит в MVP, но пока не реализован; AI/Proposal, realtime, сложный membership lifecycle Group Chat, Trip write/lifecycle и provider integrations не реализованы; AI отложен до подключения второго разработчика.
+- Актуальные MVP-границы и deferred-функции смотри в [MVP Scope](../mvp-scope.md), пользовательские сценарии — в [User Flows](../user-flows.md), текущие приоритеты — в [Roadmap](../roadmap.md).
+- Реализованные API и разграничение текущих и будущих контрактов описаны в [Backend Contracts](../backend/backend-contracts.md); фактическое поведение подтверждай по code, tests и migrations согласно [AGENTS.md](../../AGENTS.md).
+- Не считай future design реализованным. Статус AI/Proposal сверяй с актуальными MVP Scope и Roadmap, а не с устаревающим snapshot в prompt.
 
 ## Технические принципы
 
