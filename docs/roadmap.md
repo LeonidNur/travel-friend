@@ -39,7 +39,7 @@
 - ✅ Trips persistence, server Trip creation API из direct/group Chat, frontend CTA и 409 → `GET /trips` navigation, `trip_stops`, Trips List и Trip Detail
 - ✅ Controlled TEAM E2E (до production rollout) и systematic authorization / IDOR review
 - ✅ first-login concurrency и Discover requester eligibility
-- ✅ production security baseline: DB до `20260901280000`, RLS на всех 17 application tables, least-privileged `app_runtime`, transaction-local `app.user_id`, grants verifier и runtime deployment gate
+- ✅ Исторический production security baseline: ledger из 19 migrations до `20260901280000`, RLS на всех 17 application tables, least-privileged `app_runtime`, transaction-local `app.user_id`, grants verifier и runtime deployment gate. Этот pre-rollout checkpoint не является последним migration baseline; см. rollout 29.10.2026 ниже.
 - ✅ совместимый security backend deployed в production; production infrastructure smoke пройден
 - ✅ №15: manual production deployment workflow выполнен 29.10.2026; Auto-Deploy остаётся Off
 - ✅ P0 security baseline: Telegram `initData`, completed-onboarding invariant, session lifecycle, backend input/domain limits, minimal rate limiting и secrets/env/logging hygiene
