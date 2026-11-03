@@ -55,4 +55,4 @@ npm run telegram:set-menu
 
 ## Статус deployment
 
-Vercel — текущий публичный контур frontend Mini App и URL для Telegram Menu Button. Совместимый FastAPI security backend и PostgreSQL/Supabase production contour deployed и прошли `/health`/Telegram smoke; это не означает, что Vercel сам по себе деплоит весь backend stack. Auto-Deploy backend остаётся Off до отдельной задачи по deployment workflow.
+На checkpoint 29.10.2026 Vercel production deployment Mini App и связанный FastAPI backend прошли infrastructure health/readiness smoke, описанный в [production deployment runbook](backend/production-deployment-runbook.md). Это датированное наблюдение, не гарантия текущей доступности; авторизованный Telegram production E2E не проводился. Vercel не деплоит весь backend stack. Backend Auto-Deploy на этом checkpoint оставался Off; его включение требует отдельного решения. Локальные инструкции запуска выше не зависят от этого production snapshot.

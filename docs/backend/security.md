@@ -28,7 +28,7 @@ Backend — единственная доверенная зона исполн�
 
 - серверную проверку raw `initData`;
 - контроль доступа к чатам, поездкам, proposal и usage;
-- применение allowlist и redirect-политики;
+- применение redirect-политики;
 - валидацию входных данных;
 - аудит чувствительных действий.
 
@@ -51,7 +51,7 @@ AI provider и travel API — полудоверенные внешние зон
 
 Для hosted Supabase production есть отдельные scripts `apps/backend/scripts/provision-production-app-runtime-role.sql` и `apps/backend/scripts/verify-production-app-runtime-role.sql`. Первый запускается только approved privileged provisioning identity и при первом запуске создаёт `app_runtime` сразу с требуемыми least-privilege attributes; он не выдаёт table/function grants, не меняет owners, RLS, стандартные Supabase-роли или `PUBLIC`. При повторном запуске script только проверяет attributes существующей роли: при любом несовпадении он fail closed и не пытается выполнять `ALTER ROLE`, который managed Supabase `postgres` может быть не вправе выполнить. Пароль не хранится в репозитории: script вызывает `psql \password app_runtime`, который запрашивает пароль скрыто и передаёт на сервер только encrypted hash, а не password literal в SQL. Запуск: `psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PROVISIONING_DSN" -f apps/backend/scripts/provision-production-app-runtime-role.sql`; пароль вводится только в интерактивном prompt. Connection DSN provisioning identity остаётся только в approved secret store/операторском окружении.
 
-Production cutover `988aeb0` → `b25e08dce158b7fe7ea6d17b40d96c3e893330fa` завершён: production DB применена до `20260901280000`, final grants verifier и runtime deployment gate прошли, а совместимый backend deployed. Точный порядок, maintenance boundary и rollback limits остаются в [production security migrations runbook](production-security-migrations-runbook.md) как запись этого cutover. Production Render `DATABASE_URL` использует `app_runtime` Session Pooler DSN; Auto-Deploy остаётся выключенным до отдельной deployment-задачи. После несовместимых DB/grants изменений старый backend не является автоматически допустимым rollback target. Verification script только читает catalogs: он показывает effective role attributes, owner каждой current application table и memberships. `NOINHERIT` не удаляет существующие memberships и не запрещает возможный `SET ROLE`, поэтому любой результат в последнем query — finding для отдельного approved remediation, не повод менять memberships этим provisioning script.
+Production cutover `988aeb0` → `b25e08dce158b7fe7ea6d17b40d96c3e893330fa` завершён: production DB применена до `20260901280000`, final grants verifier и runtime deployment gate прошли, а совместимый backend deployed. Точный порядок, maintenance boundary и rollback limits остаются в [production security migrations runbook](production-security-migrations-runbook.md) как запись этого cutover. Production Render `DATABASE_URL` использует `app_runtime` Session Pooler DSN. На checkpoint ручного rollout 2026-10-29 backend Auto-Deploy оставался Off; включение требует отдельного решения, см. [production deployment runbook](production-deployment-runbook.md). После несовместимых DB/grants изменений старый backend не является автоматически допустимым rollback target. Verification script только читает catalogs: он показывает effective role attributes, owner каждой current application table и memberships. `NOINHERIT` не удаляет существующие memberships и не запрещает возможный `SET ROLE`, поэтому любой результат в последнем query — finding для отдельного approved remediation, не повод менять memberships этим provisioning script.
 
 После verifier и перед manual backend deploy обязательно запустить runtime gate через реальный Session Pooler DSN роли `app_runtime` (не provisioning/migrator DSN):
 
@@ -65,7 +65,7 @@ Gate fail closed: подтверждает `current_user`/`session_user`, неп
 
 Telegram `initData` по-прежнему проверяется только FastAPI: raw payload, freshness и HMAC не передаются в PostgreSQL. После проверки FastAPI нормализует metadata, генерирует raw session token, вычисляет SHA-256 и вызывает узкую owner-owned `SECURITY DEFINER` capability `public.bootstrap_telegram_login(...)`. Она атомарно resolve/create Telegram identity, обновляет verified metadata, при необходимости создаёт bootstrap defaults и session, но получает только token hash; raw token остаётся в FastAPI и HTTP response. First-login race сериализуется transaction-scoped PostgreSQL advisory lock по verified Telegram user ID до создания `users` row.
 
-Bearer session resolution — отдельная pre-auth bootstrap capability. FastAPI извлекает raw Bearer token, вычисляет его hash и передаёт только hash в `public.resolve_bearer_session(text)`. Эта owner-owned `SECURITY DEFINER` capability возвращает только `session_id` и `user_id` активной, неотозванной, неистёкшей сессии не удалённого пользователя; raw token, `token_hash` и business/profile data она не возвращает. Lookup остаётся в отдельном bootstrap connection: authenticated business transaction с `app.user_id` ещё не существует в этот момент.
+Bearer session resolution — отдельная pre-auth bootstrap capability. FastAPI извлекает raw Bearer token, вычисляет его hash и передаёт только hash в `public.resolve_bearer_session_with_identity(text)`. Эта owner-owned `SECURITY DEFINER` capability используется для поиска активной, неотозванной, неистёкшей сессии не удалённого пользователя; raw token, `token_hash` и business/profile data она не возвращает. Lookup остаётся в отдельном bootstrap connection: authenticated business transaction с `app.user_id` ещё не существует в этот момент.
 
 ### Telegram authentication and registration
 
@@ -78,35 +78,29 @@ session; `onboarding_status` начинается с `not_started`. Повтор
 обновляет проверенную Telegram metadata и создаёт новую session, не дублируя
 пользователя или identity.
 
-Списки Telegram ID и tester pause не являются частью backend configuration и
-не ограничивают регистрацию или API. В частности, старые переменные
-`TELEGRAM_CORE_USER_IDS`, `TELEGRAM_TESTER_USER_IDS` и
-`TELEGRAM_TESTERS_PAUSED` не читаются приложением.
+Core/tester allowlists и tester pause отсутствуют в текущей реализации.
+Регистрация не ограничена cohort-списками: любой Telegram account с валидным
+raw `initData` может пройти login bootstrap. Эти controls не управляются через
+Render configuration.
 
 Для каждого Bearer request общий `auth_dependency` передаёт hash токена в
-`public.resolve_bearer_session(text)`. Существующая
-`SECURITY DEFINER` capability возвращает только `session_id` и `user_id` для
-неотозванной, неистёкшей session пользователя, который не удалён. Raw token,
-`token_hash` и Telegram numeric ID не возвращаются. Business queries выполняются
-отдельно с transaction-local `app.user_id`; RLS и endpoint authorization
-продолжают ограничивать доступ к чужим данным. Проверка действует и при прямом
-запросе к Render API, независимо от frontend.
+`public.resolve_bearer_session_with_identity(text)`. Эта `SECURITY DEFINER`
+capability разрешает только активную session пользователя, который не удалён,
+и связывает session с его Telegram identity; backend использует из результата
+`session_id` и `user_id`. Raw Bearer token не передаётся в PostgreSQL, только его
+hash. Resolver не используется для cohort admission и не возвращает
+business/profile data. Business queries
+выполняются отдельно с transaction-local `app.user_id`; RLS и endpoint
+authorization продолжают ограничивать доступ к чужим данным. Проверка действует
+и при прямом запросе к Render API, независимо от frontend.
 
 Удалённые пользователи по-прежнему не могут войти или использовать существующую
 session. Ошибки Telegram signature/freshness и неизвестные, истёкшие либо
 отозванные Bearer sessions остаются отказами. Отдельного per-user revoke через
-allowlist и pause для tester cohort больше нет; emergency stop выполняется
-оператором на уровне provider по deployment runbook.
-
-Оператор управляет списками и pause только в защищённой server-side конфигурации
-Render и применяет изменения контролируемым ручным deploy/restart. Auto-Deploy
-остаётся Off. Изменение не мгновенное: прежняя политика действует до запуска
-процесса с новой конфигурацией; после применения новый backend проверяет каждый
-Bearer request. Перед включением внешнего доступа нужно пройти отдельный
-production migration/grants/deployment preflight из
-[deployment runbook](production-deployment-runbook.md). Эта реализация сама по
-себе не является разрешением на production migration, изменение environment
-или external testing.
+allowlist или tester pause нет. Emergency stop выполняется оператором на уровне
+provider по [deployment runbook](production-deployment-runbook.md); это не
+эквивалент индивидуальной блокировки пользователя. Изменение auth policy,
+production migration или environment не подразумевается этим описанием.
 
 Для authenticated business request FastAPI после успешной Bearer authentication является единственным источником `app.user_id`: dependency открывает отдельный explicit outer transaction и выполняет параметризованный `set_config('app.user_id', <principal.user_id>, true)` до router/service SQL. Флаг `true` делает контекст transaction-local; при commit или rollback он больше не представляет identity запроса. Authenticated business UoW начинается только после authentication. Для условия текущего logout PostgreSQL также требует column-level `SELECT(id)` вместе с `UPDATE`; table-level `SELECT` и чтение `token_hash` отсутствуют, а Bearer resolution идёт только через capability. `profiles`, `travel_intents`, `user_activity_states` и `user_sessions` покрыты owner-scoped RLS. `users`, `telegram_identities`, `user_settings`, `profile_photos` и `chat_summaries` также имеют enabled RLS, но намеренно не имеют runtime policy или direct privilege: первые три доступны только существующим owner-owned `SECURITY DEFINER` bootstrap/resolver/projection paths, последние две не используются текущим MVP. Persisted onboarding changes остаются только в owner-owned `SECURITY DEFINER` paths `bootstrap_telegram_login()` и `complete_current_onboarding()`. Discover cross-user чтение проходит через отдельную owner-owned SECURITY DEFINER capability с server-derived context.
 
