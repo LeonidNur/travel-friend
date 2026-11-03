@@ -1,61 +1,45 @@
 # Feature List
 
-## MVP-функции
+## Реализовано в MVP
 
-### Telegram Mini App
+### Telegram Mini App и доступ
 
-- открытие приложения внутри Telegram;
-- server-side проверка raw `initData` и backend session;
-- onboarding profile и TravelIntent.
+- вход через проверку raw Telegram `initData` на backend и Bearer session;
+- onboarding с заполнением профиля и TravelIntent.
 
-### Профиль
+### Profile и TravelIntent
 
-- имя;
-- возраст;
-- город;
-- фото — physical storage поддержан схемой, UI/API ещё не реализованы;
-- описание;
-- интересы;
-- стиль отдыха.
+- просмотр и редактирование профиля: имя, дата рождения/возраст, город, описание, интересы, стиль поездки, бюджет и уровень комфорта;
+- одна активная TravelIntent с направлением и необязательными датами.
 
-### Travel-анкета
+### Discover и Match
 
-- одно активное направление;
-- даты;
-- уровень комфорта;
+- просмотр подходящих кандидатов при выполненном onboarding, заполненном профиле и активном TravelIntent;
+- финальное решение `interested` или `rejected`;
+- взаимный интерес создаёт Match и direct Chat.
 
-### Поиск попутчиков
+### Chats
 
-- карточки пользователей;
-- финальное решение `interested` / `rejected`;
-- взаимный мэтч.
-
-### Чат
-
-- чат после мэтча;
-- текстовые сообщения;
-- серверная история сообщений без realtime/read receipts.
-- Group Chat: создатель выбирает existing matched/direct-chat companions, в группе минимум три участника вместе с создателем, сообщения persisted, а состав после создания фиксирован;
-- из direct и group Chat создаётся Trip, при этом все текущие `ChatParticipant` становятся `TripParticipant`.
+- список и persisted история direct Chats;
+- Group Chat из существующих matched direct-chat companions: минимум три участника вместе с создателем, persisted сообщения и фиксированный состав;
+- текстовые сообщения сохраняются и читаются участниками.
 
 ### Trips
 
-- создание из existing direct или group Chat через Mini App;
-- все активные ChatParticipant сразу становятся TripParticipant;
-- при `409` Mini App читает `GET /trips` и открывает existing unfinished Trip того же Chat;
-- список и read-only detail Trip;
-- read `trip_stops`.
+- создание Trip из direct или group Chat с переносом всех текущих ChatParticipant в TripParticipant;
+- список и read-only detail Trip, включая участников и чтение `trip_stops`;
+- при `409` Mini App находит и открывает незавершённую Trip этого Chat через `GET /trips`.
 
-## После MVP
+## Реализовано частично
 
-- полноценная геймификация;
-- рейтинги;
-- верификация;
-- подписки;
-- интеграции с travel-сервисами;
-- отдельное мобильное приложение.
-- AI Travel Copilot / Proposal и внешние travel provider-интеграции (отложены до подключения второго разработчика);
-- invitations, add/remove members, leave, roles/admin/permissions, invite links, persisted group title и сложный membership lifecycle Group Chat;
+- Profile photos: таблица предусмотрена схемой БД; UI и API загрузки/управления фото отсутствуют.
+- Messaging: доступны persisted текст и история; realtime, pagination и read receipts отсутствуют.
+- Trips: создание и чтение реализованы; изменение данных и lifecycle-команды отсутствуют.
+
+## Отложено
+
+- AI Travel Copilot, `Proposal`, генерация маршрута и внешние travel provider-интеграции — до подключения второго разработчика;
+- расширенный Group Chat lifecycle: invitations, добавление/удаление участников, выход, роли/admin/permissions, invite links, название группы и изменение состава;
 - TripInvitation и расширенный lifecycle поездки;
-- realtime messaging, pagination и read receipts;
-- Profile photo UI/API и Discover filters/ranking.
+- Discover filters/ranking;
+- геймификация, рейтинги, верификация, подписки, travel-сервис интеграции и отдельное мобильное приложение.
