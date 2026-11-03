@@ -6,9 +6,9 @@
 
 Production состоит из backend-контура Render, frontend Mini App на Vercel и Supabase/PostgreSQL. Подтверждённые targets и результат последнего rollout приведены ниже. Это запись о выполненном rollout, не гарантия текущего состояния: перед каждым следующим изменением оператор заново сверяет target, live revision и provider status.
 
-**Актуальное состояние:** согласованный production rollout пяти migrations завершён 2026-10-29. Факты и результаты записаны в [результате последнего rollout](#production-rollout-2026-10-29). Датированные preflight-снимки ниже отражают состояние на свои даты; их прежние `UNKNOWN`/`BLOCKED` статусы не описывают текущее состояние. Уже применённые migrations и grants повторно не выполнять.
+**Подтверждённый checkpoint на 2026-10-29:** согласованный production rollout пяти migrations завершён. Факты и результаты записаны в [результате rollout](#production-rollout-2026-10-29). Этот датированный snapshot не подтверждает текущее состояние или uptime. Датированные preflight-снимки ниже отражают состояние на свои даты; их прежние `UNKNOWN`/`BLOCKED` статусы superseded результатом rollout. Уже применённые migrations и grants повторно не выполнять.
 
-Auto-Deploy остаётся **Off**. До rollout оператор проверяет в provider settings, что выбранные production services не начнут deploy автоматически от Git события. Не включать Auto-Deploy в рамках этого workflow. Фактическое состояние frontend deployment automation должно быть проверено в provider: репозиторий его не подтверждает.
+На checkpoint 2026-10-29 backend Auto-Deploy был **Off**. Перед каждым будущим rollout оператор проверяет в provider settings, что выбранные production services не начнут deploy автоматически от Git события. Не включать Auto-Deploy в рамках этого workflow. Фактическое состояние frontend deployment automation должно быть проверено в provider: репозиторий его не подтверждает.
 
 Этот документ задаёт порядок для нового изменения и не является повтором [завершённого security cutover](production-security-migrations-runbook.md). Там зафиксированы exact исторические SHA, migration suffix, grants, preconditions и failure boundary; их нельзя переносить на новое изменение или повторять как универсальные команды. Источники истины: текущие migrations в `supabase/migrations/`, grants/verifier/gate в `apps/backend/scripts/`, backend HTTP contracts и выбранный target commit.
 
@@ -50,13 +50,18 @@ Release считается provenance-complete только когда intended 
 4. `20261003090000_chat_participant_public_profile.sql`
 5. `20261018090000_server_side_tester_admission_session_identity.sql`
 
-### Production preflight — 2026-10-19
+### Historical pre-rollout audit — 2026-10-18–19 (superseded)
+
+Следующие findings и статусы описывают только audit/preflight до rollout. Их
+`UNKNOWN`/`BLOCKED` выводы не являются текущим deployment status; подтверждённый
+rollout от 2026-10-29 и его пределы записаны в отдельном разделе ниже.
 
 **VERIFIED:** Supabase project `travel-friend-dev` (`tlgprfsecdasloqnuyjo`),
 `ACTIVE_HEALTHY`, PostgreSQL 17.6; ledger содержит 19 versions. В `develop` —
 24 migrations, перечисленные выше пять pending migrations. В `profiles` и
 `travel_intents` обнаружено по 3 строки; NULL/blank `profiles.display_name` и
-`travel_intents.destination_label` — по 0. Три текущие SQL capabilities —
+`travel_intents.destination_label` — по 0. Для трёх SQL capabilities этот
+pre-rollout audit зафиксировал:
 legacy `bootstrap_telegram_login` (8 аргументов),
 `resolve_bearer_session(text)` и
 `chat_participant_profile_projection(uuid)` — принадлежат `postgres`; у
@@ -71,7 +76,8 @@ legacy `bootstrap_telegram_login` (8 аргументов),
 этого preflight. Эффективные права новых функций после применения ещё не
 проверены.
 
-**BLOCKED:** Production rollout остаётся заблокированным. Непосредственно перед
+**На момент pre-rollout audit: BLOCKED.** Production rollout был заблокирован.
+Непосредственно перед
 любым migration apply повторно подтвердить target, ledger, данные, роль создания
 функций и её default ACL. Если фактическая роль — `supabase_admin`, либо ACL
 неоднозначен, остановиться до отдельного решения. После применения выполнить
@@ -82,13 +88,13 @@ effective-privilege проверку новых функций для `PUBLIC`, 
 
 Это подтверждённый migration drift на дату наблюдения, а не подтверждение того, что все остальные schema objects совпадают. Перед rollout ledger нужно получить повторно; за время после read-only snapshot он мог измениться.
 
-Read-only function/permission comparison подтверждает для Render SHA `b25e08d…` наличие и `app_runtime` EXECUTE для его 12 используемых public functions, включая восьмиаргументную `bootstrap_telegram_login` и `chat_participant_profile_projection(uuid)`. Следовательно, проверенная backend↔DB compatibility для этого SHA ограничена его наблюдаемым migration/function/runtime-permission surface; полный schema drift audit не завершён. На repository source, рассмотренном в этом историческом preflight, использовались шестипараметрическая версия `bootstrap_telegram_login` и `chat_participant_public_profile(uuid,uuid)`, которых на дату проверки не было в production. Текущая Bearer auth использует сохранённый `resolve_bearer_session(text)`; versioned `resolve_bearer_session_with_identity(text)` остаётся DB/gate capability, но приложению для admission не требуется. Без соответствующих login/Chat migrations target source **не совместим с production** в этих двух контрактах. Перед выпуском нужны отдельная migration review/preflight, grants verification и явное разрешение на production migration.
+Read-only function/permission comparison подтверждает для Render SHA `b25e08d…` наличие и `app_runtime` EXECUTE для его 12 используемых public functions, включая восьмиаргументную `bootstrap_telegram_login` и `chat_participant_profile_projection(uuid)`. Следовательно, проверенная backend↔DB compatibility для этого SHA ограничена его наблюдаемым migration/function/runtime-permission surface; полный schema drift audit не завершён. В repository source, рассмотренном в этом историческом preflight, использовались шестипараметрическая версия `bootstrap_telegram_login` и `chat_participant_public_profile(uuid,uuid)`, которых не было в production на дату проверки. Bearer auth того source использовала `resolve_bearer_session(text)`; после PR #37 текущий backend использует `resolve_bearer_session_with_identity(text)`. Без соответствующих login/Chat migrations target source **не был совместим с production на дату audit** в этих двух контрактах. Перед тем rollout требовались отдельная migration review/preflight, grants verification и явное разрешение на production migration.
 
-Frontend↔backend compatibility — **UNKNOWN**: frontend deployed SHA не раскрыт provider record, фактическое `BACKEND_API_ORIGIN` не проверялось/не раскрывалось, а source-level frontend tests не подтверждают deployed pair. Текущий read-only HTTP smoke Render URL завершился network timeout на `GET /health`; `GET /ready` не запускался, поскольку smoke останавливается на первой ошибке. Поэтому свежие live health/readiness и основные production flows этим аудитом не подтверждены.
+Frontend↔backend compatibility на дату pre-rollout audit — **UNKNOWN**: frontend deployed SHA не раскрыт provider record, фактическое `BACKEND_API_ORIGIN` не проверялось/не раскрывалось, а source-level frontend tests не подтверждали deployed pair. Read-only HTTP smoke Render URL завершился network timeout на `GET /health`; `GET /ready` не запускался, поскольку smoke останавливается на первой ошибке. Поэтому live health/readiness и основные production flows этим audit не были подтверждены. Отдельный infrastructure smoke после rollout 2026-10-29 описан ниже; он не подтверждает текущую доступность или авторизованные сценарии.
 
 Известный backend deployment SHA `b25e08d…` — reference для анализа совместимости, но не автоматическое разрешение rollback: перед выбором known-good нужно заново удостовериться, что deployment доступен в Render history и подходит текущим DB/API state. Более ранний SHA из истории предшествует security cutover и не считается безопасным rollback candidate без отдельного доказательства.
 
-**Текущий итог №16: PARTIALLY VERIFIED / OPEN.** Для закрытия остаются: получение frontend deployed SHA, подтверждение фактического backend origin без раскрытия credentials, повторяемая полная сверка production schema drift, live health/readiness и проверка основных flows после устранения timeout, а также явное решение о порядке миграций и grants для текущего repository source. Не объявлять полную frontend/backend/DB совместимость или полную production provenance.
+**Исторический итог №16 на момент pre-rollout audit: PARTIALLY VERIFIED / OPEN.** Тогда для закрытия оставались получение frontend deployed SHA, подтверждение фактического backend origin без раскрытия credentials, повторяемая полная сверка production schema drift, live health/readiness и проверка основных flows после устранения timeout, а также решение о порядке миграций и grants для source, рассматривавшегося в audit. Позднее rollout от 2026-10-29 подтвердил конкретные deployment snapshots и infrastructure smoke, но не полную frontend/backend/DB совместимость, полную schema parity или текущую production provenance.
 
 ## 1. Preflight и Git SHA
 
@@ -373,7 +379,9 @@ psql -X -v ON_ERROR_STOP=1 "$SUPABASE_PRODUCTION_MIGRATOR_DSN" \
 что `app_runtime` не имеет прямого `SELECT` на `public.users` и
 `public.telegram_identities`.
 
-**Статус verifier gap: закрыт локально, production verification pending.**
+**Статус на момент pre-rollout review: verifier gap закрыт локально,
+production verification ещё ожидалась.** Production verification и runtime gate
+позднее прошли в рамках rollout 2026-10-29 (см. [его запись](#production-rollout-2026-10-29)); это закрывает verifier/gate для того rollout, но не является результатом новой проверки текущего production.
 Обновлённый `verify-production-app-runtime-privileges.sql` проверяет точные
 сигнатуры трёх backend-only функций, effective EXECUTE для `app_runtime`,
 `PUBLIC`, `anon`, `authenticated`, `service_role` и отсутствие прямого runtime
