@@ -6,20 +6,26 @@
 
 Travel Friend — социальный продукт, где незнакомые люди ищут компанию для поездки. Поэтому доверие, moderation и backend-security должны быть встроены в архитектуру с самого начала.
 
-## Что уже зафиксировано
+## Реализованный security baseline
 
-- клиент Telegram Mini App считается недоверенной зоной;
-- raw `initData` должен проверяться только на backend;
-- блокировки, жалобы и audit не могут жить только на уровне UI;
-- внешние provider-ы и AI рассматриваются как недоверенные источники данных;
-- внешние переходы должны идти через backend redirect и allowlist.
+- backend проверяет raw Telegram `initData` и использует Bearer sessions;
+- backend authorization опирается на серверную identity и RLS/capability boundary; подробности реализации приведены в [security documentation](./backend/security.md).
 
-## Базовые safety-capabilities
+## Принципы безопасности и доверия
+
+- Telegram Mini App client недоверенный: решение о доступе и другие security-решения принимает backend.
+- Будущие AI и внешние provider-ы рассматриваются как недоверенные источники данных, а не источники авторизации или финальных доменных решений.
+- Будущие внешние переходы должны проверяться backend policy, включая allowlist.
+
+## Планируемые safety-capabilities — не реализованы
 
 - `UserBlock` как серверное ограничение на взаимодействие пользователей;
 - `UserReport` как backend-канал жалоб и moderation;
 - `Audit` как журнал security-значимых действий;
-- ручная модерация на MVP как стартовый operating mode.
+- ручная модерация как операционный процесс;
+- backend redirect и allowlist для внешних provider/affiliate-переходов.
+
+Для этих возможностей сейчас не заявляются готовые UI, API или persistence workflows.
 
 ## Ограничения ответственности
 
