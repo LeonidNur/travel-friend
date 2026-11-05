@@ -8,6 +8,7 @@ import {
   getChatMessageHistoryState,
   getMessageAuthorLabel,
   getChatsScreenState,
+  formatChatListTimestamp,
   mapChatMessages,
   submitChatMessage
 } from './chat-runtime';
@@ -167,10 +168,31 @@ test('merges polling messages by persisted id and sorts by sequence', async () =
   assert.deepEqual(merged.map((message) => message.message_id), ['first', 'second']);
 });
 
-test('formats chat preview timestamps in Russian', async () => {
-  const { formatChatListTimestamp } = await import('./chat-runtime');
-  assert.equal(formatChatListTimestamp('2026-11-05T09:15:00.000Z', new Date('2026-11-05T10:00:00.000Z')), '12:15');
-  assert.match(formatChatListTimestamp('2026-11-04T09:15:00.000Z', new Date('2026-11-05T10:00:00.000Z')), /4 нояб\./);
+test('formats chat preview timestamps in the local timezone around midnight', () => {
+  const sameLocalDayMessage = new Date(2026, 10, 5, 12, 15);
+  const sameLocalDayNow = new Date(2026, 10, 5, 13, 0);
+  assert.equal(formatChatListTimestamp(sameLocalDayMessage.toISOString(), sameLocalDayNow), '12:15');
+
+  const justBeforeLocalMidnight = new Date(2026, 10, 4, 23, 55);
+  const justAfterLocalMidnight = new Date(2026, 10, 5, 0, 5);
+  assert.match(
+    formatChatListTimestamp(justBeforeLocalMidnight.toISOString(), justAfterLocalMidnight),
+    /4 нояб\./
+  );
+
+  const justAfterMidnightMessage = new Date(2026, 10, 5, 0, 2);
+  const sameLocalDayLateNow = new Date(2026, 10, 5, 23, 58);
+  assert.equal(formatChatListTimestamp(justAfterMidnightMessage.toISOString(), sameLocalDayLateNow), '00:02');
+});
+
+test('formats message timestamps in the local timezone', () => {
+  const localMessageTime = new Date(2026, 10, 5, 12, 15);
+  const [message] = mapChatMessages(
+    [{ ...messages[2], created_at: localMessageTime.toISOString() }],
+    ownUserId
+  );
+
+  assert.equal(message.sentAtLabel, '12:15');
 });
 
 test('treats an unavailable chat id as absent without accessing mock data', () => {
