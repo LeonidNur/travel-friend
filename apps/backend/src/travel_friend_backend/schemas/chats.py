@@ -18,6 +18,16 @@ class DirectChatCompanionResponse(BaseModel):
     city: str | None
 
 
+class ChatMessagePreviewResponse(BaseModel):
+    """Last message visible to the current active Chat participant."""
+
+    sequence_number: int
+    type: Literal["user", "system"]
+    sender_user_id: UUID | None
+    content_text: str | None
+    created_at: datetime
+
+
 class DirectChatListItemResponse(BaseModel):
     """MVP data required to render one direct Chat list item."""
 
@@ -25,6 +35,8 @@ class DirectChatListItemResponse(BaseModel):
     type: Literal["direct"]
     companion: DirectChatCompanionResponse
     created_at: datetime
+    last_message: ChatMessagePreviewResponse | None
+    unread_count: int = Field(ge=0)
 
 
 class GroupChatParticipantResponse(BaseModel):
@@ -42,6 +54,8 @@ class GroupChatListItemResponse(BaseModel):
     participants: list[GroupChatParticipantResponse]
     participant_count: int
     created_at: datetime
+    last_message: ChatMessagePreviewResponse | None
+    unread_count: int = Field(ge=0)
 
 
 ChatListItemResponse: TypeAlias = Annotated[
@@ -75,11 +89,12 @@ class GroupChatCreateResponse(BaseModel):
 
 
 class ChatMessageCreateRequest(BaseModel):
-    """The only client-provided field when sending a Chat message."""
+    """Client text and an optional stable key for retry-safe message creation."""
 
     model_config = ConfigDict(extra="forbid")
 
     content_text: str
+    client_request_id: UUID | None = None
 
     @field_validator("content_text")
     @classmethod
@@ -102,3 +117,24 @@ class ChatMessageResponse(BaseModel):
     sender_user_id: UUID | None
     content_text: str | None
     created_at: datetime
+
+
+class ChatMessagePageResponse(BaseModel):
+    """One bounded, ascending page of persisted messages and its sequence cursor."""
+
+    messages: list[ChatMessageResponse]
+    high_water_sequence: int = Field(ge=0)
+    next_after_sequence: int = Field(ge=0)
+    has_more_older: bool
+    has_more_newer: bool
+
+
+class ChatReadResponse(BaseModel):
+    chat_id: UUID
+    last_read_sequence: int = Field(ge=0)
+
+
+class ChatReadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sequence_number: int = Field(ge=0)

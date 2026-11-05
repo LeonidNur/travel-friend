@@ -33,7 +33,7 @@
 ## Обязательный Pre-Beta scope (ещё не реализован)
 
 - AI Travel Copilot в контексте Chat/Trip и базовый Proposal flow должны быть реализованы и проверены до первого внешнего теста; AI не изменяет confirmed Trip напрямую.
-- Chats List должен показывать последнее сообщение, его время и unread indicator; realtime, read/unread и recovery входят в отдельный Live Chats block.
+- Chats List должен показывать последнее сообщение, время и unread indicator; bounded HTTP polling, pagination, read/unread и recovery входят в отдельный Live Chats block. Push/realtime provider не входит в этот scope.
 - Group Chat получает пользовательское название при создании и rename flow; authorization для rename ещё требует contract decision.
 - Явное действие в Chat показывает «Создать поездку» или «Открыть поездку» по состоянию; `409` остаётся recovery fallback.
 - Первая бета русскоязычная, без locale switcher и полноценной i18n-системы.
@@ -41,7 +41,7 @@
 ## Реализовано частично
 
 - Profile photos: таблица предусмотрена схемой БД; UI и API загрузки/управления фото отсутствуют.
-- Messaging: доступны persisted текст и история; realtime, pagination и read receipts отсутствуют.
+- Messaging: доступны persisted текст и история; bounded polling, cursor pagination, idempotent retry и read/unread реализуются в Live Chats block и пока не считаются завершёнными.
 - Trips: создание и чтение реализованы; изменение данных и lifecycle-команды отсутствуют.
 
 ## Отложено за пределы первой беты

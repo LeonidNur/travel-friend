@@ -22,7 +22,8 @@ type SubmitChatMessageInput = Readonly<{
   draft: string;
   isSending: boolean;
   messages: readonly ChatMessageResponse[];
-  sendMessage: (contentText: string) => Promise<ChatMessageResponse>;
+  requestId: string;
+  sendMessage: (contentText: string, requestId: string) => Promise<ChatMessageResponse>;
 }>;
 
 export type SubmitChatMessageResult = Readonly<{
@@ -84,6 +85,29 @@ export function appendServerMessage(
   return [...messages, serverMessage].sort((first, second) => first.sequence_number - second.sequence_number);
 }
 
+export function mergeServerMessages(
+  messages: readonly ChatMessageResponse[],
+  incomingMessages: readonly ChatMessageResponse[]
+): ChatMessageResponse[] {
+  const byId = new Map(messages.map((message) => [message.message_id, message]));
+  for (const message of incomingMessages) {
+    byId.set(message.message_id, message);
+  }
+  return [...byId.values()].sort((first, second) => first.sequence_number - second.sequence_number);
+}
+
+export function formatChatListTimestamp(createdAt: string, now = new Date()): string {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const isToday = date.toLocaleDateString('ru-RU') === now.toLocaleDateString('ru-RU');
+  return new Intl.DateTimeFormat('ru-RU', isToday
+    ? { hour: '2-digit', minute: '2-digit' }
+    : { day: 'numeric', month: 'short' }).format(date);
+}
+
 export function mapChatMessages(
   messages: readonly ChatMessageResponse[],
   currentUserId: string
@@ -104,6 +128,7 @@ export async function submitChatMessage({
   draft,
   isSending,
   messages,
+  requestId,
   sendMessage
 }: SubmitChatMessageInput): Promise<SubmitChatMessageResult> {
   const contentText = draft.trim();
@@ -113,7 +138,7 @@ export async function submitChatMessage({
   }
 
   try {
-    const serverMessage = await sendMessage(contentText);
+    const serverMessage = await sendMessage(contentText, requestId);
 
     return {
       draft: '',

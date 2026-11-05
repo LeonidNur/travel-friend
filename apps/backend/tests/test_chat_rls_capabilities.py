@@ -20,6 +20,9 @@ from integration_database import (
 ACTIVE_PARTICIPANT_PREDICATE = "public.is_current_active_chat_participant(uuid)"
 CREATE_GROUP_CAPABILITY = "public.create_current_group_chat(uuid[])"
 SEND_MESSAGE_CAPABILITY = "public.send_current_chat_message(uuid,text)"
+IDEMPOTENT_SEND_CAPABILITY = "public.send_current_chat_message(uuid,text,uuid)"
+MARK_CHAT_READ_CAPABILITY = "public.mark_current_chat_read(uuid,bigint)"
+CHAT_LIST_PROJECTION_CAPABILITY = "public.chat_list_projection()"
 
 
 @pytest.fixture
@@ -93,6 +96,15 @@ def call_send_capability(connection: psycopg.Connection, chat_id: UUID, text: st
     ).fetchone()
 
 
+def call_idempotent_send_capability(
+    connection: psycopg.Connection, chat_id: UUID, text: str, request_id: UUID
+):
+    return connection.execute(
+        "SELECT * FROM public.send_current_chat_message(%s, %s, %s)",
+        (chat_id, text, request_id),
+    ).fetchone()
+
+
 def test_chat_rls_catalog_and_private_capabilities(database_url: str) -> None:
     with psycopg.connect(database_url) as connection:
         assert connection.execute(
@@ -116,7 +128,10 @@ def test_chat_rls_catalog_and_private_capabilities(database_url: str) -> None:
         ]
         predicate_name = ACTIVE_PARTICIPANT_PREDICATE.rsplit(".", maxsplit=1)[1].split("(", maxsplit=1)[0]
         assert all(predicate_name in (qual or "") for _, command, _, qual, _ in policies if command == "SELECT")
-        for function_name in (ACTIVE_PARTICIPANT_PREDICATE, CREATE_GROUP_CAPABILITY, SEND_MESSAGE_CAPABILITY):
+        for function_name in (
+            ACTIVE_PARTICIPANT_PREDICATE, CREATE_GROUP_CAPABILITY, SEND_MESSAGE_CAPABILITY,
+            IDEMPOTENT_SEND_CAPABILITY, MARK_CHAT_READ_CAPABILITY, CHAT_LIST_PROJECTION_CAPABILITY,
+        ):
             assert connection.execute(
                 "SELECT prosecdef, proconfig FROM pg_proc WHERE oid=%s::regprocedure", (function_name,)
             ).fetchone() == (True, ["search_path=pg_catalog"])
@@ -348,3 +363,82 @@ def test_send_capability_rejects_message_over_four_thousand_characters(
 
     with psycopg.connect(database_url) as owner:
         assert owner.execute("SELECT count(*) FROM public.messages WHERE chat_id=%s", (chat_id,)).fetchone() == (0,)
+
+
+def test_idempotent_send_and_read_capability_preserve_chat_write_boundary(
+    database_url: str, runtime_database_url: str
+) -> None:
+    actor, companion = create_user(database_url), create_user(database_url)
+    chat_id = create_direct_chat(database_url, actor, companion)
+    request_id = UUID("b576bb10-27d4-4bc4-8918-80119d140ff7")
+
+    with psycopg.connect(runtime_database_url) as runtime:
+        with runtime.transaction():
+            set_authenticated_user(runtime, actor)
+            first = call_idempotent_send_capability(runtime, chat_id, "once", request_id)
+        with runtime.transaction():
+            set_authenticated_user(runtime, actor)
+            repeated = call_idempotent_send_capability(runtime, chat_id, " once ", request_id)
+            assert repeated == first
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            with runtime.transaction():
+                set_authenticated_user(runtime, actor)
+                call_idempotent_send_capability(runtime, chat_id, "different", request_id)
+        with runtime.transaction():
+            set_authenticated_user(runtime, actor)
+            assert runtime.execute(
+                "SELECT * FROM public.mark_current_chat_read(%s, 99)", (chat_id,)
+            ).fetchone() == (chat_id, 1)
+        with runtime.transaction():
+            set_authenticated_user(runtime, actor)
+            assert runtime.execute(
+                "SELECT * FROM public.mark_current_chat_read(%s, 0)", (chat_id,)
+            ).fetchone() == (chat_id, 1)
+        with pytest.raises(psycopg.Error):
+            with runtime.transaction():
+                set_authenticated_user(runtime, actor)
+                runtime.execute("UPDATE public.chat_participants SET last_read_sequence=0 WHERE chat_id=%s", (chat_id,))
+
+    with psycopg.connect(database_url) as owner:
+        assert owner.execute(
+            "SELECT count(*), max(sequence_number) FROM public.messages WHERE chat_id=%s", (chat_id,)
+        ).fetchone() == (1, 1)
+
+
+def test_chat_summary_capability_exposes_only_requester_unread_projection(
+    database_url: str, runtime_database_url: str
+) -> None:
+    actor, companion, outsider = (create_user(database_url) for _ in range(3))
+    chat_id = create_direct_chat(database_url, actor, companion)
+    with psycopg.connect(database_url) as owner:
+        owner.execute("UPDATE public.chats SET last_sequence=2 WHERE id=%s", (chat_id,))
+        owner.execute(
+            "INSERT INTO public.messages (chat_id, sender_user_id, sequence_number, type, content_text) "
+            "VALUES (%s, %s, 1, 'user', 'incoming'), (%s, %s, 2, 'user', 'own')",
+            (chat_id, companion, chat_id, actor),
+        )
+
+    with psycopg.connect(runtime_database_url) as runtime:
+        with runtime.transaction():
+            set_authenticated_user(runtime, actor)
+            assert runtime.execute(
+                "SELECT chat_id, last_message->>'content_text', unread_count "
+                "FROM public.chat_list_projection()"
+            ).fetchone() == (chat_id, "own", 1)
+        with runtime.transaction():
+            set_authenticated_user(runtime, companion)
+            assert runtime.execute(
+                "SELECT chat_id, last_message->>'content_text', unread_count "
+                "FROM public.chat_list_projection()"
+            ).fetchone() == (chat_id, "own", 1)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with runtime.transaction():
+                set_authenticated_user(runtime, actor)
+                runtime.execute(
+                    "SELECT last_read_sequence FROM public.chat_participants WHERE chat_id=%s", (chat_id,)
+                ).fetchall()
+        with runtime.transaction():
+            set_authenticated_user(runtime, outsider)
+            assert runtime.execute(
+                "SELECT chat_id FROM public.chat_list_projection()"
+            ).fetchall() == []

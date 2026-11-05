@@ -97,7 +97,9 @@ test('maps GET /chats through the authenticated backend client', async () => {
         age: 31,
         city: 'Тбилиси'
       },
-      created_at: '2026-09-01T10:00:00Z'
+      created_at: '2026-09-01T10:00:00Z',
+      last_message: null,
+      unread_count: 0
     }
   ];
   const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(chats)));
@@ -119,7 +121,9 @@ test('maps a group Chat from GET /chats through the authenticated backend client
       { user_id: 'user-three', display_name: 'Анна' }
     ],
     participant_count: 3,
-    created_at: '2026-09-01T10:00:00Z'
+    created_at: '2026-09-01T10:00:00Z',
+    last_message: null,
+    unread_count: 0
   };
   const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify([groupChat])));
   const client = createBackendApiClient(fetchStub);
@@ -297,6 +301,58 @@ test('sends only content_text when creating a chat message', async () => {
     input: '/api/backend/chats/chat-uuid/messages',
     init: {
       body: JSON.stringify({ content_text: 'Привет' }),
+      headers: {
+        Accept: 'application/json',
+        Authorization: 'Bearer session-token',
+        'Content-Type': 'application/json'
+      },
+      method: 'POST'
+    }
+  });
+});
+
+test('includes the stable client request id when sending a retryable message', async () => {
+  const { calls, fetchStub } = createFetchStub(
+    new Response(JSON.stringify({ message_id: 'message-uuid', sequence_number: 3 }))
+  );
+  const client = createBackendApiClient(fetchStub);
+
+  await client.createChatMessage('session-token', 'chat-uuid', {
+    content_text: 'Привет',
+    client_request_id: 'request-uuid'
+  });
+
+  assert.equal(
+    (calls[0].init as RequestInit).body,
+    JSON.stringify({ content_text: 'Привет', client_request_id: 'request-uuid' })
+  );
+});
+
+test('sends a stable request id and reads bounded message pages', async () => {
+  const page = {
+    messages: [], high_water_sequence: 17, next_after_sequence: 17,
+    has_more_older: true, has_more_newer: false
+  };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(page)));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(
+    await client.getChatMessagePage('session-token', 'chat-uuid', { after_sequence: 12, limit: 40 }),
+    page
+  );
+  assertReadRequest(calls[0], '/api/backend/chats/chat-uuid/messages/page?after_sequence=12&limit=40');
+});
+
+test('marks a visible Chat sequence as read through the authenticated backend client', async () => {
+  const result = { chat_id: 'chat-uuid', last_read_sequence: 12 };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(result)));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(await client.markChatRead('session-token', 'chat-uuid', 12), result);
+  assert.deepEqual(calls[0], {
+    input: '/api/backend/chats/chat-uuid/read',
+    init: {
+      body: JSON.stringify({ sequence_number: 12 }),
       headers: {
         Accept: 'application/json',
         Authorization: 'Bearer session-token',

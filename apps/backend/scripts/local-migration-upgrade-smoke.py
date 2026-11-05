@@ -39,6 +39,7 @@ EXPECTED_PENDING_NAMES = (
     "20260924110000_backend_field_domain_limits.sql",
     "20261003090000_chat_participant_public_profile.sql",
     "20261018090000_server_side_tester_admission_session_identity.sql",
+    "20261105121901_live_chat_pagination_unread_idempotency.sql",
 )
 EXPECTED_DATABASE_PREFIX = "tf_restore_"
 DDL_OPTIONS = "-c lock_timeout=5s -c statement_timeout=120s"
@@ -247,9 +248,9 @@ def validate_repository_migration_sequence(manifest: dict[str, Any]) -> tuple[li
         ledger.get("count") != EXPECTED_APPLIED_COUNT
         or not isinstance(versions, list)
         or len(versions) != EXPECTED_APPLIED_COUNT
-        or len(repository_files) != 24
+        or len(repository_files) != 25
     ):
-        raise UpgradeSmokeError("MIGRATIONS", "expected 19 manifest migrations and 24 repository migration files.")
+        raise UpgradeSmokeError("MIGRATIONS", "expected 19 manifest migrations and 25 repository migration files.")
 
     by_version: dict[str, Path] = {}
     for path in repository_files:
@@ -279,7 +280,7 @@ def validate_repository_migration_sequence(manifest: dict[str, Any]) -> tuple[li
         raise UpgradeSmokeError("MIGRATIONS", "the manifest is not the ordered 19-migration repository prefix.")
     pending = repository_files[EXPECTED_APPLIED_COUNT:]
     if tuple(path.name for path in pending) != EXPECTED_PENDING_NAMES:
-        raise UpgradeSmokeError("MIGRATIONS", "the repository pending suffix differs from the five approved migrations.")
+        raise UpgradeSmokeError("MIGRATIONS", "the repository pending suffix differs from the six approved migrations.")
     return applied, pending
 
 
@@ -1018,8 +1019,8 @@ def run_local_db_push(
     run_id: str,
     port: int,
 ) -> None:
-    if tuple(pending_names) != EXPECTED_PENDING_NAMES or len(pending_names) != 5:
-        raise UpgradeSmokeError("DRY_RUN", "db push requires the exact five approved pending migrations.")
+    if tuple(pending_names) != EXPECTED_PENDING_NAMES or len(pending_names) != 6:
+        raise UpgradeSmokeError("DRY_RUN", "db push requires the exact six approved pending migrations.")
     if re.fullmatch(r"[a-f0-9]{12}", run_id) is None or re.fullmatch(
         rf"tf-upgrade-\d{{14}}-{re.escape(run_id)}", container_name
     ) is None:

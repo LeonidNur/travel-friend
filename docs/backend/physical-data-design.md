@@ -302,7 +302,7 @@ CHECK(last_read_sequence <= last_visible_message_sequence)
 ```
 
 Semantics:
-- unread: `last_visible_message_sequence > last_read_sequence`;
+- Этот reviewed design использует `last_visible_message_sequence > last_read_sequence` как boolean unread proxy. Принятый Live Chats API возвращает backend count видимых входящих сообщений после read watermark, исключая собственные сообщения; один boolean proxy сам по себе не задаёт этот count.
 - `left_after_sequence` фиксирует границу истории после выхода;
 - read state движется только вперёд.
 

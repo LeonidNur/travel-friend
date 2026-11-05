@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useState } from 'react';
 
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import { createBackendApiClient, type ChatResponse } from '@/lib/backend-api-client';
-import { getChatsScreenState } from '@/lib/chat-runtime';
+import { formatChatListTimestamp, getChatsScreenState } from '@/lib/chat-runtime';
 import {
   getAvailableGroupChatCompanions,
   validateGroupChatCompanionIds
@@ -25,6 +25,8 @@ export default function ChatsPage() {
   const [isGroupFormOpen, setIsGroupFormOpen] = useState(false);
   const [selectedCompanionIds, setSelectedCompanionIds] = useState<string[]>([]);
   const [groupError, setGroupError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
     if (session === null) {
@@ -51,6 +53,71 @@ export default function ChatsPage() {
       isCurrent = false;
     };
   }, [reloadKey, session]);
+
+  useEffect(() => {
+    if (session === null || isLoading || error !== null) {
+      return;
+    }
+
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const offlineSyncTimer = setTimeout(() => setIsOffline(!navigator.onLine), 0);
+    let isRefreshing = false;
+
+    const refresh = async () => {
+      if (!active || isRefreshing || document.visibilityState !== 'visible' || !navigator.onLine) {
+        return;
+      }
+      isRefreshing = true;
+      try {
+        const nextChats = await backendApiClient.getChats(session.accessToken);
+        if (active) {
+          setChats(nextChats);
+          setRefreshError(false);
+        }
+      } catch {
+        if (active) {
+          setRefreshError(true);
+        }
+      } finally {
+        isRefreshing = false;
+        if (active && document.visibilityState === 'visible' && navigator.onLine) {
+          timer = setTimeout(() => void refresh(), 60_000);
+        }
+      }
+    };
+
+    const resume = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        setIsOffline(false);
+        if (timer !== undefined) clearTimeout(timer);
+        void refresh();
+      } else if (timer !== undefined) {
+        clearTimeout(timer);
+        setIsOffline(!navigator.onLine);
+      }
+    };
+
+    const pause = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      setIsOffline(true);
+    };
+
+    timer = setTimeout(() => void refresh(), 60_000);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
+    window.addEventListener('online', resume);
+    window.addEventListener('offline', pause);
+    return () => {
+      active = false;
+      clearTimeout(offlineSyncTimer);
+      if (timer !== undefined) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('online', resume);
+      window.removeEventListener('offline', pause);
+    };
+  }, [error, isLoading, reloadKey, session]);
 
   const screenState = getChatsScreenState({ isLoading, error, chats });
   const companions = getAvailableGroupChatCompanions(chats);
@@ -170,6 +237,8 @@ export default function ChatsPage() {
 
       {screenState === 'success' ? (
         <section className="list-stack" aria-label="Список чатов">
+          {isOffline ? <p className="chat-room__composer-note" role="status">Нет подключения. Список не обновляется.</p> : null}
+          {refreshError ? <p className="chat-room__composer-note" role="status">Не удалось обновить чаты. Повторим автоматически.</p> : null}
           {chats.map((chat) => (
             <Link className="surface-card surface-card--compact chat-card chat-card--link" key={chat.chat_id} href={`/chats/${chat.chat_id}`}>
               <div className="chat-card__header">
@@ -190,8 +259,24 @@ export default function ChatsPage() {
                     </p>
                   </div>
                 )}
+                <div className="chat-card__preview">
+                  <span className="chat-card__preview-time">
+                    {chat.last_message === null
+                      ? ''
+                      : formatChatListTimestamp(chat.last_message.created_at)}
+                  </span>
+                  {chat.unread_count > 0 ? (
+                    <span className="chat-card__unread" aria-label={`Непрочитанных сообщений: ${chat.unread_count}`}>
+                      {chat.unread_count}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-
+              <p className="chat-card__last-message">
+                {chat.last_message === null
+                  ? 'Сообщений пока нет'
+                  : `${chat.last_message.sender_user_id === session?.userId ? 'Вы: ' : ''}${chat.last_message.content_text ?? 'Системное сообщение'}`}
+              </p>
             </Link>
           ))}
         </section>

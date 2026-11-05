@@ -95,7 +95,7 @@ WITH application_tables (table_name) AS (
     ('user_sessions', 'UPDATE', ARRAY['revoked_at']),
     ('discover_interest_decisions', 'SELECT', ARRAY['actor_user_id', 'target_user_id', 'decision']),
     ('matches', 'SELECT', ARRAY['id', 'user_a_id', 'user_b_id', 'chat_id']),
-    ('chats', 'SELECT', ARRAY['id', 'type', 'created_at']),
+    ('chats', 'SELECT', ARRAY['id', 'type', 'created_at', 'last_sequence']),
     ('chat_participants', 'SELECT', ARRAY['chat_id', 'user_id', 'left_at']),
     ('messages', 'SELECT', ARRAY['id', 'chat_id', 'sequence_number', 'type', 'sender_user_id', 'recipient_user_id', 'content_text', 'created_at']),
     ('trips', 'SELECT', ARRAY['id', 'chat_id', 'created_by_user_id', 'status', 'membership_version', 'state_version', 'destination_version', 'dates_version', 'budget_version', 'transport_version', 'destination_status', 'dates_status', 'budget_status', 'transport_status', 'date_from', 'date_to', 'budget_min', 'budget_max', 'budget_currency', 'budget_scope', 'started_at', 'completed_at', 'cancelled_at', 'created_at', 'updated_at']),
@@ -174,6 +174,9 @@ WITH capability_signatures (function_signature) AS (
     ,('public.is_current_active_chat_participant(uuid)')
     ,('public.create_current_group_chat(uuid[])')
     ,('public.send_current_chat_message(uuid,text)')
+    ,('public.send_current_chat_message(uuid,text,uuid)')
+    ,('public.mark_current_chat_read(uuid,bigint)')
+    ,('public.chat_list_projection()')
     ,('public.is_current_active_trip_participant(uuid)')
     ,('public.create_current_trip_from_chat(uuid)')
 ), required_capabilities AS (
@@ -195,7 +198,10 @@ WITH protected_capabilities (function_signature) AS (
   VALUES
     ('public.bootstrap_telegram_login(bigint,text,text,text,text,text)'),
     ('public.chat_participant_public_profile(uuid,uuid)'),
-    ('public.resolve_bearer_session_with_identity(text)')
+    ('public.resolve_bearer_session_with_identity(text)'),
+    ('public.send_current_chat_message(uuid,text,uuid)'),
+    ('public.mark_current_chat_read(uuid,bigint)'),
+    ('public.chat_list_projection()')
 ), api_roles (role_name) AS (
   VALUES ('anon'), ('authenticated'), ('service_role')
 ), resolved_capabilities AS (
@@ -271,6 +277,9 @@ WITH capability_signatures (function_signature) AS (
     ,('public.is_current_active_chat_participant(uuid)')
     ,('public.create_current_group_chat(uuid[])')
     ,('public.send_current_chat_message(uuid,text)')
+    ,('public.send_current_chat_message(uuid,text,uuid)')
+    ,('public.mark_current_chat_read(uuid,bigint)')
+    ,('public.chat_list_projection()')
     ,('public.is_current_active_trip_participant(uuid)')
     ,('public.create_current_trip_from_chat(uuid)')
 ), required_capabilities AS (

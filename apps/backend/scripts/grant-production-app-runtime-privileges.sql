@@ -60,7 +60,7 @@ GRANT SELECT (actor_user_id, target_user_id, decision)
 
 GRANT SELECT (id, user_a_id, user_b_id, chat_id) ON TABLE public.matches TO app_runtime;
 
-GRANT SELECT (id, type, created_at) ON TABLE public.chats TO app_runtime;
+GRANT SELECT (id, type, created_at, last_sequence) ON TABLE public.chats TO app_runtime;
 
 GRANT SELECT (chat_id, user_id, left_at) ON TABLE public.chat_participants TO app_runtime;
 
@@ -105,6 +105,9 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.record_current_discover_decision(uuid, 
 REVOKE ALL PRIVILEGES ON FUNCTION public.is_current_active_chat_participant(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.create_current_group_chat(uuid[]) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.send_current_chat_message(uuid, text) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.send_current_chat_message(uuid, text, uuid) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.mark_current_chat_read(uuid, bigint) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.chat_list_projection() FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.is_current_active_trip_participant(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.create_current_trip_from_chat(uuid) FROM app_runtime;
 
@@ -129,5 +132,8 @@ GRANT EXECUTE ON FUNCTION public.record_current_discover_decision(uuid, text) TO
 GRANT EXECUTE ON FUNCTION public.is_current_active_chat_participant(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.create_current_group_chat(uuid[]) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.send_current_chat_message(uuid, text) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.send_current_chat_message(uuid, text, uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.mark_current_chat_read(uuid, bigint) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.chat_list_projection() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.is_current_active_trip_participant(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.create_current_trip_from_chat(uuid) TO app_runtime;

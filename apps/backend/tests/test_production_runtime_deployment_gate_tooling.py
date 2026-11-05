@@ -60,6 +60,8 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "is_current_active_chat_participant",
         "create_current_group_chat",
         "send_current_chat_message",
+        "mark_current_chat_read",
+        "chat_list_projection",
         "is_current_active_trip_participant",
         "create_current_trip_from_chat",
         "enforce_direct_chat_participant_count",
@@ -93,6 +95,9 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
         "public.chat_participant_public_profile(uuid,uuid)",
         "public.resolve_bearer_session_with_identity(text)",
+        "public.send_current_chat_message(uuid,text,uuid)",
+        "public.mark_current_chat_read(uuid,bigint)",
+        "public.chat_list_projection()",
     )
 
     for policy_name in (
