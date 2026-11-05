@@ -66,6 +66,172 @@ def test_messages_require_authentication(client: TestClient) -> None:
     ).status_code == 401
 
 
+def test_bounded_message_pages_handle_cursor_gaps_and_read_watermarks(
+    client: TestClient, database_url: str
+) -> None:
+    first, second, match = create_reciprocal_match(client)
+    chat_id = chat_id_for_match(database_url, match["match_id"])
+    for index in range(5):
+        response = send_message(client, first["access_token"], chat_id, f"message {index + 1}")
+        assert response.status_code == 201
+    with psycopg.connect(database_url) as connection:
+        connection.execute(
+            "INSERT INTO public.messages "
+            "(chat_id, recipient_user_id, sequence_number, type, content_text) "
+            "VALUES (%s, %s, 6, 'system', 'private')",
+            (chat_id, UUID(second["user"]["id"])),
+        )
+        connection.execute("UPDATE public.chats SET last_sequence=6 WHERE id=%s", (chat_id,))
+
+    initial = client.get(
+        f"/chats/{chat_id}/messages/page?limit=2", headers=auth_headers(second["access_token"])
+    )
+    assert initial.status_code == 200
+    assert [item["sequence_number"] for item in initial.json()["messages"]] == [5, 6]
+    assert initial.json()["high_water_sequence"] == 6
+    assert initial.json()["has_more_older"] is True
+    assert initial.json()["next_after_sequence"] == 6
+
+    older = client.get(
+        f"/chats/{chat_id}/messages/page?before_sequence=5&limit=2",
+        headers=auth_headers(second["access_token"]),
+    )
+    assert [item["sequence_number"] for item in older.json()["messages"]] == [3, 4]
+    assert older.json()["has_more_older"] is True
+    assert older.json()["has_more_newer"] is True
+    assert older.json()["next_after_sequence"] == 6
+
+    incremental = client.get(
+        f"/chats/{chat_id}/messages/page?after_sequence=4&limit=2",
+        headers=auth_headers(second["access_token"]),
+    )
+    assert [item["sequence_number"] for item in incremental.json()["messages"]] == [5, 6]
+    assert incremental.json()["has_more_newer"] is False
+    assert incremental.json()["next_after_sequence"] == 6
+
+    hidden_gap = client.get(
+        f"/chats/{chat_id}/messages/page?after_sequence=5",
+        headers=auth_headers(first["access_token"]),
+    )
+    assert hidden_gap.status_code == 200
+    assert hidden_gap.json()["messages"] == []
+    assert hidden_gap.json()["high_water_sequence"] == 6
+    assert hidden_gap.json()["next_after_sequence"] == 6
+    later_message = send_message(client, second["access_token"], chat_id, "visible after the private gap")
+    assert later_message.status_code == 201
+    resumed = client.get(
+        f"/chats/{chat_id}/messages/page?after_sequence=6",
+        headers=auth_headers(first["access_token"]),
+    )
+    assert [item["sequence_number"] for item in resumed.json()["messages"]] == [7]
+
+    before_read = client.get("/chats", headers=auth_headers(second["access_token"])).json()[0]
+    assert before_read["last_message"]["sequence_number"] == 7
+    assert before_read["unread_count"] == 6
+
+    marked = client.post(
+        f"/chats/{chat_id}/read", headers=auth_headers(second["access_token"]),
+        json={"sequence_number": 5},
+    )
+    assert marked.status_code == 200
+    assert marked.json()["last_read_sequence"] == 5
+    after_read = client.get("/chats", headers=auth_headers(second["access_token"])).json()[0]
+    assert after_read["unread_count"] == 1
+
+    own_read = client.post(
+        f"/chats/{chat_id}/read", headers=auth_headers(first["access_token"]),
+        json={"sequence_number": 7},
+    )
+    assert own_read.status_code == 200
+    assert own_read.json()["last_read_sequence"] == 7
+    own_chat = client.get("/chats", headers=auth_headers(first["access_token"])).json()[0]
+    assert own_chat["unread_count"] == 0
+
+
+def test_message_send_is_idempotent_for_same_request_and_rejects_key_reuse(
+    client: TestClient, database_url: str
+) -> None:
+    first, _, match = create_reciprocal_match(client)
+    chat_id = chat_id_for_match(database_url, match["match_id"])
+    request_id = "4f7c72d1-0a0a-4f07-9bfa-731b93b1f837"
+    payload = {"content_text": "retry safely", "client_request_id": request_id}
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(
+            lambda _: client.post(
+                f"/chats/{chat_id}/messages", headers=auth_headers(first["access_token"]), json=payload
+            ),
+            range(2),
+        ))
+
+    assert [response.status_code for response in responses] == [201, 201]
+    assert responses[0].json()["message_id"] == responses[1].json()["message_id"]
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute(
+            "SELECT count(*) FROM public.messages WHERE chat_id=%s", (chat_id,)
+        ).fetchone()[0] == 1
+
+    conflict = client.post(
+        f"/chats/{chat_id}/messages", headers=auth_headers(first["access_token"]),
+        json={"content_text": "different body", "client_request_id": request_id},
+    )
+    assert conflict.status_code == 409
+
+
+def test_message_page_and_read_require_active_chat_membership(
+    client: TestClient, database_url: str
+) -> None:
+    first, _, match = create_reciprocal_match(client)
+    outsider = create_discover_eligible_user(client, 4)
+    chat_id = chat_id_for_match(database_url, match["match_id"])
+
+    assert client.get(
+        f"/chats/{chat_id}/messages/page", headers=auth_headers(outsider["access_token"])
+    ).status_code == 404
+    assert client.post(
+        f"/chats/{chat_id}/read", headers=auth_headers(outsider["access_token"]),
+        json={"sequence_number": 1},
+    ).status_code == 404
+
+
+def test_group_chat_summary_tracks_preview_and_unread_for_active_members(client: TestClient) -> None:
+    initiator, first_member, _, group_chat = create_group_chat_with_three_participants(client)
+    chat_id = UUID(group_chat["chat_id"])
+    sent = send_message(client, initiator["access_token"], chat_id, "Встречаемся в центре")
+    assert sent.status_code == 201
+
+    chats = client.get("/chats", headers=auth_headers(first_member["access_token"]))
+    assert chats.status_code == 200
+    group_item = next(item for item in chats.json() if item["chat_id"] == str(chat_id))
+    assert group_item["last_message"]["content_text"] == "Встречаемся в центре"
+    assert group_item["last_message"]["sender_user_id"] == initiator["user"]["id"]
+    assert group_item["unread_count"] == 1
+
+    read = client.post(
+        f"/chats/{chat_id}/read", headers=auth_headers(first_member["access_token"]),
+        json={"sequence_number": sent.json()["sequence_number"]},
+    )
+    assert read.status_code == 200
+    refreshed = client.get("/chats", headers=auth_headers(first_member["access_token"]))
+    group_item = next(item for item in refreshed.json() if item["chat_id"] == str(chat_id))
+    assert group_item["unread_count"] == 0
+
+
+def test_message_page_rejects_conflicting_or_unbounded_cursor_parameters(
+    client: TestClient, database_url: str
+) -> None:
+    first, _, match = create_reciprocal_match(client)
+    chat_id = chat_id_for_match(database_url, match["match_id"])
+    headers = auth_headers(first["access_token"])
+
+    assert client.get(
+        f"/chats/{chat_id}/messages/page?before_sequence=1&after_sequence=0", headers=headers
+    ).status_code == 422
+    assert client.get(
+        f"/chats/{chat_id}/messages/page?limit=101", headers=headers
+    ).status_code == 422
+
+
 def test_participant_reads_history_in_ascending_sequence_order(
     client: TestClient, database_url: str
 ) -> None:

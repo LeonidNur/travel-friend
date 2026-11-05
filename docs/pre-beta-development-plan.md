@@ -36,7 +36,7 @@
 | UX-02 | Chat → Public Profile (включая group participant) | Переходы, доступность и error states зафиксированы; существующая реализация подтверждена | DECIDED |
 | UX-03 | Где после onboarding показывать и менять active Travel Intent | Отдельно от Profile; существующее расположение и редактирование подтверждены | DECIDED |
 | UX-04 | Preview Mode / незавершённый onboarding | Preview Mode не будет; onboarding обязателен до Discover | DECIDED |
-| UX-05 | Chats list и Chat room: последнее сообщение, время, unread, empty/loading/error/offline | UI-состав зафиксирован; last message/time/unread реализация входит в будущий Live Chats block | DECIDED |
+| UX-05 | Chats list и Chat room: последнее сообщение, время, unread, empty/loading/error/offline | UI-состав зафиксирован; last message/time/unread реализация входит в Live Chats block | DECIDED |
 | UX-06 | Group Chat: название, участники, создание/переименование; без invitations/leave/remove/admin roles | Пользовательское название при создании и rename; roster фиксированный. Rename authorization — отдельный implementation question | DECIDED |
 | UX-07 | Chat → Trip: «Создать поездку» или «Открыть поездку»; empty Trips | Явный CTA по состоянию; `409` только технический recovery fallback | DECIDED |
 | UX-08 | Trip data/lifecycle/participants/ownership | Creator — атрибуция; confirmed changes проходят через Proposal, не creator-only write | DECIDED |
@@ -65,15 +65,17 @@
 
 **Зависимости:** UX-05; обзор текущего transport/auth boundary; без изменения Proposal/Trip.
 
-**Порядок самостоятельных slices:**
+**Принятые решения Stage 3:** HTTP polling с ограниченной частотой; persisted backend messages — источник истины; initial history bounded и синхронизируется по sequence cursor с before/after pagination; unread — количество доступных пользователю сообщений выше его read watermark, отправленные самим пользователем не считаются; watermark продвигается после отображения сообщений в активной комнате; повтор неоднозначной отправки использует тот же request ID и не создаёт дубликат. Realtime transport и расширенные функции мессенджера не входят в этот slice.
 
-1. **Transport decision.** Сравнить Supabase Realtime, SSE, WebSocket и bounded polling с учётом собственного Telegram auth, RLS/capability, Render topology, reconnect и расходов. Выбрать минимальное работающее решение, не внедрять технологию по популярности.
-2. **Live messages.** Новые сообщения без ручного обновления, корректная сортировка, дедупликация после отправки/reconnect, сохранение истории и контроль доступа. Серверная persisted history остаётся источником истины.
-3. **Chats list preview.** Последнее сообщение, время, корректное обновление списка. Отдельно определить unread semantics и серверные границы.
-4. **Read/unread и recovery.** Минимальная модель прочитанного, reconnect/resync, ошибки сети и повторные запросы без дублей.
-5. **History bounds/performance.** Оценить pagination/response caps, N+1, write rate и cost amplification; внедрять только необходимую защиту до теста, но не оставлять очевидно неограниченные ответы.
+**Порядок реализации (IN PROGRESS; решение не означает готовность к внешнему тесту):**
 
-**Done:** два и более реальных пользователя видят сообщения без refresh, подтверждены persist/reconnect/order/no-duplicates, работают права доступа, chats list и unread соответствуют UX, CI и multi-user integration tests проходят. Нагрузка и стоимость приемлемы для запланированной беты.
+1. **Transport** — bounded HTTP polling в активной видимой Chat Room; обновление Chats list с ограниченной частотой и восстановление после возврата вкладки/сети.
+2. **History and sync** — ограниченная первая страница и sequence-cursor pagination в обе стороны; курсор учитывает high-water sequence, чтобы пропуски недоступных recipient-only сообщений не приводили к потере синхронизации.
+3. **Idempotent send** — backend persisted state и клиентский request ID защищают повтор после неоднозначного результата; один ключ не может быть повторно использован с другим текстом.
+4. **Chats list and unread** — видимые последнее сообщение/время, backend unread count без собственных сообщений; mark-as-read только до фактически отображённой позиции.
+5. **Security, tests and performance** — сохранить активное членство/RLS и capability-only writes; ограничить размер истории и частоту polling; проверить direct/group, reconnect, concurrent sends и стоимость для ожидаемой беты.
+
+**Done:** два и более реальных пользователя видят сообщения без ручного refresh, подтверждены persisted history/reconnect/order/no-duplicates, работают права доступа, bounded pagination и unread соответствуют UX, CI и multi-user integration tests проходят. Нагрузка и стоимость приемлемы для запланированной беты. Stage 3 остаётся `IN PROGRESS`, пока эти критерии не проверены; это не production rollout.
 
 ## 4. Group Chats
 
@@ -169,8 +171,7 @@
 
 - Какое authorization rule применяется к rename Group Chat без предположения creator/admin роли?
 - Какие schema/validation/error contract и handoff нужны между AI-разработчиком, Proposal API и Trip apply?
-- Каковы live unread/read semantics, reconnect/resync и допустимые history bounds для беты?
-- Какая схема real-time messages совместима с фактическими auth, provider topology и бюджетом?
+- Каковы ожидаемый объём одновременных Chat Rooms и допустимая polling latency/cost? Проверить на release cost/abuse gate; транспорт и cursor/read semantics для Stage 3 уже приняты.
 - Какую метрику считать active user, что означает «online» и какая платформа аналитики нужна?
 - Какая прогнозируемая первая когорта и допустимый worst-case операционный бюджет?
 

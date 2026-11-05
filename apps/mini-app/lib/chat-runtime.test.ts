@@ -8,6 +8,7 @@ import {
   getChatMessageHistoryState,
   getMessageAuthorLabel,
   getChatsScreenState,
+  formatChatListTimestamp,
   mapChatMessages,
   submitChatMessage
 } from './chat-runtime';
@@ -23,7 +24,9 @@ const groupChat: ChatResponse = {
     { user_id: 'third-user-uuid', display_name: 'Илья' }
   ],
   participant_count: 3,
-  created_at: '2026-09-01T10:00:00Z'
+  created_at: '2026-09-01T10:00:00Z',
+  last_message: null,
+  unread_count: 0
 };
 
 const messages: ChatMessageResponse[] = [
@@ -69,7 +72,9 @@ test('returns loading, error, empty, and success Chats screen states', () => {
           chat_id: 'chat-uuid',
           type: 'direct',
           companion: { user_id: 'companion-uuid', display_name: 'Мария', age: 31, city: 'Тбилиси' },
-          created_at: '2026-09-01T10:00:00Z'
+          created_at: '2026-09-01T10:00:00Z',
+          last_message: null,
+          unread_count: 0
         }
       ]
     }),
@@ -109,8 +114,10 @@ test('appends the server-returned message in sequence order only after a success
     draft: '  Отправлено  ',
     isSending: false,
     messages: messages.slice(0, 2),
-    sendMessage: async (contentText) => {
+    requestId: 'stable-request-id',
+    sendMessage: async (contentText, requestId) => {
       assert.equal(contentText, 'Отправлено');
+      assert.equal(requestId, 'stable-request-id');
       return sentMessage;
     }
   });
@@ -125,6 +132,7 @@ test('preserves the draft when sending fails', async () => {
     draft: 'Не потерять текст',
     isSending: false,
     messages: [],
+    requestId: 'stable-request-id',
     sendMessage: async () => {
       throw new Error('network failed');
     }
@@ -142,8 +150,8 @@ test('prevents duplicate and whitespace-only submissions', async () => {
     return messages[0];
   };
 
-  const duplicateResult = await submitChatMessage({ draft: 'Привет', isSending: true, messages: [], sendMessage });
-  const whitespaceResult = await submitChatMessage({ draft: ' \n\t ', isSending: false, messages: [], sendMessage });
+  const duplicateResult = await submitChatMessage({ draft: 'Привет', isSending: true, messages: [], requestId: 'stable-request-id', sendMessage });
+  const whitespaceResult = await submitChatMessage({ draft: ' \n\t ', isSending: false, messages: [], requestId: 'stable-request-id', sendMessage });
 
   assert.equal(calls, 0);
   assert.equal(duplicateResult.draft, 'Привет');
@@ -152,6 +160,39 @@ test('prevents duplicate and whitespace-only submissions', async () => {
 
 test('does not duplicate a server message that is already present in runtime history', () => {
   assert.deepEqual(appendServerMessage([messages[0]], messages[0]), [messages[0]]);
+});
+
+test('merges polling messages by persisted id and sorts by sequence', async () => {
+  const { mergeServerMessages } = await import('./chat-runtime');
+  const merged = mergeServerMessages([messages[1]], [messages[2], messages[1]]);
+  assert.deepEqual(merged.map((message) => message.message_id), ['first', 'second']);
+});
+
+test('formats chat preview timestamps in the local timezone around midnight', () => {
+  const sameLocalDayMessage = new Date(2026, 10, 5, 12, 15);
+  const sameLocalDayNow = new Date(2026, 10, 5, 13, 0);
+  assert.equal(formatChatListTimestamp(sameLocalDayMessage.toISOString(), sameLocalDayNow), '12:15');
+
+  const justBeforeLocalMidnight = new Date(2026, 10, 4, 23, 55);
+  const justAfterLocalMidnight = new Date(2026, 10, 5, 0, 5);
+  assert.match(
+    formatChatListTimestamp(justBeforeLocalMidnight.toISOString(), justAfterLocalMidnight),
+    /4 нояб\./
+  );
+
+  const justAfterMidnightMessage = new Date(2026, 10, 5, 0, 2);
+  const sameLocalDayLateNow = new Date(2026, 10, 5, 23, 58);
+  assert.equal(formatChatListTimestamp(justAfterMidnightMessage.toISOString(), sameLocalDayLateNow), '00:02');
+});
+
+test('formats message timestamps in the local timezone', () => {
+  const localMessageTime = new Date(2026, 10, 5, 12, 15);
+  const [message] = mapChatMessages(
+    [{ ...messages[2], created_at: localMessageTime.toISOString() }],
+    ownUserId
+  );
+
+  assert.equal(message.sentAtLabel, '12:15');
 });
 
 test('treats an unavailable chat id as absent without accessing mock data', () => {

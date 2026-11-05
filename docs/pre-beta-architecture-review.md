@@ -148,17 +148,19 @@ flowchart LR
 
 ## Cross-Team Contract Questions
 
-1. **Live Chats:** what is the bounded history page size and cursor semantics? What counts as unread (sequence-based, system messages included/excluded, own messages, hidden/visible messages)? Which action advances `last_read_sequence` and when? What are the retention/history bounds and expected polling latency/cost?
-2. **Message delivery:** what client request key or equivalent makes retry after a timeout safe? Is the product allowed to show “delivery unknown” until resync, or must an explicit retry be idempotent?
-3. **Group Chat:** what is the persisted title’s blank/length/update behavior? Who may rename? Proposed policy: any active participant; approval required. Are rename collisions handled by last-write-wins or a version conflict? Do not assume creator/admin role.
-4. **AI/Proposal:** approve the shared contract items listed above: normalized context, allowed structured outputs, ownership of AIRequest and Proposal persistence, retry/idempotency, version snapshot/stale outcomes, and exact atomic vote/apply boundary. The backend remains the only domain authority.
-5. **Analytics:** define active-user windows/timezone, unique event IDs/deduplication, consent/processor policy, field allowlist, retention/deletion, report access, and operational owner before choosing PostHog or owned tracking.
+1. **Group Chat:** what is the persisted title’s blank/length/update behavior? Who may rename? Proposed policy: any active participant; approval required. Are rename collisions handled by last-write-wins or a version conflict? Do not assume creator/admin role.
+2. **AI/Proposal:** approve the shared contract items listed above: normalized context, allowed structured outputs, ownership of AIRequest and Proposal persistence, retry/idempotency, version snapshot/stale outcomes, and exact atomic vote/apply boundary. The backend remains the only domain authority.
+3. **Analytics:** define active-user windows/timezone, unique event IDs/deduplication, consent/processor policy, field allowlist, retention/deletion, report access, and operational owner before choosing PostHog or owned tracking.
+
+### Live Chats decision update — 05.11.2026
+
+The team has decided bounded HTTP polling, persisted messages as the source of truth, a bounded initial page with before/after sequence cursors, own-message-excluded unread counts, read watermark advancement after display in the active Chat Room, and stable request IDs for retry-safe sends. The implementation is in progress; these decisions do not certify the feature or production rollout. Earlier L-01…L-03 rows and runtime descriptions above remain historical findings for the audited revision in the header.
 
 ## Recommended Implementation Order
 
-1. **Live Chats transport and read contract:** select bounded polling for the first beta, then review a cursor-based bounded history/read endpoint plus expected load. Keep sends HTTP and persisted history authoritative.
+1. **Live Chats transport and read contract:** implement the decided bounded polling and sequence-based history/read APIs. Keep sends HTTP and persisted history authoritative.
 2. **Live message refresh:** visible-screen polling, backoff/background pause, sequence-based merge/deduplication, reconnect/resync, and explicitly tested ambiguous-send retry behavior.
-3. **Chats list summary + unread:** approve semantics; implement last message/time/unread in a bounded/batched backend projection; measure query/load behavior. Preserve the current participant-only visibility boundary.
+3. **Chats list summary + unread:** implement last message/time/unread in the existing participant visibility boundary; verify query plan, N+1 behavior, and load cost.
 4. **Group title/rename:** resolve title constraints and rename authorization; only then update persisted create/read/rename contracts and UI. Retain fixed roster; keep this slice independent from mutable membership.
 5. **Proposal/AI contract alignment:** AI developer and backend owner agree shared request/result, validation, version, stale, idempotency, and atomic apply boundaries before shared schema/API changes. UI can be designed in parallel; implementation follows the approved contract.
 6. **Proposal persistence/voting/apply and Copilot integration:** server-side auth and fixed voters, version checks, unanimous decisions, stale handling, transactionally atomic apply, duplicate/concurrency tests, and controlled-output E2E. AI never directly mutates Trip.

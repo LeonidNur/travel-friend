@@ -6,7 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from travel_friend_backend.auth.service import AuthenticatedPrincipal, auth_dependency
 from travel_friend_backend.dependencies import get_authenticated_database_connection
@@ -18,7 +18,10 @@ from travel_friend_backend.rate_limit import (
 from travel_friend_backend.schemas.chats import (
     ChatListItemResponse,
     ChatMessageCreateRequest,
+    ChatMessagePageResponse,
     ChatMessageResponse,
+    ChatReadRequest,
+    ChatReadResponse,
     GroupChatCreateRequest,
     GroupChatCreateResponse,
 )
@@ -85,73 +88,47 @@ def create_group_chat_route(
     return create_group_chat(connection, principal, payload.user_ids)
 
 
-def direct_chat_list_item(
-    connection: psycopg.Connection, chat_id: UUID, created_at: object
-) -> dict[str, object] | None:
-    """Return the existing companion projection for one accessible direct Chat."""
-    row = connection.execute(
-        "SELECT user_id, display_name, age, city "
-        "FROM public.chat_participant_profile_projection(%s)",
-        (chat_id,),
-    ).fetchone()
-    if row is None:
-        return None
-    return {
-        "chat_id": chat_id,
-        "type": "direct",
-        "companion": {
-            "user_id": row["user_id"],
-            "display_name": row["display_name"],
-            "age": row["age"],
-            "city": row["city"],
-        },
-        "created_at": created_at,
-    }
-
-
-def group_chat_list_item(
-    connection: psycopg.Connection, chat_id: UUID, created_at: object
-) -> dict[str, object]:
-    """Return persisted current membership for one accessible Group Chat."""
-    participants = connection.execute(
-        "SELECT user_id, display_name "
-        "FROM public.chat_participant_profile_projection(%s)",
-        (chat_id,),
-    ).fetchall()
-    participant_projection = [
-        {"user_id": participant["user_id"], "display_name": participant["display_name"]}
-        for participant in participants
-    ]
-    return {
-        "chat_id": chat_id,
-        "type": "group",
-        "participants": participant_projection,
-        "participant_count": len(participant_projection),
-        "created_at": created_at,
-    }
-
-
 @router.get("", response_model=list[ChatListItemResponse])
 def get_chats(
-    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> list[dict[str, object]]:
     rows = connection.execute(
-        "SELECT c.id AS chat_id, c.type, c.created_at "
-        "FROM public.chats c "
-        "JOIN public.chat_participants own "
-        "ON own.chat_id=c.id AND own.user_id=%s AND own.left_at IS NULL "
-        "ORDER BY c.created_at DESC, c.id DESC",
-        (principal.user_id,),
+        "SELECT * FROM public.chat_list_projection() "
+        "ORDER BY COALESCE((last_message->>'created_at')::timestamptz, created_at) DESC, chat_id DESC"
     ).fetchall()
     chat_items: list[dict[str, object]] = []
     for row in rows:
-        if row["type"] == "direct":
-            direct_chat = direct_chat_list_item(connection, row["chat_id"], row["created_at"])
-            if direct_chat is not None:
-                chat_items.append(direct_chat)
+        chat_id = row["chat_id"]
+        participants = row["participants"]
+        if row["chat_type"] == "direct":
+            if participants:
+                companion = participants[0]
+                chat_items.append({
+                    "chat_id": chat_id,
+                    "type": "direct",
+                    "companion": {
+                        "user_id": companion["user_id"],
+                        "display_name": companion["display_name"],
+                        "age": companion["age"],
+                        "city": companion["city"],
+                    },
+                    "created_at": row["created_at"],
+                    "last_message": row["last_message"],
+                    "unread_count": row["unread_count"],
+                })
             continue
-        chat_items.append(group_chat_list_item(connection, row["chat_id"], row["created_at"]))
+        chat_items.append({
+            "chat_id": chat_id,
+            "type": "group",
+            "participants": [
+                {"user_id": participant["user_id"], "display_name": participant["display_name"]}
+                for participant in participants
+            ],
+            "participant_count": row["participant_count"],
+            "created_at": row["created_at"],
+            "last_message": row["last_message"],
+            "unread_count": row["unread_count"],
+        })
     return chat_items
 
 
@@ -240,6 +217,106 @@ def get_chat_messages(
     return [message_response(row) for row in rows]
 
 
+@router.get("/{chat_id}/messages/page", response_model=ChatMessagePageResponse)
+def get_chat_message_page(
+    chat_id: UUID,
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
+    before_sequence: Annotated[int | None, Query(ge=0)] = None,
+    after_sequence: Annotated[int | None, Query(ge=0)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> dict[str, object]:
+    """Return a bounded history page or one incremental page after a sequence cursor."""
+    if before_sequence is not None and after_sequence is not None:
+        raise HTTPException(422, "before_sequence and after_sequence cannot be combined")
+    if find_authorized_message_chat(connection, chat_id, principal.user_id, lock=False) is None:
+        raise HTTPException(404, "Chat not found")
+
+    high_water_sequence = connection.execute(
+        "SELECT last_sequence FROM public.chats WHERE id=%s", (chat_id,)
+    ).fetchone()["last_sequence"]
+    visibility = "(recipient_user_id IS NULL OR recipient_user_id=%s)"
+    base_parameters: tuple[object, ...] = (chat_id, principal.user_id, high_water_sequence)
+
+    if after_sequence is not None:
+        rows = connection.execute(
+            "SELECT id AS message_id, chat_id, sequence_number, type, sender_user_id, "
+            "content_text, created_at FROM public.messages WHERE chat_id=%s "
+            f"AND {visibility} AND sequence_number>%s AND sequence_number<=%s "
+            "ORDER BY sequence_number ASC LIMIT %s",
+            (chat_id, principal.user_id, after_sequence, high_water_sequence, limit),
+        ).fetchall()
+        page_rows = rows
+    else:
+        cursor = before_sequence
+        cursor_filter = "" if cursor is None else " AND sequence_number<%s"
+        parameters: tuple[object, ...] = base_parameters + (() if cursor is None else (cursor,))
+        rows = connection.execute(
+            "SELECT id AS message_id, chat_id, sequence_number, type, sender_user_id, "
+            "content_text, created_at FROM public.messages WHERE chat_id=%s "
+            f"AND {visibility} AND sequence_number<=%s{cursor_filter} "
+            "ORDER BY sequence_number DESC LIMIT %s",
+            parameters + (limit,),
+        ).fetchall()
+        page_rows = list(reversed(rows))
+        has_more_newer = False
+
+    page_messages = [message_response(row) for row in page_rows]
+    if page_messages:
+        first_sequence = page_messages[0]["sequence_number"]
+        last_sequence = page_messages[-1]["sequence_number"]
+        has_more_older = connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM public.messages WHERE chat_id=%s "
+            f"AND {visibility} AND sequence_number<%s AND sequence_number<=%s)",
+            (chat_id, principal.user_id, first_sequence, high_water_sequence),
+        ).fetchone()["exists"]
+        has_more_newer = connection.execute(
+            "SELECT EXISTS (SELECT 1 FROM public.messages WHERE chat_id=%s "
+            f"AND {visibility} AND sequence_number>%s AND sequence_number<=%s)",
+            (chat_id, principal.user_id, last_sequence, high_water_sequence),
+        ).fetchone()["exists"]
+        next_after_sequence = (
+            last_sequence
+            if after_sequence is not None and has_more_newer
+            else high_water_sequence
+        )
+    else:
+        has_more_older = False
+        has_more_newer = False
+        next_after_sequence = high_water_sequence
+
+    return {
+        "messages": page_messages,
+        "high_water_sequence": high_water_sequence,
+        "next_after_sequence": next_after_sequence,
+        "has_more_older": has_more_older,
+        "has_more_newer": has_more_newer,
+    }
+
+
+@router.post("/{chat_id}/read", response_model=ChatReadResponse)
+def mark_chat_read(
+    chat_id: UUID,
+    payload: ChatReadRequest,
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
+) -> dict[str, object]:
+    """Advance the authenticated participant's read watermark monotonically."""
+    del principal
+    try:
+        result = connection.execute(
+            "SELECT * FROM public.mark_current_chat_read(%s, %s)",
+            (chat_id, payload.sequence_number),
+        ).fetchone()
+    except psycopg.Error as error:
+        if error.sqlstate == "P0002":
+            raise HTTPException(404, "Chat not found") from error
+        raise
+    if result is None:
+        raise RuntimeError("Chat read capability returned no result")
+    return dict(result)
+
+
 @router.post(
     "/{chat_id}/messages",
     response_model=ChatMessageResponse,
@@ -251,19 +328,29 @@ def create_chat_message(
     payload: ChatMessageCreateRequest,
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
+    response: Response,
 ) -> dict[str, object]:
     with connection.transaction():
         try:
-            message = connection.execute(
-                "SELECT * FROM public.send_current_chat_message(%s, %s)",
-                (chat_id, payload.content_text),
-            ).fetchone()
+            if payload.client_request_id is None:
+                message = connection.execute(
+                    "SELECT * FROM public.send_current_chat_message(%s, %s)",
+                    (chat_id, payload.content_text),
+                ).fetchone()
+            else:
+                message = connection.execute(
+                    "SELECT * FROM public.send_current_chat_message(%s, %s, %s)",
+                    (chat_id, payload.content_text, payload.client_request_id),
+                ).fetchone()
         except psycopg.Error as error:
             if error.sqlstate == "P0002":
                 raise HTTPException(404, "Chat not found") from error
+            if error.sqlstate == "23505":
+                raise HTTPException(409, "client_request_id was already used for another message") from error
             raise
 
     if message is None:
         raise RuntimeError("Chat message capability returned no result")
 
+    response.status_code = status.HTTP_201_CREATED
     return message_response(message)

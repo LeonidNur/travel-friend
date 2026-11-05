@@ -16,6 +16,9 @@ BACKEND_ONLY_FUNCTIONS = (
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
     "public.chat_participant_public_profile(uuid,uuid)",
     "public.resolve_bearer_session_with_identity(text)",
+    "public.send_current_chat_message(uuid,text,uuid)",
+    "public.mark_current_chat_read(uuid,bigint)",
+    "public.chat_list_projection()",
 )
 INTERNAL_DORMANT_TABLES = (
     "users",
@@ -61,6 +64,9 @@ REQUIRED_FUNCTIONS = (
     "public.is_current_active_chat_participant(uuid)",
     "public.create_current_group_chat(uuid[])",
     "public.send_current_chat_message(uuid,text)",
+    "public.send_current_chat_message(uuid,text,uuid)",
+    "public.mark_current_chat_read(uuid,bigint)",
+    "public.chat_list_projection()",
     "public.is_current_active_trip_participant(uuid)",
     "public.create_current_trip_from_chat(uuid)",
 )
@@ -75,7 +81,7 @@ RUNTIME_TABLE_OPERATION_SURFACE = {
 }
 
 RUNTIME_COLUMN_PRIVILEGES = {
-    ("chats", "SELECT"): {"id", "type", "created_at"},
+    ("chats", "SELECT"): {"id", "type", "created_at", "last_sequence"},
     ("chat_participants", "SELECT"): {"chat_id", "user_id", "left_at"},
     ("messages", "SELECT"): {
         "id",
@@ -182,6 +188,9 @@ def check_capability_metadata(connection: psycopg.Connection) -> None:
         "public.is_current_active_chat_participant(uuid)": True,
         "public.create_current_group_chat(uuid[])": True,
         "public.send_current_chat_message(uuid,text)": True,
+        "public.send_current_chat_message(uuid,text,uuid)": True,
+        "public.mark_current_chat_read(uuid,bigint)": True,
+        "public.chat_list_projection()": True,
         "public.chat_participant_public_profile(uuid,uuid)": True,
         "public.is_current_active_trip_participant(uuid)": True,
         "public.create_current_trip_from_chat(uuid)": True,

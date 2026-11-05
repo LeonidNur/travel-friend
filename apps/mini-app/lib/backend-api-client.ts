@@ -71,6 +71,14 @@ export type OnboardingResponse = Readonly<{
   status: Exclude<OnboardingStatus, 'not_started'>;
 }>;
 
+export type ChatMessagePreviewResponse = Readonly<{
+  sequence_number: number;
+  type: 'system' | 'user';
+  sender_user_id: string | null;
+  content_text: string | null;
+  created_at: string;
+}>;
+
 export type DirectChatResponse = Readonly<{
   chat_id: string;
   type: 'direct';
@@ -81,6 +89,8 @@ export type DirectChatResponse = Readonly<{
     city: string | null;
   }>;
   created_at: string;
+  last_message: ChatMessagePreviewResponse | null;
+  unread_count: number;
 }>;
 
 export type GroupChatResponse = Readonly<{
@@ -92,6 +102,8 @@ export type GroupChatResponse = Readonly<{
   }>>;
   participant_count: number;
   created_at: string;
+  last_message: ChatMessagePreviewResponse | null;
+  unread_count: number;
 }>;
 
 export type ChatResponse = DirectChatResponse | GroupChatResponse;
@@ -189,6 +201,26 @@ export type ChatMessageResponse = Readonly<{
 
 export type ChatMessageCreateRequest = Readonly<{
   content_text: string;
+  client_request_id?: string;
+}>;
+
+export type ChatMessagePageResponse = Readonly<{
+  messages: ChatMessageResponse[];
+  high_water_sequence: number;
+  next_after_sequence: number;
+  has_more_older: boolean;
+  has_more_newer: boolean;
+}>;
+
+export type ChatMessagePageRequest = Readonly<{
+  before_sequence?: number;
+  after_sequence?: number;
+  limit?: number;
+}>;
+
+export type ChatReadResponse = Readonly<{
+  chat_id: string;
+  last_read_sequence: number;
 }>;
 
 export type DiscoverTravelIntentResponse = Readonly<{
@@ -256,6 +288,12 @@ export type BackendApiClient = Readonly<{
   getTrips: (token: string) => Promise<TripListItemResponse[]>;
   getTrip: (token: string, tripId: string) => Promise<TripDetailResponse>;
   getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
+  getChatMessagePage: (
+    token: string,
+    chatId: string,
+    options?: ChatMessagePageRequest
+  ) => Promise<ChatMessagePageResponse>;
+  markChatRead: (token: string, chatId: string, sequenceNumber: number) => Promise<ChatReadResponse>;
   getChatParticipantProfile: (
     token: string,
     chatId: string,
@@ -369,6 +407,20 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
     getTrip: (token, tripId) => request<TripDetailResponse>(`/trips/${tripId}`, { method: 'GET', token }),
     getChatMessages: (token, chatId) =>
       request<ChatMessageResponse[]>(`/chats/${chatId}/messages`, { method: 'GET', token }),
+    getChatMessagePage: (token, chatId, options = {}) => {
+      const query = new URLSearchParams();
+      if (options.before_sequence !== undefined) query.set('before_sequence', String(options.before_sequence));
+      if (options.after_sequence !== undefined) query.set('after_sequence', String(options.after_sequence));
+      if (options.limit !== undefined) query.set('limit', String(options.limit));
+      const suffix = query.size === 0 ? '' : `?${query.toString()}`;
+      return request<ChatMessagePageResponse>(`/chats/${chatId}/messages/page${suffix}`, {
+        method: 'GET', token
+      });
+    },
+    markChatRead: (token, chatId, sequenceNumber) =>
+      request<ChatReadResponse>(`/chats/${chatId}/read`, {
+        method: 'POST', token, body: { sequence_number: sequenceNumber }
+      }),
     getChatParticipantProfile: (token, chatId, userId) =>
       request<ChatParticipantProfileResponse>(
         `/chats/${chatId}/participants/${userId}/profile`,

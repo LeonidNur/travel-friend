@@ -15,6 +15,7 @@ import {
   findChatById,
   getChatMessageHistoryState,
   getMessageAuthorLabel,
+  mergeServerMessages,
   mapChatMessages,
   submitChatMessage
 } from '@/lib/chat-runtime';
@@ -48,6 +49,13 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const router = useRouter();
   const [chat, setChat] = useState<ChatResponse | null>(null);
   const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
+  const [syncError, setSyncError] = useState(false);
+  const [readError, setReadError] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [readRetryKey, setReadRetryKey] = useState(0);
   const [roomState, setRoomState] = useState<ChatRoomState>('loading');
   const [reloadKey, setReloadKey] = useState(0);
   const [draftMessage, setDraftMessage] = useState('');
@@ -58,6 +66,11 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const [tripLookup, setTripLookup] = useState<TripNavigationLookupState>({ status: 'loading' });
   const [tripLookupKey, setTripLookupKey] = useState(0);
   const sendingRef = useRef(false);
+  const retrySendRef = useRef(new Map<string, string>());
+  const afterSequenceRef = useRef(0);
+  const lastReadRequestedRef = useRef(0);
+  const readRetryDelayRef = useRef(1_000);
+  const readRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (session === null) {
@@ -78,11 +91,14 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
           return;
         }
 
-        const history = await backendApiClient.getChatMessages(session.accessToken, chatId);
+        const history = await backendApiClient.getChatMessagePage(session.accessToken, chatId);
 
         if (isCurrent) {
           setChat(nextChat);
-          setMessages(history);
+          setMessages(history.messages);
+          setHasMoreOlder(history.has_more_older);
+          afterSequenceRef.current = history.high_water_sequence;
+          lastReadRequestedRef.current = 0;
           setRoomState('loaded');
         }
       } catch (error) {
@@ -98,6 +114,138 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
       isCurrent = false;
     };
   }, [chatId, reloadKey, session]);
+
+  useEffect(() => {
+    if (session === null || chat === null || roomState !== 'loaded') {
+      return;
+    }
+
+    let isCurrent = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const offlineSyncTimer = setTimeout(() => setIsOffline(!navigator.onLine), 0);
+    let isPolling = false;
+    let retryDelay = 15_000;
+
+    const clearTimer = () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    };
+
+    const schedule = (delay: number) => {
+      clearTimer();
+      if (isCurrent && document.visibilityState === 'visible' && navigator.onLine) {
+        timer = setTimeout(() => void poll(), delay);
+      }
+    };
+
+    const poll = async () => {
+      if (!isCurrent || isPolling || document.visibilityState !== 'visible' || !navigator.onLine) {
+        return;
+      }
+      isPolling = true;
+      try {
+        for (let pageCount = 0; pageCount < 4; pageCount += 1) {
+          const page = await backendApiClient.getChatMessagePage(
+            session.accessToken,
+            chat.chat_id,
+            { after_sequence: afterSequenceRef.current, limit: 100 }
+          );
+          if (!isCurrent) {
+            return;
+          }
+          if (page.messages.length > 0) {
+            setMessages((currentMessages) => mergeServerMessages(currentMessages, page.messages));
+          }
+          afterSequenceRef.current = page.next_after_sequence;
+          if (!page.has_more_newer) {
+            break;
+          }
+        }
+        retryDelay = 15_000;
+        setSyncError(false);
+        schedule(retryDelay);
+      } catch {
+        setSyncError(true);
+        retryDelay = Math.min(120_000, retryDelay * 2);
+        schedule(retryDelay * (0.8 + Math.random() * 0.4));
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    const resume = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        setIsOffline(false);
+        setReadRetryKey((key) => key + 1);
+        void poll();
+      } else {
+        clearTimer();
+        setIsOffline(!navigator.onLine);
+      }
+    };
+
+    const goOffline = () => {
+      clearTimer();
+      setIsOffline(true);
+    };
+
+    schedule(retryDelay);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
+    window.addEventListener('online', resume);
+    window.addEventListener('offline', goOffline);
+
+    return () => {
+      isCurrent = false;
+      clearTimer();
+      clearTimeout(offlineSyncTimer);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('online', resume);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, [chat, roomState, session]);
+
+  useEffect(() => {
+    if (session === null || chat === null || roomState !== 'loaded' || messages.length === 0 ||
+        document.visibilityState !== 'visible') {
+      return;
+    }
+    const displayedSequence = messages[messages.length - 1].sequence_number;
+    if (displayedSequence <= lastReadRequestedRef.current) {
+      return;
+    }
+    lastReadRequestedRef.current = displayedSequence;
+    void backendApiClient.markChatRead(session.accessToken, chat.chat_id, displayedSequence).catch(() => {
+      if (lastReadRequestedRef.current === displayedSequence) {
+        setReadError(true);
+        lastReadRequestedRef.current = 0;
+        if (readRetryTimerRef.current !== null) clearTimeout(readRetryTimerRef.current);
+        const delay = readRetryDelayRef.current;
+        readRetryDelayRef.current = Math.min(30_000, delay * 2);
+        if (document.visibilityState === 'visible' && navigator.onLine) {
+          readRetryTimerRef.current = setTimeout(() => {
+            readRetryTimerRef.current = null;
+            setReadRetryKey((key) => key + 1);
+          }, delay);
+        }
+      }
+    }).then(() => {
+      if (lastReadRequestedRef.current === displayedSequence) {
+        setReadError(false);
+        readRetryDelayRef.current = 1_000;
+        if (readRetryTimerRef.current !== null) {
+          clearTimeout(readRetryTimerRef.current);
+          readRetryTimerRef.current = null;
+        }
+      }
+    });
+  }, [chat, messages, readRetryKey, roomState, session]);
+
+  useEffect(() => () => {
+    if (readRetryTimerRef.current !== null) clearTimeout(readRetryTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (session === null || chat === null || roomState !== 'loaded') {
@@ -135,19 +283,53 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
     setIsSending(true);
     setSendError(null);
 
+    const contentText = draftMessage.trim();
+    let requestId = retrySendRef.current.get(contentText);
+    if (requestId === undefined) {
+      requestId = crypto.randomUUID();
+      retrySendRef.current.set(contentText, requestId);
+    }
     const result = await submitChatMessage({
       draft: draftMessage,
       isSending: false,
       messages,
-      sendMessage: (contentText) =>
-        backendApiClient.createChatMessage(session.accessToken, chat.chat_id, { content_text: contentText })
+      requestId,
+      sendMessage: (contentText, clientRequestId) =>
+        backendApiClient.createChatMessage(session.accessToken, chat.chat_id, {
+          content_text: contentText,
+          client_request_id: clientRequestId
+        })
     });
 
-    setMessages([...result.messages]);
+    setMessages((currentMessages) => mergeServerMessages(currentMessages, result.messages));
     setDraftMessage(result.draft);
     setSendError(result.error);
+    if (result.error === null) {
+      retrySendRef.current.delete(contentText);
+    }
     sendingRef.current = false;
     setIsSending(false);
+  };
+
+  const handleLoadOlder = async () => {
+    const firstMessage = messages[0];
+    if (session === null || chat === null || firstMessage === undefined || isLoadingOlder) {
+      return;
+    }
+    setIsLoadingOlder(true);
+    setHistoryError(false);
+    try {
+      const page = await backendApiClient.getChatMessagePage(session.accessToken, chat.chat_id, {
+        before_sequence: firstMessage.sequence_number,
+        limit: 50
+      });
+      setMessages((currentMessages) => mergeServerMessages(currentMessages, page.messages));
+      setHasMoreOlder(page.has_more_older);
+    } catch {
+      setHistoryError(true);
+    } finally {
+      setIsLoadingOlder(false);
+    }
   };
 
   const handleCreateTrip = async () => {
@@ -304,6 +486,19 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
       </article>
 
       <section className="surface-card chat-room" aria-label="История сообщений">
+        {isOffline ? <p className="chat-room__composer-note" role="status">Нет подключения. Сообщения обновятся после восстановления сети; черновик сохранён.</p> : null}
+        {syncError ? (
+          <p className="chat-room__composer-note" role="status">
+            Не удалось обновить сообщения. Повторим автоматически; текст в поле ввода сохранён.
+          </p>
+        ) : null}
+        {readError ? <p className="chat-room__composer-note" role="status">Не удалось обновить отметку о прочтении. Повторим автоматически.</p> : null}
+        {historyError ? <p className="chat-room__composer-note" role="alert">Не удалось загрузить ранние сообщения.</p> : null}
+        {hasMoreOlder ? (
+          <button className="profile-button profile-button--secondary" type="button" disabled={isLoadingOlder} onClick={handleLoadOlder}>
+            {isLoadingOlder ? 'Загружаем…' : historyError ? 'Повторить загрузку ранних сообщений' : 'Загрузить ранние сообщения'}
+          </button>
+        ) : null}
         <div className="chat-room__timeline">
           {messageHistoryState === 'empty' ? (
             <p className="surface-card__copy">Сообщений пока нет</p>
