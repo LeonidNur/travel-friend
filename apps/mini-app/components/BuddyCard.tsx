@@ -1,24 +1,20 @@
+import Link from 'next/link';
+
 import { getDiscoverLevelLabels, type DiscoverCardCandidate } from '@/lib/discover-runtime';
+import { formatRussianDateRange } from '@/lib/russian-date-format';
 
 interface BuddyCardProps {
   buddy: DiscoverCardCandidate;
   onDismiss?: () => void;
   onInterested?: () => void;
+  profileHref?: string;
   disabled?: boolean;
 }
 
-function formatDateRange(dateFrom: string | null, dateTo: string | null): string | null {
-  if (dateFrom && dateTo) {
-    return `${dateFrom} — ${dateTo}`;
-  }
-
-  return dateFrom ?? dateTo;
-}
-
-export function BuddyCard({ buddy, onDismiss, onInterested, disabled }: BuddyCardProps) {
+export function BuddyCard({ buddy, onDismiss, onInterested, profileHref, disabled }: BuddyCardProps) {
   const visibleInterests = buddy.interests.slice(0, 4);
   const visibleTravelStyles = buddy.travelStyle.slice(0, 3);
-  const dates = formatDateRange(buddy.travelIntent.dateFrom, buddy.travelIntent.dateTo);
+  const dates = formatRussianDateRange(buddy.travelIntent.dateFrom, buddy.travelIntent.dateTo);
   const levels = getDiscoverLevelLabels(buddy.budgetLevel, buddy.comfortLevel);
 
   return (
@@ -75,6 +71,12 @@ export function BuddyCard({ buddy, onDismiss, onInterested, disabled }: BuddyCar
           ))}
         </div>
       </div> : null}
+
+      {profileHref ? (
+        <Link className="profile-button profile-button--secondary buddy-card__profile-link" href={profileHref}>
+          Открыть профиль
+        </Link>
+      ) : null}
 
       {onDismiss && onInterested ? <div className="buddy-card__footer">
         <div className="buddy-card__actions">

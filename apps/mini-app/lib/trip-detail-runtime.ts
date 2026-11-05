@@ -1,3 +1,5 @@
+import { formatRussianDateRange } from './russian-date-format';
+
 export type PersistedTripStatus = 'forming' | 'active' | 'completed' | 'cancelled';
 export type PersistedBudgetScope = 'per_person' | 'group_total';
 
@@ -54,11 +56,7 @@ export function formatTripParticipants(
 }
 
 export function formatTripDetailDates(dateFrom: string | null, dateTo: string | null): string | null {
-  if (dateFrom !== null && dateTo !== null) {
-    return `${dateFrom} — ${dateTo}`;
-  }
-
-  return dateFrom ?? dateTo;
+  return formatRussianDateRange(dateFrom, dateTo);
 }
 
 export function formatTripBudget({

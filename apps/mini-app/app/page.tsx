@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useReducer, useRef } from 'react';
-import Link from 'next/link';
 
 import { BuddyCard } from '@/components/BuddyCard';
+import { DiscoverMatchFeedback } from '@/components/DiscoverMatchFeedback';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import {
+  ApiError,
   createBackendApiClient,
   type DiscoverDecision
 } from '@/lib/backend-api-client';
@@ -64,12 +65,17 @@ export default function HomePage() {
           ? null
           : { matchId: decisionResponse.match_id, displayName: activeCandidate.display_name }
       });
-    } catch {
+    } catch (error) {
+      // Another tab may have already made this final decision. Reload the server-owned
+      // eligible candidate list so the card cannot submit a stale decision again.
       dispatch({ type: 'decision_failed' });
+      if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
+        void loadCandidates();
+      }
     } finally {
       isSubmittingRef.current = false;
     }
-  }, [activeCandidate, session]);
+  }, [activeCandidate, loadCandidates, session]);
 
   return (
     <section className="page">
@@ -79,21 +85,10 @@ export default function HomePage() {
 
       {state.matchFeedback ? (
         <section className="discover-list" aria-live="polite">
-          <article className="surface-card surface-card--compact">
-            <p className="surface-card__copy">
-              У вас мэтч с {state.matchFeedback.displayName}. Можно начать общение.
-            </p>
-            <Link className="profile-button profile-button--primary" href="/chats">
-              Открыть чаты
-            </Link>
-            <button
-              type="button"
-              className="profile-button profile-button--secondary"
-              onClick={() => dispatch({ type: 'match_feedback_dismissed' })}
-            >
-              Закрыть
-            </button>
-          </article>
+          <DiscoverMatchFeedback
+            displayName={state.matchFeedback.displayName}
+            onDismiss={() => dispatch({ type: 'match_feedback_dismissed' })}
+          />
         </section>
       ) : null}
 
@@ -118,6 +113,7 @@ export default function HomePage() {
         <section className="discover-list" aria-label="Активная карточка попутчика">
           <BuddyCard
             buddy={toDiscoverCardCandidate(activeCandidate)}
+            profileHref={`/buddies/${activeCandidate.user_id}`}
             disabled={state.submitting}
             onDismiss={() => void submitDecision('rejected')}
             onInterested={() => void submitDecision('interested')}

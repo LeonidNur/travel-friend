@@ -5,6 +5,7 @@ import { ChangeEvent, FormEvent, useRef, useState } from 'react';
 import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import { createBackendApiClient, type TravelIntentResponse } from '@/lib/backend-api-client';
+import { focusFirstValidationErrorField } from '@/lib/form-validation-focus';
 import {
   createOnboardingTravelIntentDraft,
   saveOnboardingTravelIntent,
@@ -59,13 +60,19 @@ function OnboardingTravelIntentForm({
   const [isCompleting, setIsCompleting] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const destinationInputRef = useRef<HTMLInputElement>(null);
+  const dateFromInputRef = useRef<HTMLInputElement>(null);
+  const dateToInputRef = useRef<HTMLInputElement>(null);
 
   const handleTextChange =
     (field: 'destination' | 'dateFrom' | 'dateTo') => (event: ChangeEvent<HTMLInputElement>) => {
       setDraft({ ...draft, [field]: event.target.value });
       setIsSaved(false);
       setCompletionError(null);
-      setValidationErrors((errors) => ({ ...errors, [field]: undefined }));
+      setValidationErrors((errors) => ({
+        ...errors,
+        [field]: undefined,
+        ...(field === 'dateFrom' ? { dateTo: undefined } : {})
+      }));
     };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -87,9 +94,11 @@ function OnboardingTravelIntentForm({
 
     if (result.status === 'validation_error') {
       setValidationErrors(result.errors);
-      if (result.errors.destination) {
-        destinationInputRef.current?.focus();
-      }
+      focusFirstValidationErrorField(result.errors, ['destination', 'dateFrom', 'dateTo'], {
+        destination: destinationInputRef.current,
+        dateFrom: dateFromInputRef.current,
+        dateTo: dateToInputRef.current
+      });
       return;
     }
 
@@ -151,6 +160,7 @@ function OnboardingTravelIntentForm({
           <label className="profile-form__field">
             <span className="profile-form__label">Дата начала</span>
             <input
+              ref={dateFromInputRef}
               className="profile-input"
               type="date"
               value={draft.dateFrom}
@@ -165,6 +175,7 @@ function OnboardingTravelIntentForm({
           <label className="profile-form__field">
             <span className="profile-form__label">Дата окончания</span>
             <input
+              ref={dateToInputRef}
               className="profile-input"
               type="date"
               value={draft.dateTo}

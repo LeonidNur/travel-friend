@@ -190,6 +190,11 @@ test('keeps Match feedback until dismissed and replaces it when another Match is
 
 test('keeps real Discover independent from local decisions and removes demo presentation', async () => {
   const pageSource = await readFile(new URL('../app/page.tsx', import.meta.url), 'utf8');
+  const profileRouteSource = await readFile(new URL('../app/buddies/[id]/page.tsx', import.meta.url), 'utf8');
+  const profileSource = await readFile(new URL('../components/BuddyPublicProfile.tsx', import.meta.url), 'utf8');
+  const matchFeedbackSource = await readFile(new URL('../components/DiscoverMatchFeedback.tsx', import.meta.url), 'utf8');
+  const candidateCardSource = await readFile(new URL('../components/BuddyCard.tsx', import.meta.url), 'utf8');
+  const chatParticipantProfileSource = await readFile(new URL('../components/ChatParticipantProfile.tsx', import.meta.url), 'utf8');
 
   assert.equal(pageSource.includes('useInterestDecisions'), false);
   assert.equal(pageSource.includes("from '@/lib/mock-buddies'"), false);
@@ -197,7 +202,15 @@ test('keeps real Discover independent from local decisions and removes demo pres
   assert.equal(pageSource.includes('Осталось анкет'), false);
   assert.equal(pageSource.includes('Просмотрено'), false);
   assert.equal(pageSource.includes('текущем сеансе'), false);
-  assert.equal(pageSource.includes('У вас мэтч с {state.matchFeedback.displayName}. Можно начать общение.'), true);
-  assert.equal(pageSource.includes('href="/chats"'), true);
-  assert.equal(pageSource.includes('Открыть чаты'), true);
+  assert.equal(pageSource.includes('profileHref={`/buddies/${activeCandidate.user_id}`}'), true);
+  assert.equal(candidateCardSource.includes('profileHref?: string'), true);
+  assert.equal(chatParticipantProfileSource.includes('profileHref='), false);
+  assert.equal(profileRouteSource.includes("from '@/lib/mock-buddies'"), false);
+  assert.equal(profileSource.includes('getDiscoverCandidates(session.accessToken)'), true);
+  assert.equal(profileSource.includes('putDiscoverDecision(session.accessToken, candidate.user_id'), true);
+  assert.equal(profileSource.includes('useInterestDecisions'), false);
+  assert.equal(profileSource.includes('demo'), false);
+  assert.equal(matchFeedbackSource.includes('У вас мэтч с {displayName}. Можно начать общение.'), true);
+  assert.equal(matchFeedbackSource.includes('href="/chats"'), true);
+  assert.equal(matchFeedbackSource.includes('Открыть чаты'), true);
 });
