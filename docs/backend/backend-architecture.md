@@ -1,6 +1,6 @@
 # Backend architecture
 
-> Статус: high-level architecture. В `develop` и production реализованы FastAPI, server-side Telegram Auth, persisted HTTP flow и RLS/runtime-role security boundary. Отдельные AI Orchestrator, external providers и realtime ещё не реализованы; AI отложен до подключения второго разработчика.
+> Статус: high-level architecture. В `develop` и production реализованы FastAPI, server-side Telegram Auth, persisted HTTP flow и RLS/runtime-role security boundary. Отдельные AI Orchestrator, external providers и realtime ещё не реализованы. AI Copilot и baseline Proposal обязательны до первого внешнего теста; provider integrations имеют отдельный scope.
 
 ## Назначение документа
 

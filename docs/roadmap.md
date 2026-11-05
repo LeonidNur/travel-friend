@@ -59,13 +59,14 @@ Controlled TEAM E2E и systematic authorization / IDOR checks завершены
 
 Последующие самостоятельные work items:
 
-- P1 из TEAM E2E: realtime incoming messages без refresh и Group Chat invitation/accept lifecycle;
-- Trip write/lifecycle: изменение подтверждённого состояния, stop editor, `start/complete/cancel/leave` и правила версий;
+- Pre-Beta Development Plan: Live Chats (realtime incoming messages, list preview/time/unread/recovery) обязательны до внешнего теста, но ещё не реализованы;
+- Group Chat invitation/accept lifecycle остаётся отдельной P1 задачей после первой беты;
+- Расширенный Trip lifecycle за пределами обязательного Proposal apply: отдельный stop editor и `start/complete/cancel/leave` с правилами версий; подтверждённые изменения в Pre-Beta проходят только через Proposal;
 - invitations, изменение состава, leave, roles/admin/permissions, invite links, сложный membership lifecycle Group Chat и расширенный Trip lifecycle — после отдельного решения.
 
 Auto-Deploy остаётся Off. Будущие production rollout выполняются вручную после отдельного подтверждения оператора. После несовместимых DB/grants изменений старый backend не является автоматически допустимым rollback target.
 
-AI/Proposal и provider integrations отложены до подключения второго разработчика. Это не блокер текущего direct-chat MVP и не должно реализовываться в рамках закрытия его persistence flow.
+AI Copilot и базовый Proposal flow обязательны до первого внешнего теста согласно [Pre-Beta Development Plan](pre-beta-development-plan.md); они ещё не реализованы и ведутся отдельными slices с AI-разработчиком. Внешние provider integrations и расширенные AI capabilities имеют отдельный scope и не включаются автоматически.
 
 #### UX/UI refinement
 

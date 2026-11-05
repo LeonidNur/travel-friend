@@ -23,10 +23,15 @@
 - механика взаимного интереса / мэтча;
 - создание чата после совпадения;
 - обсуждение поездки;
-- Group Chat: создатель выбирает existing matched/direct-chat companions; в группе минимум три участника вместе с создателем; сообщения persisted и видны в Chats; состав после создания фиксирован;
+- Chats List с последним сообщением, временем и unread indicator (доставка/read state — отдельный Live Chats block);
+- Group Chat: инициатор выбирает existing matched/direct-chat companions; в группе минимум три участника вместе с инициатором; пользовательское название задаётся при создании и может быть переименовано; сообщения persisted и видны в Chats; состав фиксирован. Rename authorization требует отдельного contract decision;
 - создание Trip из direct или group Chat с переносом всех текущих `ChatParticipant` в `TripParticipant`;
 - создание Trip из existing direct или group Chat через Chat Room; при `409` Mini App через `GET /trips` открывает existing unfinished Trip того же Chat;
-- список и read-only detail сохранённых Trip, включая участников и `trip_stops`.
+- список и detail сохранённых Trip, включая участников и `trip_stops`;
+- AI Travel Copilot и базовый Proposal flow — обязательный Pre-Beta scope до первого внешнего теста. Copilot помогает в контексте Chat/Trip; подтверждённое состояние Trip меняется только после согласования Proposal. Эти slices ещё не реализованы; детали и зависимости находятся в [Pre-Beta Development Plan](pre-beta-development-plan.md).
+- Явное действие Chat «Создать поездку» / «Открыть поездку» зависит от состояния; `409` остаётся recovery fallback.
+- Первая бета русскоязычная, без переключения локалей и полноценной i18n-системы.
+- Live Chats до внешнего теста включает realtime incoming messages, preview/time/unread, read/reconnect recovery и необходимые history bounds; scope ограничен [Pre-Beta Development Plan](pre-beta-development-plan.md).
 
 ## Что НЕ входит в MVP
 
@@ -39,11 +44,12 @@
 - полноценная геймификация;
 - платные подписки;
 - маркетплейс украшений профиля;
-- интеграции с авиакомпаниями, отелями и туроператорами.
-- AI Travel Copilot, `Proposal`, генерация маршрута и внешние provider-интеграции — отложены до подключения второго разработчика;
-- invitations, add/remove members, leave, roles/admin/permissions, invite links, persisted group title и сложный membership lifecycle Group Chat;
-- realtime, read receipts и pagination сообщений;
-- TripInvitation и расширенный Trip lifecycle.
+- интеграции с авиакомпаниями, отелями и туроператорами;
+- генерация маршрута и внешние provider-интеграции;
+- invitations, add/remove members, leave, roles/admin/permissions, invite links и сложный membership lifecycle Group Chat;
+- расширенные messenger features сверх Live Chats scope Pre-Beta;
+- TripInvitation и расширенный Trip lifecycle;
+- Preview Mode: onboarding обязателен.
 
 ## Критерий успеха MVP
 
@@ -54,4 +60,5 @@ MVP считается успешным, если пользователи:
 - просматривают других пользователей;
 - используют механику интереса / мэтча;
 - переходят к обсуждению поездки;
-- создают Trip из direct или group Chat и видят её сохранённое состояние после повторного открытия приложения.
+- создают Trip из direct или group Chat и видят её сохранённое состояние после повторного открытия приложения;
+- до первого внешнего теста используют встроенный AI Copilot и базовый Proposal flow для согласования изменений Trip.

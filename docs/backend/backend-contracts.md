@@ -2,7 +2,7 @@
 
 ## Назначение и границы
 
-Этот документ содержит два разных слоя: сначала фактические HTTP contracts `develop`, затем логические contracts будущей архитектуры. Они не равны друг другу: deferred design ниже не является API specification уже реализованного MVP.
+Этот документ содержит два разных слоя: сначала фактические HTTP contracts `develop`, затем утверждённые логические contracts целевого Pre-Beta design. Они не равны друг другу: Proposal/AI и часть read/write flows ниже обязательны к реализации до внешнего теста, но не являются API specification уже реализованного MVP.
 
 API проектируется вокруг пользовательских и domain actions, а не как CRUD поверх каждой ER-сущности. Frontend не может напрямую создавать внутренние сущности `Match`, `ChatParticipant`, `TripParticipant`, `Proposal` и system `Message`. Backend/domain является доверенной точкой применения инвариантов, авторизации и атомарных domain-операций.
 
@@ -78,12 +78,12 @@ Path-параметры в FastAPI объявлены как `target_user_id`, `
 - `POST /chats/{chat_id}/messages` принимает nonblank `content_text` до 4000 characters после `trim`; `POST /chats/groups` принимает от 2 до 20 unique companion IDs. Existing no-self и matched direct-chat prerequisite сохраняются. Это field/domain limits, а не общий HTTP request-body byte limit.
 - `POST /chats/{chat_id}/trips` разрешает только один незавершённый (`forming`/`active`) Trip на Chat и отвечает `409` при повторе.
 - Trip создаётся из direct или group Chat. Backend в одной transaction читает всех активных ChatParticipant и сразу создаёт столько же `TripParticipant`; `TripInvitation` в этом MVP flow не создаётся и не используется.
-- `GET /trips` и `GET /trips/{trip_id}` — read contracts. Нет Trip/stop write API, start/complete/cancel/leave, invitation или Proposal endpoints. Mini App при `409` использует `GET /trips`, чтобы найти unfinished Trip того же Chat и открыть её.
+- `GET /trips` и `GET /trips/{trip_id}` — read contracts. Нет Trip/stop write API, start/complete/cancel/leave, invitation или Proposal endpoints. Baseline Proposal/AI — обязательный Pre-Beta slice, ещё не реализованный. Mini App при `409` использует `GET /trips`, чтобы найти unfinished Trip того же Chat и открыть её.
 - Actual Discover не использует `DiscoverImpression`, отдельные Like records, filters или ranking: решение хранится как `discover_interest_decisions` с `interested`/`rejected`.
 
-## Логические contracts future design
+## Логические contracts целевого Pre-Beta design (не реализованы)
 
-Следующие разделы сохраняют утверждённое направление будущей архитектуры. Где они расходятся с таблицей выше, приоритет для текущего MVP имеет реализованный HTTP contract.
+Следующие разделы задают target behavior и domain constraints для Pre-Beta implementation. Они не утверждают, что соответствующие endpoints или schema уже существуют. Где они расходятся с таблицей выше, таблица описывает current runtime, а логические contracts — целевое поведение после отдельного contract review.
 
 ## Identity, Profile и TravelIntent
 
@@ -282,9 +282,11 @@ AI/ML не получает application secrets и не изменяет Trip н
 
 Конкретные поставщики сейчас не выбираются. Все внешние ответы считаются недоверенными, валидируются и нормализуются backend-ом; provider secrets остаются только на backend.
 
-## Future Group Chat membership design
+## Отложенный Group Chat membership design
 
 Current MVP уже создаёт Group Chat через `POST /chats/groups`: создатель выбирает минимум двух eligible direct-chat companions, инициатор добавляется автоматически, а состав фиксирован. Ниже описан **deferred** design invitations, голосований и изменения состава; его endpoints не реализованы.
+
+Pre-Beta UX также требует задавать persisted пользовательское название при создании и разрешать переименование. Текущие HTTP/physical-data contracts это не поддерживают. До реализации требуется определить authorization rule: не выводить право переименования автоматически из `created_by`, creator status или admin role.
 
 ### Первый group chat
 

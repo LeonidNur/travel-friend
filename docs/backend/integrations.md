@@ -1,6 +1,6 @@
 # Интеграции
 
-> Статус: Telegram Auth реализован. AI/travel/affiliate provider integrations — future design и отложены до подключения второго разработчика.
+> Статус: Telegram Auth реализован. AI Copilot и baseline Proposal обязательны к реализации до первого внешнего теста, но пока не интегрированы. Внешние travel/affiliate provider integrations остаются отдельным future scope.
 
 ## Принцип интеграций
 

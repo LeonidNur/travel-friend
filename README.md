@@ -61,7 +61,7 @@ Telegram Mini App не отменяет будущую отдельную моб
 - единый frontend data model слой для профилей, travel preferences, чатов и решений интереса
 - обновлённая нижняя навигация с основной группой Chats / Discover / Trips и отдельным Profile
 
-Рабочий MVP flow backend-backed: direct и group Chat, persisted messages, создание Trip из Chat и Trips List/Detail читают persistence. Mini App создаёт Trip через API; при `409` читает `GET /trips` и открывает существующую незавершённую Trip того же Chat. Realtime, read receipts, pagination, Trip write/lifecycle, TripInvitation, сложный membership lifecycle, AI/Proposal и provider integrations также отсутствуют. Логическая ER-модель остаётся design-источником для deferred архитектуры и не должна приниматься за перечень уже поставленных таблиц/API.
+Текущий backend-backed runtime: direct и group Chat, persisted messages, создание Trip из Chat и Trips List/Detail читают persistence. Mini App создаёт Trip через API; при `409` читает `GET /trips` и открывает существующую незавершённую Trip того же Chat. Realtime, read receipts, pagination, Trip write/lifecycle, TripInvitation, сложный membership lifecycle и AI/Proposal runtime пока не реализованы. AI Copilot и baseline Proposal обязательны до первого внешнего теста по [Pre-Beta Development Plan](docs/pre-beta-development-plan.md); внешние provider integrations имеют отдельный scope. Логическая ER-модель остаётся design-источником и не должна приниматься за перечень уже поставленных таблиц/API.
 
 ### Почему мы отказались от ngrok
 
@@ -97,7 +97,7 @@ Telegram Mini App не отменяет будущую отдельную моб
 - воспроизводить интеграционные ошибки без догадок;
 - сравнивать поведение локального браузера, Telegram WebView и Vercel.
 
-Важно: AI-помощник не выделен в отдельную вкладку. Его интеграция в Chats/Trips отложена до подключения второго разработчика.
+Важно: AI-помощник не выделен в отдельную вкладку. Его интеграция в Chats/Trips ещё не реализована и обязательна до первого внешнего теста по [Pre-Beta Development Plan](docs/pre-beta-development-plan.md).
 
 ## Текущий статус проекта
 
@@ -126,8 +126,8 @@ Telegram Mini App не отменяет будущую отдельную моб
 - закрыт P0 security baseline реализованного MVP: server-side Telegram `initData`, completed-onboarding invariant, session lifecycle, backend input limits, minimal rate limiting и secrets/logging hygiene;
 - закрыт P0.5 reliability/observability: request correlation, GET/read timeout с user-initiated Retry из recoverable error states, explicit loading/empty/error states, Chat → persisted participant Profile, controlled multi-user Trip Detail regression coverage, reciprocal Match feedback, active TravelIntent edit, readiness и correlated backend logging;
 - Auto-Deploy backend остаётся выключенным после ручного production rollout; включение автоматизации требует отдельного решения. После несовместимых DB/grants изменений старый backend не считается автоматически допустимым rollback target;
-- realtime, Trip write/lifecycle, invitations, сложный membership lifecycle и AI/Proposal остаются дальнейшими отдельными задачами;
-- AI/Proposal и provider integrations отложены до подключения второго разработчика;
+- Live Chats, group title/rename, Trip Create/Open CTA и AI/Proposal остаются отдельными Pre-Beta implementation tasks и пока не реализованы;
+- provider integrations и сложные AI capabilities имеют отдельный scope;
 - controlled TEAM E2E и systematic authorization / IDOR checks завершены до rollout; infrastructure smoke после rollout проверил health/readiness, proxy и ожидаемые 401 для защищённых endpoints без Bearer;
 - полный авторизованный Telegram production E2E ещё не проводился, внешнее пользовательское тестирование не начато. Следующий этап — подготовить этот E2E, пройти отдельный preflight/control gate и принять решение о готовности к external test. Технические риски и gate status ведутся в [Technical Hardening Backlog](docs/technical-hardening-backlog.md).
 
@@ -197,8 +197,8 @@ Travel Friend не является просто планировщиком пу
 - платные подписки;
 - маркетплейс украшений профиля;
 - интеграции с авиакомпаниями, отелями и туроператорами.
-- AI Travel Copilot, `Proposal` и внешние provider-интеграции — до подключения второго разработчика;
-- TripInvitation, persisted group title, изменение состава Group Chat после создания и расширенный lifecycle Trip.
+- внешние provider-интеграции;
+- TripInvitation, изменение состава Group Chat после создания и расширенный lifecycle Trip.
 
 Эти функции могут быть добавлены позже, если MVP подтвердит спрос.
 
@@ -295,7 +295,7 @@ Travel Friend не является просто планировщиком пу
 
 ### AI Travel Copilot
 
-AI Travel Copilot остаётся будущим backend-слоем поверх Chats / Trips и ещё не реализован в продукте. В утверждённой архитектуре он работает через `AIRequest`, `ChatSummary`, `Proposal` и внешние provider-интеграции, но не меняет подтверждённое состояние поездки напрямую.
+AI Travel Copilot — обязательный Pre-Beta backend-слой поверх Chats / Trips, но он ещё не реализован. В утверждённой архитектуре он работает через `AIRequest`, `ChatSummary`, `Proposal` и при необходимости внешние provider-интеграции, но не меняет подтверждённое состояние поездки напрямую.
 
 Планируемые функции первой версии:
 
