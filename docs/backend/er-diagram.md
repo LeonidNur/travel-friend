@@ -1,6 +1,6 @@
 # ER-диаграмма
 
-> Статус: утверждённая logical ER design, а не физическая schema и не полное описание current MVP. В текущей реализации TripInvitation/group membership lifecycle/Proposal/AI отсутствуют; Trip из direct или group Chat сразу получает всех активных ChatParticipant как TripParticipant. Group Chat уже создаётся с минимум тремя участниками и фиксированным составом.
+> Статус: утверждённая logical ER design, а не физическая schema и не полное описание current MVP. В текущей реализации TripInvitation/group membership lifecycle/Proposal/AI отсутствуют; Trip из direct или group Chat сразу получает всех активных ChatParticipant как TripParticipant. Group Chat уже создаётся с минимум тремя участниками и фиксированным составом. AI Copilot и baseline Proposal обязательны до первого внешнего теста, но ещё не реализованы.
 
 Этот документ переносит утверждённую ER-модель Travel Friend практически без изменений. Она остаётся источником истины для логической доменной модели и последующих backend-этапов.
 

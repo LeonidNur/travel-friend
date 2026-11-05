@@ -30,16 +30,24 @@
 - список и read-only detail Trip, включая участников и чтение `trip_stops`;
 - при `409` Mini App находит и открывает незавершённую Trip этого Chat через `GET /trips`.
 
+## Обязательный Pre-Beta scope (ещё не реализован)
+
+- AI Travel Copilot в контексте Chat/Trip и базовый Proposal flow должны быть реализованы и проверены до первого внешнего теста; AI не изменяет confirmed Trip напрямую.
+- Chats List должен показывать последнее сообщение, его время и unread indicator; realtime, read/unread и recovery входят в отдельный Live Chats block.
+- Group Chat получает пользовательское название при создании и rename flow; authorization для rename ещё требует contract decision.
+- Явное действие в Chat показывает «Создать поездку» или «Открыть поездку» по состоянию; `409` остаётся recovery fallback.
+- Первая бета русскоязычная, без locale switcher и полноценной i18n-системы.
+
 ## Реализовано частично
 
 - Profile photos: таблица предусмотрена схемой БД; UI и API загрузки/управления фото отсутствуют.
 - Messaging: доступны persisted текст и история; realtime, pagination и read receipts отсутствуют.
 - Trips: создание и чтение реализованы; изменение данных и lifecycle-команды отсутствуют.
 
-## Отложено
+## Отложено за пределы первой беты
 
-- AI Travel Copilot, `Proposal`, генерация маршрута и внешние travel provider-интеграции — до подключения второго разработчика;
-- расширенный Group Chat lifecycle: invitations, добавление/удаление участников, выход, роли/admin/permissions, invite links, название группы и изменение состава;
+- генерация маршрута и внешние travel provider-интеграции;
+- расширенный Group Chat lifecycle: invitations, добавление/удаление участников, выход, роли/admin/permissions, invite links и изменение состава;
 - TripInvitation и расширенный lifecycle поездки;
 - Discover filters/ranking;
 - геймификация, рейтинги, верификация, подписки, travel-сервис интеграции и отдельное мобильное приложение.

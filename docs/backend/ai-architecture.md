@@ -1,6 +1,6 @@
 # AI architecture
 
-> Статус: future design, не реализация. Интеграция AI/Proposal и внешних provider-ов отложена до подключения второго разработчика.
+> Статус: design input для обязательной Pre-Beta интеграции AI Copilot и baseline Proposal до первого внешнего теста; runtime пока не реализован. Внешние provider integrations имеют отдельный scope и не считаются включёнными автоматически.
 
 ## Роль AI-слоя
 

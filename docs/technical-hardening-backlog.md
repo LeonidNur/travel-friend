@@ -46,7 +46,7 @@
 14. **Minimal error monitoring — COMPLETED.** P0.5 baseline — explicit correlated backend application logging в Render Service Logs и documented operator workflow; внешний error-monitoring provider намеренно не подключён.
 14.1. **FinOps / external test guardrails — AUDIT/PLAN COMPLETED; AUTH ADMISSION MODEL SUPERSEDED BY PRODUCT DECISION.** Исторический аудит/план и usage model находятся в [FinOps runbook](finops-external-test-guardrails.md). Продуктовое решение: любая валидная Telegram `initData` может зарегистрироваться; core/tester списков и tester pause в backend нет. Рост публичного auth ingress остаётся cost/abuse risk и покрывается существующими rate limits, provider monitoring и emergency stop controls; они не дают per-user admission. Актуальные billing controls и deployment/schema compatibility остаются отдельными preflight gates.
 
-Residual observability risks после закрытия P0.5 уже ведутся без дубля в [backend security](backend/security.md#minimal-error-monitoring--incident-workflow): ordinary business DB connection timeout policy, сохранение `X-Request-ID` frontend, централизованный сбор frontend runtime errors и logging path для future streaming/post-response exceptions.
+Residual observability risks после закрытия P0.5 уже ведутся без дубля в [backend security](backend/security.md#minimal-error-monitoring--incident-workflow-p05): ordinary business DB connection timeout policy, сохранение `X-Request-ID` frontend, централизованный сбор frontend runtime errors и logging path для future streaming/post-response exceptions.
 
 ## Active stage — deployment / CI / reproducibility
 
@@ -118,12 +118,12 @@ Residual observability risks после закрытия P0.5 уже ведут�
 3. Run authorized Telegram E2E and controlled multi-user E2E before external testing.
 4. Only then decide whether to proceed to a small external user test.
 
+## Pre-Beta user-facing implementation dependencies
+
+- **Live Chats:** incoming messages without refresh, Chats List last message/time/unread, read semantics, reconnect/recovery и history bounds. Реализация и DoD заданы в [Pre-Beta Development Plan](pre-beta-development-plan.md#3-live-chats); эти элементы не являются post-test scope.
+- **AI / Proposal:** обязательный до теста implementation scope указан ниже; runtime ещё отсутствует.
+
 ## P1 — post-test backlog
-
-### Chats: realtime / unread / pagination
-
-- Incoming messages require refresh; это P1 realtime finding из TEAM E2E.
-- Unread и pagination остаются отдельными P1 Chat work items.
 
 ### Group Chat membership lifecycle / invitations
 
@@ -158,19 +158,19 @@ Residual observability risks после закрытия P0.5 уже ведут�
 
 - Отдельный post-test backlog block для documentation cleanup.
 
-## P2 — AI / Proposal
+## Pre-Beta mandatory — AI / Proposal (implementation pending)
 
-- AI/RAG boundary with second developer.
-- Proposal persistence / decisions / version invariants.
-- Atomic Proposal → Trip apply without AI.
-- AI as Proposal producer/facilitator, never Trip owner.
-- Later RAG/providers/background jobs/cost controls.
-- Uploads/audit events only when justified by later scope.
+- Совместный AI integration boundary и Proposal output contract с AI-разработчиком.
+- Baseline Proposal persistence / decisions / version invariants.
+- Atomic Proposal → Trip apply, включая stale и rejected outcomes.
+- AI как Proposal producer/facilitator, никогда не владелец подтверждённого Trip state.
+- Copilot в контексте Chat/Trip с FinOps controls до внешнего теста.
+- Все пункты выше не реализованы; порядок и release gates заданы в [Pre-Beta Development Plan](pre-beta-development-plan.md).
 
 ### Mandatory Pre-AI FinOps gate
 
-До включения AI требуется отдельный gate с per-user quota, global budget/usage guard, model/token/context/output limits, concurrency, bounded retries, tool/provider-call limits, accounting/anomaly monitoring, kill switch и worst-case cost model. AI implementation этим gate не начинается.
+До включения AI для внешних пользователей требуется отдельный gate с per-user quota, global budget/usage guard, model/token/context/output limits, concurrency, bounded retries, tool/provider-call limits, accounting/anomaly monitoring, kill switch и worst-case cost model. Gate ограничивает включение для внешней когорты; продуктовый scope AI/Proposal остаётся обязательным, а сроки внутренней implementation/integration определяются Pre-Beta Plan.
 
 ## Consciously deferred / do not do now
 
-Прематурная архитектура и post-MVP work остаются отдельно от active MVP hardening: сложный Group Chat membership lifecycle сверх P1 invitation/accept, расширенный Trip lifecycle, transport/external offers, full moderation, provider integrations, AI/RAG implementation и прочие product expansions. Их нельзя выводить из frontend view models, добавлять «заодно» при закрытии hardening work item или принимать за текущий HTTP/physical-data contract.
+Прематурная архитектура и post-MVP work остаются отдельно от active MVP hardening: сложный Group Chat membership lifecycle сверх P1 invitation/accept, расширенный Trip lifecycle, transport/external offers, full moderation, provider integrations, advanced RAG, uploads/audit events без отдельного обоснования и прочие product expansions. Обязательные Pre-Beta AI/Proposal slices нельзя считать уже реализованными или выводить их API/schema из frontend view models; их следует вести по отдельному contract review и плану.
