@@ -156,8 +156,9 @@ test('saves an in_progress Profile without changing onboarding status', async ()
 });
 
 test('returns a representative API error without reporting a save', async () => {
+  const draft = { ...createOnboardingProfileDraft(null), displayName: 'Алина', city: 'Казань' };
   const result = await saveOnboardingProfile({
-    draft: { ...createOnboardingProfileDraft(null), displayName: 'Алина' },
+    draft,
     onboardingStatus: 'in_progress',
     token: 'runtime-token',
     patchOnboarding: async () => ({ status: 'in_progress' }),
@@ -167,4 +168,5 @@ test('returns a representative API error without reporting a save', async () => 
   });
 
   assert.deepEqual(result, { status: 'api_error', message: 'Сервис временно недоступен' });
+  assert.equal(draft.city, 'Казань');
 });

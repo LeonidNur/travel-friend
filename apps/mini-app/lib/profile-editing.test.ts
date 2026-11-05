@@ -84,8 +84,9 @@ test('saves the Profile API payload with birth_date and without UI-only age', as
 });
 
 test('reports an API error rather than a successful Profile save', async () => {
+  const draft = { ...createProfileEditingDraft(serverProfile), city: 'Казань' };
   const result = await saveProfileEditing({
-    draft: createProfileEditingDraft(serverProfile),
+    draft,
     sourceProfile: serverProfile,
     token: 'runtime-token',
     patchProfile: async () => {
@@ -94,6 +95,7 @@ test('reports an API error rather than a successful Profile save', async () => {
   });
 
   assert.deepEqual(result, { status: 'api_error', message: 'Сервис временно недоступен' });
+  assert.equal(draft.city, 'Казань');
 });
 
 test('does not overwrite unknown server levels with null while saving other Profile fields', async () => {

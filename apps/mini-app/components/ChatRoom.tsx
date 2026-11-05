@@ -18,7 +18,13 @@ import {
   mapChatMessages,
   submitChatMessage
 } from '@/lib/chat-runtime';
-import { createChatTrip, getCreateTripButtonState } from '@/lib/chat-trip-runtime';
+import {
+  createChatTrip,
+  loadChatTripNavigationState,
+  getTripNavigationDescription,
+  getTripNavigationButtonState,
+  type TripNavigationLookupState
+} from '@/lib/chat-trip-runtime';
 import { getAvatarInitials } from '@/lib/travel-preferences';
 import {
   getChatParticipantProfilePath,
@@ -49,6 +55,8 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const [isSending, setIsSending] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [tripError, setTripError] = useState<string | null>(null);
+  const [tripLookup, setTripLookup] = useState<TripNavigationLookupState>({ status: 'loading' });
+  const [tripLookupKey, setTripLookupKey] = useState(0);
   const sendingRef = useRef(false);
 
   useEffect(() => {
@@ -91,6 +99,25 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
     };
   }, [chatId, reloadKey, session]);
 
+  useEffect(() => {
+    if (session === null || chat === null || roomState !== 'loaded') {
+      return;
+    }
+
+    let isCurrent = true;
+    void loadChatTripNavigationState(chat.chat_id, () => backendApiClient.getTrips(session.accessToken)).then((state) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setTripLookup(state);
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [chat, roomState, session, tripLookupKey]);
+
   const renderedMessages = useMemo(
     () => (session === null ? [] : mapChatMessages(messages, session.userId)),
     [messages, session]
@@ -128,6 +155,15 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
       return;
     }
 
+    if (tripLookup.status !== 'loaded') {
+      return;
+    }
+
+    if (tripLookup.tripId !== null) {
+      router.push(`/trips/${tripLookup.tripId}`);
+      return;
+    }
+
     setIsCreatingTrip(true);
     setTripError(null);
     const result = await createChatTrip({
@@ -143,6 +179,12 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
 
     setTripError(result.error);
     setIsCreatingTrip(false);
+  };
+
+  const retryTripLookup = () => {
+    setTripError(null);
+    setTripLookup({ status: 'loading' });
+    setTripLookupKey((key) => key + 1);
   };
 
   if (roomState === 'loading') {
@@ -167,6 +209,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
         message="Попробуйте открыть чат ещё раз."
         onRetry={() => {
           setRoomState('loading');
+          setTripLookup({ status: 'loading' });
           setReloadKey((key) => key + 1);
         }}
       />
@@ -176,7 +219,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const isGroupChat = chat.type === 'group';
   const companion = chat.type === 'direct' ? chat.companion : null;
   const chatTitle = isGroupChat ? 'Групповой чат' : companion?.display_name ?? '';
-  const tripButtonState = getCreateTripButtonState(isCreatingTrip);
+  const tripButtonState = getTripNavigationButtonState(tripLookup, isCreatingTrip);
 
   return (
     <section className="page">
@@ -244,11 +287,20 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
 
       <article className="surface-card surface-card--compact">
         <p className="surface-card__title">Поездка</p>
-        <p className="surface-card__copy">Создайте поездку для участников этого чата.</p>
+        <p className="surface-card__copy">{getTripNavigationDescription(tripLookup)}</p>
+        {tripLookup.status === 'error' ? (
+          <p className="chat-room__composer-note" role="alert">Не удалось проверить поездку. Повторите попытку.</p>
+        ) : null}
         {tripError !== null ? <p className="chat-room__composer-note" role="alert">{tripError}</p> : null}
-        <button className="profile-button profile-button--primary" disabled={tripButtonState.disabled} type="button" onClick={handleCreateTrip}>
-          {tripButtonState.label}
-        </button>
+        {tripButtonState.showRetry ? (
+          <button className="profile-button profile-button--secondary" type="button" onClick={retryTripLookup}>
+            Повторить
+          </button>
+        ) : (
+          <button className="profile-button profile-button--primary" disabled={tripButtonState.disabled} type="button" onClick={handleCreateTrip}>
+            {tripButtonState.label}
+          </button>
+        )}
       </article>
 
       <section className="surface-card chat-room" aria-label="История сообщений">

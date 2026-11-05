@@ -31,7 +31,7 @@ test('uses only backend participant display names', () => {
 });
 
 test('renders dates and budget only from persisted values', () => {
-  assert.equal(formatTripDetailDates('2026-10-01', '2026-10-10'), '2026-10-01 — 2026-10-10');
+  assert.equal(formatTripDetailDates('2026-10-01', '2026-10-10'), '1 октября 2026 г. — 10 октября 2026 г.');
   assert.equal(formatTripDetailDates(null, null), null);
   assert.equal(
     formatTripBudget({ min: '1200.00', max: '1500.00', currency: 'RUB', scope: 'per_person' }),

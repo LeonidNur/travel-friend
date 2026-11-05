@@ -15,7 +15,7 @@ test('does not invent a direction when a trip has no route stops', () => {
 });
 
 test('shows only persisted dates and statuses', () => {
-  assert.equal(formatTripDates('2026-09-09', '2026-09-18'), '2026-09-09 — 2026-09-18');
+  assert.equal(formatTripDates('2026-09-09', '2026-09-18'), '9 сентября 2026 г. — 18 сентября 2026 г.');
   assert.equal(formatTripDates(null, null), null);
   assert.equal(getPersistedTripStatusLabel('forming'), 'Формируется');
   assert.equal(getPersistedTripStatusLabel('cancelled'), 'Отменена');

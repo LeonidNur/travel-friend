@@ -1,3 +1,5 @@
+import { formatRussianDateRange } from './russian-date-format';
+
 export type PersistedTripStatus = 'forming' | 'active' | 'completed' | 'cancelled';
 
 type TripListScreenInput = Readonly<{
@@ -34,11 +36,7 @@ export function formatTripRoute(routePlaceLabels: readonly string[]): string | n
 }
 
 export function formatTripDates(dateFrom: string | null, dateTo: string | null): string | null {
-  if (dateFrom !== null && dateTo !== null) {
-    return `${dateFrom} — ${dateTo}`;
-  }
-
-  return dateFrom ?? dateTo;
+  return formatRussianDateRange(dateFrom, dateTo);
 }
 
 export function getPersistedTripStatusLabel(status: PersistedTripStatus): string {

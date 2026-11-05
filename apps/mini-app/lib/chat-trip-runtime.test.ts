@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { ApiError, type TripCreateResponse, type TripListItemResponse } from './backend-api-client';
-import { createChatTrip, getCreateTripButtonState } from './chat-trip-runtime';
+import {
+  createChatTrip,
+  findUnfinishedTripForChat,
+  loadChatTripNavigationState,
+  getTripNavigationDescription,
+  getTripNavigationButtonState
+} from './chat-trip-runtime';
 
 const createdTrip: TripCreateResponse = {
   trip_id: 'trip-created',
@@ -81,7 +87,70 @@ test('reports a 409 without an available unfinished Trip honestly', async () => 
   });
 });
 
-test('disables the Trip CTA while creation is in progress', () => {
-  assert.deepEqual(getCreateTripButtonState(false), { disabled: false, label: 'Создать поездку' });
-  assert.deepEqual(getCreateTripButtonState(true), { disabled: true, label: 'Создаём поездку…' });
+test('finds forming or active Trip for the current direct or group Chat only', () => {
+  const trips = [tripListItem('other-chat-uuid', 'forming'), tripListItem('chat-uuid', 'active')];
+
+  assert.equal(findUnfinishedTripForChat(trips, 'chat-uuid')?.trip_id, 'trip-existing');
+  assert.equal(findUnfinishedTripForChat(trips, 'another-chat-uuid'), null);
+});
+
+test('ignores completed and cancelled Trips when choosing the Chat CTA', () => {
+  assert.equal(findUnfinishedTripForChat([tripListItem('chat-uuid', 'completed')], 'chat-uuid'), null);
+  assert.equal(findUnfinishedTripForChat([tripListItem('chat-uuid', 'cancelled')], 'chat-uuid'), null);
+});
+
+test('loads an existing Trip from the read endpoint for direct and group Chats', async () => {
+  for (const chatId of ['direct-chat-uuid', 'group-chat-uuid']) {
+    let reads = 0;
+    const state = await loadChatTripNavigationState(chatId, async () => {
+      reads += 1;
+      return [tripListItem(chatId, 'forming')];
+    });
+
+    assert.deepEqual(state, { status: 'loaded', tripId: 'trip-existing' });
+    assert.equal(reads, 1);
+  }
+});
+
+test('returns an explicit retryable state when the Trip list cannot be read', async () => {
+  const state = await loadChatTripNavigationState('chat-uuid', async () => {
+    throw new Error('temporary read failure');
+  });
+
+  assert.deepEqual(state, { status: 'error' });
+});
+
+test('chooses loading, retry, create, and open states without creating a Trip for lookup', () => {
+  assert.deepEqual(getTripNavigationButtonState({ status: 'loading' }, false), {
+    disabled: true,
+    label: 'Проверяем поездку…',
+    showRetry: false
+  });
+  assert.deepEqual(getTripNavigationButtonState({ status: 'error' }, false), {
+    disabled: true,
+    label: 'Поездка недоступна',
+    showRetry: true
+  });
+  assert.deepEqual(getTripNavigationButtonState({ status: 'loaded', tripId: null }, false), {
+    disabled: false,
+    label: 'Создать поездку',
+    showRetry: false
+  });
+  assert.deepEqual(getTripNavigationButtonState({ status: 'loaded', tripId: 'trip-existing' }, false), {
+    disabled: false,
+    label: 'Открыть поездку',
+    showRetry: false
+  });
+  assert.deepEqual(getTripNavigationButtonState({ status: 'loaded', tripId: null }, true), {
+    disabled: true,
+    label: 'Создаём поездку…',
+    showRetry: false
+  });
+});
+
+test('describes Trip navigation according to lookup state', () => {
+  assert.equal(getTripNavigationDescription({ status: 'loading' }), 'Проверяем, есть ли поездка для этого чата.');
+  assert.equal(getTripNavigationDescription({ status: 'error' }), 'Повторите проверку, чтобы узнать, доступна ли поездка.');
+  assert.equal(getTripNavigationDescription({ status: 'loaded', tripId: null }), 'Создайте поездку для участников этого чата.');
+  assert.equal(getTripNavigationDescription({ status: 'loaded', tripId: 'trip-existing' }), 'Откройте поездку участников этого чата.');
 });

@@ -10,7 +10,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Travel Friend',
-  description: 'Telegram Mini App MVP for finding travel companions.'
+  description: 'Мини-приложение Telegram для поиска попутчиков.'
 };
 
 export default function RootLayout({

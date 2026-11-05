@@ -7,6 +7,7 @@ import { OnboardingTravelIntentScreen } from '@/components/OnboardingTravelInten
 import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import { createBackendApiClient, type ProfileResponse } from '@/lib/backend-api-client';
+import { focusFirstValidationErrorField } from '@/lib/form-validation-focus';
 import {
   createOnboardingProfileDraft,
   saveOnboardingProfile,
@@ -73,6 +74,7 @@ function OnboardingProfileForm({
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const displayNameInputRef = useRef<HTMLInputElement>(null);
+  const birthDateInputRef = useRef<HTMLInputElement>(null);
 
   const updateDraft = (nextDraft: OnboardingProfileDraft) => {
     setDraft(nextDraft);
@@ -109,9 +111,10 @@ function OnboardingProfileForm({
 
     if (result.status === 'validation_error') {
       setValidationErrors(result.errors);
-      if (result.errors.displayName) {
-        displayNameInputRef.current?.focus();
-      }
+      focusFirstValidationErrorField(result.errors, ['displayName', 'birthDate'], {
+        displayName: displayNameInputRef.current,
+        birthDate: birthDateInputRef.current
+      });
       return;
     }
 
@@ -157,6 +160,7 @@ function OnboardingProfileForm({
             <label className="profile-form__field">
               <span className="profile-form__label">Дата рождения</span>
               <input
+                ref={birthDateInputRef}
                 className="profile-input"
                 type="date"
                 value={draft.birthDate}
