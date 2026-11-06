@@ -98,6 +98,8 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "public.send_current_chat_message(uuid,text,uuid)",
         "public.mark_current_chat_read(uuid,bigint)",
         "public.chat_list_projection()",
+        "public.create_current_group_chat(uuid[],text)",
+        "public.rename_current_group_chat(uuid,text)",
     )
 
     for policy_name in (

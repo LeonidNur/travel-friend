@@ -96,6 +96,7 @@ export type DirectChatResponse = Readonly<{
 export type GroupChatResponse = Readonly<{
   chat_id: string;
   type: 'group';
+  title: string | null;
   participants: Array<Readonly<{
     user_id: string;
     display_name: string | null;
@@ -110,7 +111,10 @@ export type ChatResponse = DirectChatResponse | GroupChatResponse;
 
 export type GroupChatCreateRequest = Readonly<{
   user_ids: string[];
+  title?: string | null;
 }>;
+
+export type GroupChatRenameResponse = Readonly<{ chat_id: string; title: string | null }>;
 
 export type GroupChatCreateResponse = Readonly<{
   chat_id: string;
@@ -284,6 +288,7 @@ export type BackendApiClient = Readonly<{
   patchOnboarding: (token: string, payload: OnboardingPatchRequest) => Promise<OnboardingResponse>;
   getChats: (token: string) => Promise<ChatResponse[]>;
   createGroupChat: (token: string, payload: GroupChatCreateRequest) => Promise<GroupChatCreateResponse>;
+  renameGroupChat: (token: string, chatId: string, title: string | null) => Promise<GroupChatRenameResponse>;
   createTrip: (token: string, chatId: string) => Promise<TripCreateResponse>;
   getTrips: (token: string) => Promise<TripListItemResponse[]>;
   getTrip: (token: string, tripId: string) => Promise<TripDetailResponse>;
@@ -401,6 +406,8 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
     getChats: (token) => request<ChatResponse[]>('/chats', { method: 'GET', token }),
     createGroupChat: (token, payload) =>
       request<GroupChatCreateResponse>('/chats/groups', { method: 'POST', token, body: payload }),
+    renameGroupChat: (token, chatId, title) =>
+      request<GroupChatRenameResponse>(`/chats/${chatId}/title`, { method: 'PATCH', token, body: { title } }),
     createTrip: (token, chatId) =>
       request<TripCreateResponse>(`/chats/${chatId}/trips`, { method: 'POST', token }),
     getTrips: (token) => request<TripListItemResponse[]>('/trips', { method: 'GET', token }),

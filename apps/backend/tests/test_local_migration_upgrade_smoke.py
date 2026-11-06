@@ -106,7 +106,7 @@ def test_manifest_migrations_match_repository_baseline_and_pending_suffix(tmp_pa
     applied, pending = smoke.validate_repository_migration_sequence(manifest)
 
     assert len(applied) == 19
-    assert len(pending) == 6
+    assert len(pending) == 7
     assert [path.name for path in pending] == [
         "20260924090000_completed_onboarding_active_travel_intent_invariant.sql",
         "20260924100000_session_lifecycle_baseline.sql",
@@ -114,6 +114,7 @@ def test_manifest_migrations_match_repository_baseline_and_pending_suffix(tmp_pa
         "20261003090000_chat_participant_public_profile.sql",
         "20261018090000_server_side_tester_admission_session_identity.sql",
         "20261105121901_live_chat_pagination_unread_idempotency.sql",
+        "20261106080902_group_chat_titles_and_rename.sql",
     ]
 
 
@@ -261,7 +262,7 @@ def test_db_push_stops_before_cli_when_expected_migration_set_is_not_exact(monke
     run_id = "ab12cd34ef56"
     database_url = smoke.local_database_url("postgres", "local-only-password", 55487, f"tf_restore_{run_id}")
 
-    with pytest.raises(smoke.UpgradeSmokeError, match="exact six approved"):
+    with pytest.raises(smoke.UpgradeSmokeError, match="exact seven approved"):
         smoke.run_local_db_push(
             database_url, "local-only-password", list(smoke.EXPECTED_PENDING_NAMES[:-1]),
             container_name=f"tf-upgrade-20261021090000-{run_id}", run_id=run_id, port=55487,
@@ -492,7 +493,7 @@ def test_db_push_timeout_reports_process_group_cleanup_and_does_not_retry(monkey
     assert "CLI_TIMEOUT" in str(error.value)
     assert f"timeout={smoke.CLI_DB_PUSH_TIMEOUT_SECONDS}s" in str(error.value)
     assert "SQLSTATE=57014" in str(error.value)
-    assert "migration=20261105121901_live_chat_pagination_unread_idempotency.sql" in str(error.value)
+    assert "migration=20261106080902_group_chat_titles_and_rename.sql" in str(error.value)
     assert "process_group_cleanup=PASS" in str(error.value)
     assert "local-db-secret" not in str(error.value)
 

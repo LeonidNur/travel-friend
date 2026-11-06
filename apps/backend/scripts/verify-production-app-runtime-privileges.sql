@@ -173,6 +173,8 @@ WITH capability_signatures (function_signature) AS (
     ,('public.record_current_discover_decision(uuid,text)')
     ,('public.is_current_active_chat_participant(uuid)')
     ,('public.create_current_group_chat(uuid[])')
+    ,('public.create_current_group_chat(uuid[],text)')
+    ,('public.rename_current_group_chat(uuid,text)')
     ,('public.send_current_chat_message(uuid,text)')
     ,('public.send_current_chat_message(uuid,text,uuid)')
     ,('public.mark_current_chat_read(uuid,bigint)')
@@ -202,6 +204,8 @@ WITH protected_capabilities (function_signature) AS (
     ('public.send_current_chat_message(uuid,text,uuid)'),
     ('public.mark_current_chat_read(uuid,bigint)'),
     ('public.chat_list_projection()')
+    ,('public.create_current_group_chat(uuid[],text)')
+    ,('public.rename_current_group_chat(uuid,text)')
 ), api_roles (role_name) AS (
   VALUES ('anon'), ('authenticated'), ('service_role')
 ), resolved_capabilities AS (
@@ -276,6 +280,8 @@ WITH capability_signatures (function_signature) AS (
     ,('public.record_current_discover_decision(uuid,text)')
     ,('public.is_current_active_chat_participant(uuid)')
     ,('public.create_current_group_chat(uuid[])')
+    ,('public.create_current_group_chat(uuid[],text)')
+    ,('public.rename_current_group_chat(uuid,text)')
     ,('public.send_current_chat_message(uuid,text)')
     ,('public.send_current_chat_message(uuid,text,uuid)')
     ,('public.mark_current_chat_read(uuid,bigint)')

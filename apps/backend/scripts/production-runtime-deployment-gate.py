@@ -19,6 +19,8 @@ BACKEND_ONLY_FUNCTIONS = (
     "public.send_current_chat_message(uuid,text,uuid)",
     "public.mark_current_chat_read(uuid,bigint)",
     "public.chat_list_projection()",
+    "public.create_current_group_chat(uuid[],text)",
+    "public.rename_current_group_chat(uuid,text)",
 )
 INTERNAL_DORMANT_TABLES = (
     "users",
@@ -63,6 +65,8 @@ REQUIRED_FUNCTIONS = (
     "public.record_current_discover_decision(uuid,text)",
     "public.is_current_active_chat_participant(uuid)",
     "public.create_current_group_chat(uuid[])",
+    "public.create_current_group_chat(uuid[],text)",
+    "public.rename_current_group_chat(uuid,text)",
     "public.send_current_chat_message(uuid,text)",
     "public.send_current_chat_message(uuid,text,uuid)",
     "public.mark_current_chat_read(uuid,bigint)",
@@ -187,6 +191,8 @@ def check_capability_metadata(connection: psycopg.Connection) -> None:
         "public.resolve_bearer_session_with_identity(text)": True,
         "public.is_current_active_chat_participant(uuid)": True,
         "public.create_current_group_chat(uuid[])": True,
+        "public.create_current_group_chat(uuid[],text)": True,
+        "public.rename_current_group_chat(uuid,text)": True,
         "public.send_current_chat_message(uuid,text)": True,
         "public.send_current_chat_message(uuid,text,uuid)": True,
         "public.mark_current_chat_read(uuid,bigint)": True,

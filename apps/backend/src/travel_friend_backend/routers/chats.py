@@ -24,6 +24,8 @@ from travel_friend_backend.schemas.chats import (
     ChatReadResponse,
     GroupChatCreateRequest,
     GroupChatCreateResponse,
+    GroupChatRenameRequest,
+    GroupChatRenameResponse,
 )
 from travel_friend_backend.schemas.discover import DiscoverCandidateResponse
 
@@ -55,14 +57,15 @@ def create_group_chat(
     connection: psycopg.Connection,
     principal: AuthenticatedPrincipal,
     companion_user_ids: list[UUID],
+    title: str | None = None,
 ) -> dict[str, object]:
     """Create one Group Chat through the database's scoped capability."""
     del principal
     try:
         with connection.transaction():
             chat = connection.execute(
-                "SELECT * FROM public.create_current_group_chat(%s::uuid[])",
-                (companion_user_ids,),
+                "SELECT * FROM public.create_current_group_chat(%s::uuid[], %s::text)",
+                (companion_user_ids, title),
             ).fetchone()
     except psycopg.Error as error:
         if error.sqlstate == "22023":
@@ -85,7 +88,32 @@ def create_group_chat_route(
     principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
     connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
 ) -> dict[str, object]:
-    return create_group_chat(connection, principal, payload.user_ids)
+    return create_group_chat(connection, principal, payload.user_ids, payload.title)
+
+
+@router.patch("/{chat_id}/title", response_model=GroupChatRenameResponse)
+def rename_group_chat_route(
+    chat_id: UUID,
+    payload: GroupChatRenameRequest,
+    principal: Annotated[AuthenticatedPrincipal, Depends(auth_dependency)],
+    connection: Annotated[psycopg.Connection, Depends(get_authenticated_database_connection)],
+) -> dict[str, object]:
+    del principal
+    try:
+        with connection.transaction():
+            row = connection.execute(
+                "SELECT * FROM public.rename_current_group_chat(%s, %s::text)",
+                (chat_id, payload.title),
+            ).fetchone()
+    except psycopg.Error as error:
+        if error.sqlstate == "22023":
+            raise HTTPException(422, error.diag.message_primary) from error
+        if error.sqlstate == "P0002":
+            raise HTTPException(404, "Chat not found") from error
+        raise
+    if row is None:
+        raise RuntimeError("Group Chat rename capability returned no result")
+    return dict(row)
 
 
 @router.get("", response_model=list[ChatListItemResponse])
@@ -120,6 +148,7 @@ def get_chats(
         chat_items.append({
             "chat_id": chat_id,
             "type": "group",
+            "title": row["title"],
             "participants": [
                 {"user_id": participant["user_id"], "display_name": participant["display_name"]}
                 for participant in participants

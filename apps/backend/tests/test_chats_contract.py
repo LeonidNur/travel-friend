@@ -33,6 +33,10 @@ def test_chats_route_requires_authentication() -> None:
                 ]
             },
         ).status_code == 401
+        assert client.patch(
+            "/chats/00000000-0000-0000-0000-000000000000/title",
+            json={"title": "Новая группа"},
+        ).status_code == 401
         assert client.get("/chats/00000000-0000-0000-0000-000000000000/messages").status_code == 401
         assert client.post(
             "/chats/00000000-0000-0000-0000-000000000000/messages",

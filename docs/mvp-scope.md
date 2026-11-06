@@ -24,7 +24,7 @@
 - создание чата после совпадения;
 - обсуждение поездки;
 - Chats List с последним сообщением, временем и unread indicator (доставка/read state — отдельный Live Chats block);
-- Group Chat: инициатор выбирает existing matched/direct-chat companions; в группе минимум три участника вместе с инициатором; пользовательское название задаётся при создании и может быть переименовано; сообщения persisted и видны в Chats; состав фиксирован. Rename authorization требует отдельного contract decision;
+- Group Chat: инициатор выбирает existing matched/direct-chat companions; в группе минимум три участника вместе с инициатором; пользовательское название необязательно (до 80 Unicode code points), blank отображается как «Групповой чат», любое active group membership может переименовать; direct Chats не имеют title; сообщения persisted и видны в Chats; состав фиксирован;
 - создание Trip из direct или group Chat с переносом всех текущих `ChatParticipant` в `TripParticipant`;
 - создание Trip из existing direct или group Chat через Chat Room; при `409` Mini App через `GET /trips` открывает existing unfinished Trip того же Chat;
 - список и detail сохранённых Trip, включая участников и `trip_stops`;

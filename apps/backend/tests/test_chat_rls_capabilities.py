@@ -19,6 +19,8 @@ from integration_database import (
 
 ACTIVE_PARTICIPANT_PREDICATE = "public.is_current_active_chat_participant(uuid)"
 CREATE_GROUP_CAPABILITY = "public.create_current_group_chat(uuid[])"
+CREATE_NAMED_GROUP_CAPABILITY = "public.create_current_group_chat(uuid[],text)"
+RENAME_GROUP_CAPABILITY = "public.rename_current_group_chat(uuid,text)"
 SEND_MESSAGE_CAPABILITY = "public.send_current_chat_message(uuid,text)"
 IDEMPOTENT_SEND_CAPABILITY = "public.send_current_chat_message(uuid,text,uuid)"
 MARK_CHAT_READ_CAPABILITY = "public.mark_current_chat_read(uuid,bigint)"
@@ -130,6 +132,7 @@ def test_chat_rls_catalog_and_private_capabilities(database_url: str) -> None:
         assert all(predicate_name in (qual or "") for _, command, _, qual, _ in policies if command == "SELECT")
         for function_name in (
             ACTIVE_PARTICIPANT_PREDICATE, CREATE_GROUP_CAPABILITY, SEND_MESSAGE_CAPABILITY,
+            CREATE_NAMED_GROUP_CAPABILITY, RENAME_GROUP_CAPABILITY,
             IDEMPOTENT_SEND_CAPABILITY, MARK_CHAT_READ_CAPABILITY, CHAT_LIST_PROJECTION_CAPABILITY,
         ):
             assert connection.execute(
@@ -147,6 +150,14 @@ def test_chat_rls_catalog_and_private_capabilities(database_url: str) -> None:
             "WHERE oid='public.enforce_direct_chat_participant_count()'::regprocedure",
             (APP_RUNTIME_ROLE,),
         ).fetchone() == (True, ["search_path=pg_catalog"], False, False)
+
+
+def test_group_title_capabilities_do_not_expand_runtime_table_privileges(database_url: str) -> None:
+    with psycopg.connect(database_url) as connection:
+        assert connection.execute(
+            "SELECT has_column_privilege('app_runtime', 'public.chats', 'title', 'SELECT'), "
+            "has_column_privilege('app_runtime', 'public.chats', 'title', 'UPDATE')"
+        ).fetchone() == (False, False)
 
 
 def test_active_membership_scopes_chat_roster_and_message_reads(

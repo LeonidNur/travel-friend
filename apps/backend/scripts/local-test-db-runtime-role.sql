@@ -60,6 +60,8 @@ GRANT EXECUTE ON FUNCTION public.trip_participant_profile_projection(uuid) TO ap
 GRANT EXECUTE ON FUNCTION public.record_current_discover_decision(uuid, text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.is_current_active_chat_participant(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.create_current_group_chat(uuid[]) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.create_current_group_chat(uuid[], text) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.rename_current_group_chat(uuid, text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.send_current_chat_message(uuid, text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.send_current_chat_message(uuid, text, uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.mark_current_chat_read(uuid, bigint) TO app_runtime;

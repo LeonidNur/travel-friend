@@ -41,7 +41,8 @@
 ### UX-06 — Group Chat
 
 - Создатель выбирает минимум двух собеседников из существующих direct чатов; вместе с ним группа содержит минимум трёх участников.
-- При создании пользователь задаёт название; название видно в списке чатов и комнате. Из комнаты доступно последующее переименование.
+- При создании пользователь может задать название длиной до 80 символов; поле необязательное. Пустое название отображается как «Групповой чат».
+- Название видно в списке чатов и комнате. Любой активный участник группы может переименовать её из комнаты; при очистке поля используется «Групповой чат».
 - Базовые действия: создать группу, переименовать её, открыть, читать/отправлять сообщения, открыть профили участников, перейти к поездке.
 - Состав группы фиксирован. Приглашения, добавление/удаление участников, выход и роли администраторов не входят в первую бету.
 
@@ -87,7 +88,7 @@
 | Discover Public Profile | loading, not found/error, loaded | Вернуться к той же карточке; доступны те же два решения, что в Discover |
 | Chat List | loading, error, empty, populated, message preview, unread | Показать последнее сообщение/время/unread; открыть direct/group чат; создать группу из доступных direct companions |
 | Chat Room | loading, error, not found, empty history, populated history, send error, offline | Повторить загрузку; сохранить текст при send error; открыть профиль участника; показывать «Создать поездку» или «Открыть поездку» |
-| Group Chat create/rename | no eligible companions, name entry, choose participants, validation/create/rename error, saving, saved | Требуются минимум два выбранных companion; задать название при создании и предусмотреть последующее переименование |
+| Group Chat create/rename | no eligible companions, optional title entry (80 chars max), choose participants, validation/create/rename error, saving, saved | Название при создании необязательно; blank показывает «Групповой чат». Любой активный участник может переименовать; сохранять draft при recoverable error |
 | Chat participant profile | loading, unavailable, error/retry, loaded | Возврат в тот же Chat; без Discover actions |
 | Trips List | loading, error/retry, empty, populated | Открыть Trip; из empty state перейти к созданию Trip из Chat |
 | Trip Detail | loading, not found, error/retry, forming/empty blocks, populated, pending proposals | Показать confirmed state, автора-создателя как атрибуцию и возврат в Chat; подтверждённые изменения принимать только через Proposal |
