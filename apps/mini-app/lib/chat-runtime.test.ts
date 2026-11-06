@@ -18,6 +18,7 @@ const ownUserId = 'own-user-uuid';
 const groupChat: ChatResponse = {
   chat_id: 'group-chat-uuid',
   type: 'group',
+  title: null,
   participants: [
     { user_id: ownUserId, display_name: 'Анна' },
     { user_id: 'companion-uuid', display_name: 'Мария' },

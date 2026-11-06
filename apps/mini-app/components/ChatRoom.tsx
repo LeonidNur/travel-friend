@@ -31,6 +31,7 @@ import {
   getChatParticipantProfilePath,
   getGroupParticipantProfilePath
 } from '@/lib/chat-participant-profile-runtime';
+import { normalizeGroupChatTitle } from '@/lib/group-chat-runtime';
 
 type ChatRoomState = 'error' | 'loaded' | 'loading' | 'not_found';
 
@@ -65,6 +66,11 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const [tripError, setTripError] = useState<string | null>(null);
   const [tripLookup, setTripLookup] = useState<TripNavigationLookupState>({ status: 'loading' });
   const [tripLookupKey, setTripLookupKey] = useState(0);
+  const [isEditingGroupTitle, setIsEditingGroupTitle] = useState(false);
+  const [groupTitleDraft, setGroupTitleDraft] = useState('');
+  const [groupTitleError, setGroupTitleError] = useState<string | null>(null);
+  const [canRetryGroupTitleSave, setCanRetryGroupTitleSave] = useState(false);
+  const [isSavingGroupTitle, setIsSavingGroupTitle] = useState(false);
   const sendingRef = useRef(false);
   const retrySendRef = useRef(new Map<string, string>());
   const afterSequenceRef = useRef(0);
@@ -272,6 +278,31 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   );
   const messageHistoryState = getChatMessageHistoryState(renderedMessages);
 
+  const handleRenameGroup = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (session === null || chat?.type !== 'group' || isSavingGroupTitle) return;
+    const normalized = normalizeGroupChatTitle(groupTitleDraft);
+    if (normalized.error !== null) {
+      setGroupTitleError(normalized.error);
+      setCanRetryGroupTitleSave(false);
+      return;
+    }
+    setIsSavingGroupTitle(true);
+    setGroupTitleError(null);
+    setCanRetryGroupTitleSave(false);
+    try {
+      const result = await backendApiClient.renameGroupChat(session.accessToken, chat.chat_id, normalized.title);
+      setChat((current) => current?.type === 'group' ? { ...current, title: result.title } : current);
+      setGroupTitleDraft(result.title ?? '');
+      setIsEditingGroupTitle(false);
+    } catch {
+      setGroupTitleError('Не удалось сохранить название. Повторите попытку.');
+      setCanRetryGroupTitleSave(true);
+    } finally {
+      setIsSavingGroupTitle(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -400,7 +431,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
 
   const isGroupChat = chat.type === 'group';
   const companion = chat.type === 'direct' ? chat.companion : null;
-  const chatTitle = isGroupChat ? 'Групповой чат' : companion?.display_name ?? '';
+  const chatTitle = isGroupChat ? chat.title ?? 'Групповой чат' : companion?.display_name ?? '';
   const tripButtonState = getTripNavigationButtonState(tripLookup, isCreatingTrip);
 
   return (
@@ -419,6 +450,50 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
           </div>
           <div className="profile-hero__content">
             <h2 className="hero-card__title profile-hero__title">{chatTitle}</h2>
+            {isGroupChat ? (
+              <div className="chat-room__group-title-actions">
+                {!isEditingGroupTitle ? (
+                  <button
+                    className="profile-button profile-button--secondary"
+                    type="button"
+                    onClick={() => {
+                      setGroupTitleDraft(chat.title ?? '');
+                      setGroupTitleError(null);
+                      setCanRetryGroupTitleSave(false);
+                      setIsEditingGroupTitle(true);
+                    }}
+                  >
+                    Переименовать группу
+                  </button>
+                ) : (
+                  <form className="group-chat-create" onSubmit={handleRenameGroup}>
+                    <label className="profile-field">
+                      <span>Название группы</span>
+                      <input
+                        autoComplete="off"
+                        disabled={isSavingGroupTitle}
+                        value={groupTitleDraft}
+                        onChange={(event) => setGroupTitleDraft(event.target.value)}
+                      />
+                    </label>
+                    {groupTitleError !== null ? <p className="chat-room__composer-note" role="alert">{groupTitleError}</p> : null}
+                    <div className="chat-room__group-title-actions">
+                      <button className="profile-button profile-button--primary" disabled={isSavingGroupTitle} type="submit">
+                        {isSavingGroupTitle ? 'Сохраняем…' : canRetryGroupTitleSave ? 'Повторить' : 'Сохранить'}
+                      </button>
+                      <button
+                        className="profile-button profile-button--secondary"
+                        disabled={isSavingGroupTitle}
+                        type="button"
+                        onClick={() => setIsEditingGroupTitle(false)}
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            ) : null}
             {companion !== null ? <p className="profile-hero__city">{companion.city ?? 'Город не указан'}</p> : null}
             {companion !== null ? <Link href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>Открыть профиль</Link> : null}
           </div>

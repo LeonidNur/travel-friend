@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import type { ChatResponse } from './backend-api-client';
 import {
   getAvailableGroupChatCompanions,
+  normalizeGroupChatTitle,
   validateGroupChatCompanionIds
 } from './group-chat-runtime';
 
@@ -17,6 +18,7 @@ const chats: ChatResponse[] = [
   {
     chat_id: 'group-one',
     type: 'group',
+    title: null,
     participants: [{ user_id: 'user-one', display_name: 'Мария' }],
     participant_count: 1,
     created_at: '2026-09-01T10:01:00Z', last_message: null, unread_count: 0
@@ -44,4 +46,11 @@ test('requires two unique companions before creating a group Chat', () => {
   assert.equal(validateGroupChatCompanionIds(['user-one']), 'Выберите минимум двух собеседников.');
   assert.equal(validateGroupChatCompanionIds(['user-one', 'user-one']), 'Выберите разных собеседников.');
   assert.equal(validateGroupChatCompanionIds(['user-one', 'user-two']), null);
+});
+
+test('normalizes optional group titles using an 80 code point limit', () => {
+  assert.deepEqual(normalizeGroupChatTitle('  Поездка  '), { title: 'Поездка', error: null });
+  assert.deepEqual(normalizeGroupChatTitle(' \t '), { title: null, error: null });
+  assert.notEqual(normalizeGroupChatTitle('я'.repeat(81)).error, null);
+  assert.equal(normalizeGroupChatTitle('🚂'.repeat(80)).error, null);
 });

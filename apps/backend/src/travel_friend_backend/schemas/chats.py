@@ -51,6 +51,7 @@ class GroupChatListItemResponse(BaseModel):
 
     chat_id: UUID
     type: Literal["group"]
+    title: str | None
     participants: list[GroupChatParticipantResponse]
     participant_count: int
     created_at: datetime
@@ -65,11 +66,22 @@ ChatListItemResponse: TypeAlias = Annotated[
 
 
 class GroupChatCreateRequest(BaseModel):
-    """Requested companions for one immutable MVP Group Chat."""
+    """Requested companions and optional presentation title for an MVP Group Chat."""
 
     model_config = ConfigDict(extra="forbid")
 
     user_ids: list[UUID] = Field(min_length=2, max_length=20)
+    title: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if len(normalized) > 80:
+            raise ValueError("title must not exceed 80 characters")
+        return normalized or None
 
     @field_validator("user_ids")
     @classmethod
@@ -77,6 +89,29 @@ class GroupChatCreateRequest(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("user_ids must not contain duplicates")
         return value
+
+
+class GroupChatRenameRequest(BaseModel):
+    """Optional title value; null or whitespace clears the stored title."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if len(normalized) > 80:
+            raise ValueError("title must not exceed 80 characters")
+        return normalized or None
+
+
+class GroupChatRenameResponse(BaseModel):
+    chat_id: UUID
+    title: str | None
 
 
 class GroupChatCreateResponse(BaseModel):

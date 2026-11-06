@@ -37,7 +37,7 @@
 | UX-03 | Где после onboarding показывать и менять active Travel Intent | Отдельно от Profile; существующее расположение и редактирование подтверждены | DECIDED |
 | UX-04 | Preview Mode / незавершённый onboarding | Preview Mode не будет; onboarding обязателен до Discover | DECIDED |
 | UX-05 | Chats list и Chat room: последнее сообщение, время, unread, empty/loading/error/offline | UI-состав зафиксирован; last message/time/unread реализация входит в Live Chats block | DECIDED |
-| UX-06 | Group Chat: название, участники, создание/переименование; без invitations/leave/remove/admin roles | Пользовательское название при создании и rename; roster фиксированный. Rename authorization — отдельный implementation question | DECIDED |
+| UX-06 | Group Chat: название, участники, создание/переименование; без invitations/leave/remove/admin roles | Optional пользовательское название (до 80 Unicode characters); любое active group membership может переименовать; blank отображается как «Групповой чат»; roster фиксированный | DECIDED |
 | UX-07 | Chat → Trip: «Создать поездку» или «Открыть поездку»; empty Trips | Явный CTA по состоянию; `409` только технический recovery fallback | DECIDED |
 | UX-08 | Trip data/lifecycle/participants/ownership | Creator — атрибуция; confirmed changes проходят через Proposal, не creator-only write | DECIDED |
 | UX-09 | AI Copilot + baseline Proposal: creation, review, vote, accepted/rejected/stale outcomes | Обязательный scope до внешнего теста; состояния согласованы, implementation не завершён | DECIDED |
@@ -83,7 +83,9 @@
 
 **Baseline:** создание backend-backed группы уже присутствует в прежней документации — не переписывать его без finding.
 
-**Независимые slices:** persisted title при создании и rename; отображение в списке/комнате; информация о составе и переходы к профилям; тесты прав доступа и поведения с существующими чатами. Первая бета сохраняет фиксированный roster без invitations, leave/remove и admin roles. До rename implementation отдельно определить право переименования: текущий contract его не задаёт, нельзя предполагать creator/admin privilege.
+**Принятые решения:** название необязательное, после trim пустое значение хранится как `null` и отображается как «Групповой чат»; максимум 80 Unicode characters. Любой активный участник группы может переименовать её. Создатель не получает отдельной роли; direct Chats не имеют title/rename. Одновременные переименования используют last-write-wins.
+
+**Implementation:** persisted title при создании и rename; отображение в Chats List/Chat Room; тесты прав доступа и совместимости. Stage 4 реализован и проверен в текущей ветке полным disposable PostgreSQL и frontend checks; migration/deployment на shared environments не выполнялись. Состав первой beta фиксирован; invitations, leave/remove и admin roles исключены.
 
 **Отложенный вопрос для будущей версии:** если roster когда-либо станет mutable, отдельно определить последствия для истории чата, Trip participants, прав и Proposal voting. В первой бете roster фиксирован; не реализовывать mutable membership.
 
@@ -169,10 +171,9 @@
 
 ## 10. Открытые вопросы реализации и эксплуатации
 
-- Какое authorization rule применяется к rename Group Chat без предположения creator/admin роли?
 - Какие schema/validation/error contract и handoff нужны между AI-разработчиком, Proposal API и Trip apply?
 - Каковы ожидаемый объём одновременных Chat Rooms и допустимая polling latency/cost? Проверить на release cost/abuse gate; транспорт и cursor/read semantics для Stage 3 уже приняты.
 - Какую метрику считать active user, что означает «online» и какая платформа аналитики нужна?
 - Какая прогнозируемая первая когорта и допустимый worst-case операционный бюджет?
 
-**UX-01…UX-10 decisions завершены.** Следующее действие: contract/architecture review против текущего `develop`, включая отдельное правило authorization на Group Chat rename и согласование AI ↔ Proposal boundary с AI-разработчиком; затем формировать implementation slices по зависимостям этого плана.
+**UX-01…UX-10 decisions завершены.** Group Chat authorization, title limit и blank behavior утверждены; Stage 4 верифицирован в этой ветке. Остальные следующие действия определяются статусами implementation и Release Gates, включая совместную AI ↔ Proposal интеграцию.

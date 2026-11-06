@@ -9,6 +9,7 @@ import { createBackendApiClient, type ChatResponse } from '@/lib/backend-api-cli
 import { formatChatListTimestamp, getChatsScreenState } from '@/lib/chat-runtime';
 import {
   getAvailableGroupChatCompanions,
+  normalizeGroupChatTitle,
   validateGroupChatCompanionIds
 } from '@/lib/group-chat-runtime';
 
@@ -24,7 +25,9 @@ export default function ChatsPage() {
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isGroupFormOpen, setIsGroupFormOpen] = useState(false);
   const [selectedCompanionIds, setSelectedCompanionIds] = useState<string[]>([]);
+  const [groupTitle, setGroupTitle] = useState('');
   const [groupError, setGroupError] = useState<string | null>(null);
+  const [canRetryGroupCreation, setCanRetryGroupCreation] = useState(false);
   const [refreshError, setRefreshError] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
 
@@ -141,6 +144,14 @@ export default function ChatsPage() {
 
     if (validationError !== null) {
       setGroupError(validationError);
+      setCanRetryGroupCreation(false);
+      return;
+    }
+
+    const normalizedTitle = normalizeGroupChatTitle(groupTitle);
+    if (normalizedTitle.error !== null) {
+      setGroupError(normalizedTitle.error);
+      setCanRetryGroupCreation(false);
       return;
     }
 
@@ -150,14 +161,17 @@ export default function ChatsPage() {
 
     setIsCreatingGroup(true);
     setGroupError(null);
+    setCanRetryGroupCreation(false);
 
     try {
       const groupChat = await backendApiClient.createGroupChat(session.accessToken, {
-        user_ids: [...selectedCompanionIds]
+        user_ids: [...selectedCompanionIds],
+        title: normalizedTitle.title
       });
       router.push(`/chats/${groupChat.chat_id}`);
     } catch {
       setGroupError('Не удалось создать групповой чат. Попробуйте ещё раз.');
+      setCanRetryGroupCreation(true);
       setIsCreatingGroup(false);
     }
   };
@@ -173,6 +187,7 @@ export default function ChatsPage() {
           onClick={() => {
             setIsGroupFormOpen((isOpen) => !isOpen);
             setGroupError(null);
+            setCanRetryGroupCreation(false);
           }}
         >
           Создать групповой чат
@@ -187,6 +202,15 @@ export default function ChatsPage() {
           ) : (
             <form className="group-chat-create" onSubmit={handleCreateGroup}>
               <p className="surface-card__copy">Выберите минимум двух собеседников.</p>
+              <label className="profile-field">
+                <span>Название группы (необязательно)</span>
+                <input
+                  autoComplete="off"
+                  disabled={isCreatingGroup}
+                  value={groupTitle}
+                  onChange={(event) => setGroupTitle(event.target.value)}
+                />
+              </label>
               <div className="group-chat-create__options">
                 {companions.map((companion) => (
                   <label className="group-chat-create__option" key={companion.user_id}>
@@ -202,7 +226,7 @@ export default function ChatsPage() {
               </div>
               {groupError !== null ? <p className="chat-room__composer-note" role="alert">{groupError}</p> : null}
               <button className="profile-button profile-button--primary" disabled={isCreatingGroup} type="submit">
-                {isCreatingGroup ? 'Создаём…' : 'Создать чат'}
+                {isCreatingGroup ? 'Создаём…' : canRetryGroupCreation ? 'Повторить создание' : 'Создать чат'}
               </button>
             </form>
           )}
@@ -252,7 +276,7 @@ export default function ChatsPage() {
                   </div>
                 ) : (
                   <div>
-                    <p className="surface-card__title">Групповой чат</p>
+                    <p className="surface-card__title">{chat.title ?? 'Групповой чат'}</p>
                     <p className="chat-card__meta">{chat.participant_count} участников</p>
                     <p className="chat-card__meta">
                       {chat.participants.map((participant) => participant.display_name ?? 'Имя не указано').join(' · ')}

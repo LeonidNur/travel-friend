@@ -35,6 +35,8 @@ REQUIRED_CAPABILITIES = {
     "public.record_current_discover_decision(uuid, text)",
     "public.is_current_active_chat_participant(uuid)",
     "public.create_current_group_chat(uuid[])",
+    "public.create_current_group_chat(uuid[], text)",
+    "public.rename_current_group_chat(uuid, text)",
     "public.send_current_chat_message(uuid, text)",
     "public.send_current_chat_message(uuid, text, uuid)",
     "public.mark_current_chat_read(uuid, bigint)",
@@ -286,7 +288,9 @@ def test_production_runtime_grants_and_verifier_execute_against_migrated_schema(
             "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
             "public.chat_participant_public_profile(uuid,uuid)",
             "public.chat_list_projection()",
+            "public.create_current_group_chat(uuid[],text)",
             "public.mark_current_chat_read(uuid,bigint)",
+            "public.rename_current_group_chat(uuid,text)",
             "public.resolve_bearer_session_with_identity(text)",
             "public.send_current_chat_message(uuid,text,uuid)",
         ))

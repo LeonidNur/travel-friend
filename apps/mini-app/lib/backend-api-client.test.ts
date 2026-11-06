@@ -115,6 +115,7 @@ test('maps a group Chat from GET /chats through the authenticated backend client
   const groupChat = {
     chat_id: 'group-chat-uuid',
     type: 'group',
+    title: 'Маршрут выходного дня',
     participants: [
       { user_id: 'user-one', display_name: 'Мария' },
       { user_id: 'user-two', display_name: 'Илья' },
@@ -156,6 +157,26 @@ test('maps POST /chats/groups through the authenticated backend client', async (
         'Content-Type': 'application/json'
       },
       method: 'POST'
+    }
+  });
+});
+
+test('maps authenticated group title rename through PATCH /chats/{id}/title', async () => {
+  const result = { chat_id: 'group-chat-uuid', title: null };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify(result)));
+  const client = createBackendApiClient(fetchStub);
+
+  assert.deepEqual(await client.renameGroupChat('session-token', 'group-chat-uuid', null), result);
+  assert.deepEqual(calls[0], {
+    input: '/api/backend/chats/group-chat-uuid/title',
+    init: {
+      body: JSON.stringify({ title: null }),
+      headers: {
+        Accept: 'application/json',
+        Authorization: 'Bearer session-token',
+        'Content-Type': 'application/json'
+      },
+      method: 'PATCH'
     }
   });
 });

@@ -71,7 +71,10 @@ def create_group_chat_with_three_participants(client: TestClient) -> tuple[dict[
     group_response = client.post(
         "/chats/groups",
         headers=auth_headers(initiator["access_token"]),
-        json={"user_ids": [first_member["user"]["id"], second_member["user"]["id"]]},
+        json={
+            "user_ids": [first_member["user"]["id"], second_member["user"]["id"]],
+            "title": "Поездка группы",
+        },
     )
     assert group_response.status_code == 201
     return initiator, first_member, second_member, group_response.json()
@@ -492,6 +495,12 @@ def test_group_chat_participant_creates_trip_with_all_active_chat_participants(
 ) -> None:
     initiator, first_member, second_member, group_chat = create_group_chat_with_three_participants(client)
     chat_id = UUID(group_chat["chat_id"])
+
+    listed_group = next(
+        item for item in client.get("/chats", headers=auth_headers(first_member["access_token"])).json()
+        if item["chat_id"] == str(chat_id)
+    )
+    assert listed_group["title"] == "Поездка группы"
 
     response = create_trip(client, first_member["access_token"], chat_id)
 

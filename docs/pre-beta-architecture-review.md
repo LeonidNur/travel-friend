@@ -4,6 +4,10 @@
 
 Evidence paths are repository-relative. Short `routers/`, `schemas/`, `auth/`, `dependencies.py`, and `db.py` references under backend sections mean `apps/backend/src/travel_friend_backend/`; `lib/` and `components/` references in frontend evidence mean `apps/mini-app/lib/` and `apps/mini-app/components/`. Migration filenames without a prefix resolve under `supabase/migrations/`. `pre-beta-development-plan.md` resolves under `docs/`; short `backend/...` design references resolve under `docs/backend/`.
 
+## Stage 4 follow-up — 2026-11-06
+
+The review below remains a historical audit of its stated `develop` revision. Product decisions have since been approved: title is optional and limited to 80 Unicode code points, blank is displayed as «Групповой чат», any active group participant may rename, and simultaneous changes use last-write-wins. Stage 4 adds only title persistence/read/rename; it does not change membership, AI/Proposal, Trip, or the RLS boundary. Implementation and checks pass in this branch on disposable PostgreSQL; no shared environment migration or deployment was performed.
+
 ## Executive Summary
 
 The current application has a working, persisted HTTP baseline: the Next.js Telegram Mini App calls a FastAPI backend; the backend validates raw Telegram `initData`, resolves an opaque Bearer session, binds the authenticated UUID to a transaction-scoped PostgreSQL context, and invokes narrowly scoped database capabilities. PostgreSQL/Supabase is the system of record. Current runtime includes Discover decisions/Match creation, direct and fixed-roster group Chats, ordered persisted messages, and Trip creation/read.

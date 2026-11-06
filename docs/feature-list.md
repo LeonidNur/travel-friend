@@ -34,7 +34,7 @@
 
 - AI Travel Copilot в контексте Chat/Trip и базовый Proposal flow должны быть реализованы и проверены до первого внешнего теста; AI не изменяет confirmed Trip напрямую.
 - Chats List должен показывать последнее сообщение, время и unread indicator; bounded HTTP polling, pagination, read/unread и recovery входят в отдельный Live Chats block. Push/realtime provider не входит в этот scope.
-- Group Chat получает пользовательское название при создании и rename flow; authorization для rename ещё требует contract decision.
+- Group Chat поддерживает optional title до 80 Unicode code points при создании и rename любым active participant; blank title показывается как «Групповой чат».
 - Явное действие в Chat показывает «Создать поездку» или «Открыть поездку» по состоянию; `409` остаётся recovery fallback.
 - Первая бета русскоязычная, без locale switcher и полноценной i18n-системы.
 

@@ -20,3 +20,11 @@ export function validateGroupChatCompanionIds(userIds: readonly string[]): strin
 
   return new Set(userIds).size === userIds.length ? null : 'Выберите разных собеседников.';
 }
+
+export function normalizeGroupChatTitle(value: string): { title: string | null; error: string | null } {
+  const title = value.trim();
+  if (Array.from(title).length > 80) {
+    return { title: null, error: 'Название не должно превышать 80 символов.' };
+  }
+  return { title: title || null, error: null };
+}
