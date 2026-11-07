@@ -95,17 +95,17 @@
 
 **Зависимости:** UX-08/09, подтверждённый ownership Chat/Trip, контракт с AI-разработчиком. Может проектироваться параллельно с чатами; не менять shared schema/API без синхронизации.
 
-**Принятый инвариант:** AI создаёт структурированное предложение; **Proposal** хранит версии и решения участников; **только backend после необходимых подтверждений** атомарно применяет изменения к Trip. AI не является владельцем confirmed Trip state.
+**Принятый инвариант:** AI возвращает кандидатов ответа/Draft/изменений; человек явно добавляет выбранное в Draft или создаёт Proposal. Proposal также можно создать вручную из редактора Trip. **Proposal** фиксирует вариант и решения участников; только backend после единогласного принятия атомарно применяет изменения к Trip. AI не меняет confirmed Trip и не создаёт голосование/голос автоматически. Состав голосующих фиксирован на Trip participants.
 
 **Обязательный Pre-Beta baseline (точные shared schema/API детали согласовать в contract review):**
 
-1. Product state machine: кто создаёт Proposal; связь с Chat/Trip; кто голосует; единогласие, отклонение, отмена; что делать при смене участников.
+1. Product flow: AI candidate или ручная правка → явное действие пользователя → Proposal; зафиксированный состав голосующих; единогласие, отклонение, отмена и stale/dependency outcomes.
 2. Contract: schema / validation / error model между AI output, Proposal API и Trip apply; version/stale checks, idempotency, authorization.
 3. Persistence + read API и тесты, без неявного изменения Trip.
 4. Decisions/voting и atomic apply с конкурентными тестами; защита от двойного принятия и stale state.
 5. UI Proposal flow и notification states; интеграционный E2E с контролируемым AI output.
 
-**Done:** полная цепочка «предложение → решения участников → подтверждённый Trip» работает с явными правами и проверками версий; непринятые предложения не меняют Trip. Реальную генерацию ИИ и её отдельные service contracts поставляет AI-разработчик; интеграция проверена совместно.
+**Done:** полная цепочка «кандидат/ручная правка → явное создание Proposal → решения участников → подтверждённый Trip» работает с явными правами и проверками версий; непринятые предложения не меняют Trip. Реальную генерацию ИИ и её отдельные service contracts поставляет AI-разработчик; интеграция проверена совместно. Продуктовые требования заданы в [канонической спецификации](ai-trip-product-spec.md), исполнение и открытые технические решения — в [AI/Trip implementation plan](ai-trip-implementation-plan.md). Реализация остаётся pending.
 
 ## 6. Продуктовая аналитика (до первого внешнего теста)
 
@@ -158,12 +158,14 @@
 
 1. **DONE (05.11):** сверить текущий repository context/реализацию и status прежних UX observations; findings записаны в alignment report.
 2. **DONE (05.11):** принять UX-01…UX-10 и подготовить Designer Update. Решения утверждены; связанные реализации остаются pending.
-3. **Architecture/contract review** по Chat / Group / Proposal / Trip / AI, оценить применимость нового code-quality skill.
-4. **Live Chats** небольшими loops → **Group Chats** небольшими loops; каждый slice через тесты и review.
-5. **Proposal**: сначала совместный контракт с AI-разработчиком, затем backend/domain и UI slices; не допускать конфликтующих параллельных изменений.
-6. **Analytics** — проектировать и внедрять параллельно, завершить до первой внешней когорты.
-7. **Release gates R-01…R-09** + совместная AI-интеграция, production rollout, финальный E2E; только затем внешний тест.
-8. **Development Harness** — в конце, без блокирования beta-release. Если срок запуска наступит раньше, это не release blocker.
+3. **Stage 3/4 status:** Live Chats остаётся `IN PROGRESS` по критериям §3; завершить оставшуюся проверку DoD там. Group Chats (Stage 4) реализованы и проверены по §4. Product decisions не открывать заново; deployment/preflight проверки остаются отдельными release gates.
+4. **NEXT — совместный contract setup:** зафиксировать `copilot-v1` schema/fixtures, fake backend/tool gateway и contract tests; завершить read-only deployment preflight перед любым runtime rollout. Схема/worker transport и область `scope_key` остаются implementation-pending до совместного review.
+5. **Loop A — Trip/day itinerary/shared Draft:** ручное редактирование и чтение без изменения confirmed Trip; migration, RLS/capabilities, API, UI и тесты — единый reviewable slice.
+6. **Loop B — manual Proposal/voting/atomic apply:** после/на основе Loop A; версии и блокировки областей, fixed voter set, stale/dependency handling, concurrent tests. AI не требуется для прохождения базового Proposal flow.
+7. **Loop C — AIRequest + AI integration:** backend orchestration/quota/context/tools и UI подключаются к совместному контракту; AI-разработчик может независимо делать adapter/prompts/evals после фиксации fixtures/mock gateway. AI outputs остаются кандидатами, integration/runtime ещё не реализованы.
+8. **Loop D — readiness/PDF/notifications:** readiness по точной версии Trip, один текущий PDF и безопасное уведомление; затем совместная интеграция.
+9. **Analytics** можно проектировать/внедрять параллельно с Loop A–D, но завершить до внешней когорты. **Loop E** объединяет privacy-safe analytics, multi-user E2E, environment parity и release gates R-01…R-09; только после их закрытия возможен внешний тест.
+10. **Development Harness** — после основной Pre-Beta разработки; не блокирует продуктовые loops и beta-release.
 
 ### Что сознательно НЕ входит в этот этап без отдельного решения
 

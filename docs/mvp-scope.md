@@ -1,5 +1,7 @@
 # MVP Scope
 
+> Для актуальных утверждённых правил AI/Trip/Proposal см. [каноническую спецификацию](ai-trip-product-spec.md) и [план реализации](ai-trip-implementation-plan.md); продуктовые детали ниже не заменяют их.
+
 ## Главная гипотеза MVP
 
 Люди готовы использовать Telegram Mini App, чтобы:
@@ -28,7 +30,7 @@
 - создание Trip из direct или group Chat с переносом всех текущих `ChatParticipant` в `TripParticipant`;
 - создание Trip из existing direct или group Chat через Chat Room; при `409` Mini App через `GET /trips` открывает existing unfinished Trip того же Chat;
 - список и detail сохранённых Trip, включая участников и `trip_stops`;
-- AI Travel Copilot и базовый Proposal flow — обязательный Pre-Beta scope до первого внешнего теста. Copilot помогает в контексте Chat/Trip; подтверждённое состояние Trip меняется только после согласования Proposal. Эти slices ещё не реализованы; детали и зависимости находятся в [Pre-Beta Development Plan](pre-beta-development-plan.md).
+- AI Travel Copilot, включая структурированное планирование маршрута и программы, и базовый Proposal flow — обязательный Pre-Beta scope до первого внешнего теста. Copilot помогает в контексте Chat/Trip; подтверждённое состояние Trip меняется только после согласования Proposal. Эти slices ещё не реализованы; детали и зависимости находятся в [Pre-Beta Development Plan](pre-beta-development-plan.md).
 - Явное действие Chat «Создать поездку» / «Открыть поездку» зависит от состояния; `409` остаётся recovery fallback.
 - Первая бета русскоязычная, без переключения локалей и полноценной i18n-системы.
 - Live Chats до внешнего теста включает realtime incoming messages, preview/time/unread, read/reconnect recovery и необходимые history bounds; scope ограничен [Pre-Beta Development Plan](pre-beta-development-plan.md).
@@ -44,8 +46,7 @@
 - полноценная геймификация;
 - платные подписки;
 - маркетплейс украшений профиля;
-- интеграции с авиакомпаниями, отелями и туроператорами;
-- генерация маршрута и внешние provider-интеграции;
+- внешние provider-интеграции с авиакомпаниями, отелями и туроператорами;
 - invitations, add/remove members, leave, roles/admin/permissions, invite links и сложный membership lifecycle Group Chat;
 - расширенные messenger features сверх Live Chats scope Pre-Beta;
 - TripInvitation и расширенный Trip lifecycle;

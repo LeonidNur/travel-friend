@@ -1,6 +1,8 @@
 # AI Travel Copilot
 
-Короткий обзор AI-слоя Travel Friend. Актуальная архитектурная версия находится в [docs/backend/ai-architecture.md](./backend/ai-architecture.md).
+Короткий обзор AI-слоя Travel Friend. Утверждённые продуктовые правила AI/Trip/Proposal задаёт [каноническая спецификация от 07.11.2026](ai-trip-product-spec.md); реализация и зависимости описаны в [плане AI/Trip/Proposal](ai-trip-implementation-plan.md). [AI architecture](./backend/ai-architecture.md) остаётся design input, а не источником, переопределяющим эти решения.
+
+> Старые формулировки ниже о составе AI-результата и Proposal сохранены как design input; при конфликте применяются каноническая спецификация и implementation plan. Этот указатель не означает, что функции уже реализованы.
 
 > Статус: обязательный Pre-Beta scope до первого внешнего теста; **не реализован**. Реализацию и интеграционную границу вести по [Pre-Beta Development Plan](pre-beta-development-plan.md), совместно с AI-разработчиком.
 

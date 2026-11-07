@@ -1,6 +1,8 @@
 # AI architecture
 
 > Статус: design input для обязательной Pre-Beta интеграции AI Copilot и baseline Proposal до первого внешнего теста; runtime пока не реализован. Внешние provider integrations имеют отдельный scope и не считаются включёнными автоматически.
+>
+> Утверждённые продуктовые правила AI/Trip/Proposal заданы [канонической спецификацией](../ai-trip-product-spec.md), а порядок реализации — [Pre-Beta implementation plan](../ai-trip-implementation-plan.md). Ниже сохранённые технические и исторические предложения не переопределяют их; API/schema требуют отдельного contract review.
 
 ## Роль AI-слоя
 

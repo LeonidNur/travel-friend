@@ -4,6 +4,8 @@
 
 Этот документ содержит два разных слоя: сначала фактические HTTP contracts `develop`, затем утверждённые логические contracts целевого Pre-Beta design. Они не равны друг другу: Proposal/AI и часть read/write flows ниже обязательны к реализации до внешнего теста, но не являются API specification уже реализованного MVP.
 
+> Для утверждённых продуктовых правил AI/Trip/Proposal приоритет имеют [каноническая спецификация](../ai-trip-product-spec.md) и [план реализации](../ai-trip-implementation-plan.md). Legacy logical contracts ниже остаются design input до совместного contract review; эта ссылка не утверждает новые HTTP, schema или persistence contracts.
+
 API проектируется вокруг пользовательских и domain actions, а не как CRUD поверх каждой ER-сущности. Frontend не может напрямую создавать внутренние сущности `Match`, `ChatParticipant`, `TripParticipant`, `Proposal` и system `Message`. Backend/domain является доверенной точкой применения инвариантов, авторизации и атомарных domain-операций.
 
 ## Реализованные HTTP contracts (текущая реализация репозитория)
