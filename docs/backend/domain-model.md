@@ -1,6 +1,8 @@
 # Логическая доменная модель
 
 > Статус: утверждённый logical design input для Pre-Beta, не описание текущей поставки. Current MVP создаёт Trip без `TripInvitation`: все активные ChatParticipant direct или group Chat сразу становятся TripParticipant. Базовый Group Chat реализован с минимум тремя участниками и фиксированным составом. Invitations и сложный group membership lifecycle остаются deferred; AI Copilot и базовый Proposal flow обязательны до первого внешнего теста, но ещё не реализованы.
+>
+> Продуктовые правила AI/Trip/Proposal утверждены в [канонической спецификации](../ai-trip-product-spec.md); план реализации — [здесь](../ai-trip-implementation-plan.md). Сохранённые ниже logical/technical proposals не переопределяют продуктовые решения и не являются описанием поставленной schema/API.
 
 ## Назначение документа
 

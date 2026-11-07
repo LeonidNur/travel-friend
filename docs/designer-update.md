@@ -2,6 +2,8 @@
 
 Краткая дельта к предыдущему дизайнерскому handoff. Используйте вместе с [User Flows](user-flows.md), [MVP Scope](mvp-scope.md) и [Design Principles](design-principles.md). Этот документ описывает целевой UX и состояния интерфейса; он не меняет backend contracts.
 
+> Для AI/Trip/Proposal части этот документ дополнен и заменён [дизайнерским handoff от 07.11.2026](ai-trip-designer-handoff.md) и [канонической продуктовой спецификацией](ai-trip-product-spec.md). Решения UX-01…UX-10 вне этой части сохраняются.
+
 ## Изменения и уточнения сценариев
 
 ### UX-01 — Discover → Public Profile

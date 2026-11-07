@@ -2,7 +2,7 @@
 
 > Статус: reviewed design input. Его identity/chat/trip подмножество и current RLS/runtime boundary реализованы migrations в `supabase/migrations/` по состоянию на 2026-09-23; остальные разделы не являются описанием поставленной schema.
 >
-> Источники истины: актуальные ER/domain model и backend contracts.
+> Фактическая DB schema определяется применёнными migrations и состоянием БД; фактический HTTP API — FastAPI routers/schemas. `backend-contracts.md` содержит в том числе исторические и целевые logical contracts, а не только runtime API. Для утверждённых продуктовых правил AI/Trip/Proposal приоритет имеют [каноническая спецификация](../ai-trip-product-spec.md) и [план реализации](../ai-trip-implementation-plan.md). Приведённая ниже физическая модель остаётся design input и требует отдельного contract/migration review.
 >
 > Этот документ не является SQL migration, RLS policy или OpenAPI specification.
 
