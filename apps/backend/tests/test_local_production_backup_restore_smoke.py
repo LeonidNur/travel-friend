@@ -7,6 +7,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -16,6 +17,13 @@ SPEC = importlib.util.spec_from_file_location("local_production_restore_smoke", 
 assert SPEC and SPEC.loader
 smoke = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(smoke)
+
+BACKUP_RUNNER_PATH = Path(__file__).parents[1] / "scripts" / "production-backup-runner.py"
+BACKUP_RUNNER_SPEC = importlib.util.spec_from_file_location("production_backup_runner_inventory", BACKUP_RUNNER_PATH)
+assert BACKUP_RUNNER_SPEC and BACKUP_RUNNER_SPEC.loader
+backup_runner = importlib.util.module_from_spec(BACKUP_RUNNER_SPEC)
+sys.modules[BACKUP_RUNNER_SPEC.name] = backup_runner
+BACKUP_RUNNER_SPEC.loader.exec_module(backup_runner)
 
 
 def _archive_files(tmp_path: Path) -> tuple[Path, Path]:
@@ -34,10 +42,10 @@ def _archive_files(tmp_path: Path) -> tuple[Path, Path]:
         "observations": {
             "metadata": {"extension_restore_dependencies": [{"name": "plpgsql", "version": "1.0"}]},
             "migration_ledger": {
-                "count": 19,
+                "count": len(smoke.LEGACY_ARCHIVE_MIGRATIONS),
                 "versions": [
-                    {"version": f"20260901{index:06d}", "name": f"migration_{index}"}
-                    for index in range(19)
+                    {"version": version, "name": name}
+                    for version, name in smoke.LEGACY_ARCHIVE_MIGRATIONS
                 ],
             },
         },
@@ -87,13 +95,60 @@ def test_validate_archive_rejects_checksum_mismatch(tmp_path: Path) -> None:
         smoke.validate_archive(archive, manifest_path)
 
 
+def test_validate_archive_accepts_current_production_migration_and_function_baseline(
+    tmp_path: Path,
+) -> None:
+    archive, manifest_path = _archive_files(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["observations"]["migration_ledger"] = {
+        "count": len(smoke.CURRENT_PRODUCTION_MIGRATIONS),
+        "versions": [
+            {"version": version, "name": name}
+            for version, name in smoke.CURRENT_PRODUCTION_MIGRATIONS
+        ],
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    validated = smoke.validate_archive(archive, manifest_path)
+
+    assert smoke.expected_archive_functions(validated) == smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS
+    assert len(smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 21
+    assert [
+        path.name for path in smoke._repository_migrations_not_in_archive(validated)
+    ] == [
+        "20261105121901_live_chat_pagination_unread_idempotency.sql",
+        "20261106080902_group_chat_titles_and_rename.sql",
+    ]
+
+
+def test_validate_archive_rejects_unreviewed_same_count_migration_ledger(
+    tmp_path: Path,
+) -> None:
+    archive, manifest_path = _archive_files(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    versions = manifest["observations"]["migration_ledger"]["versions"]
+    versions[-1]["name"] = "unreviewed_migration"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(smoke.RestoreSmokeError, match="manifest migration ledger"):
+        smoke.validate_archive(archive, manifest_path)
+
+
 def test_expected_function_inventory_matches_archived_migration_era() -> None:
     assert len(smoke.ARCHIVE_EXPECTED_FUNCTIONS) == 18
-    assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 21
+    assert len(smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 21
+    assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 26
+    assert smoke.EXPECTED_RUNTIME_CAPABILITY_COUNT == 24
+    assert smoke.CURRENT_PRODUCTION_MIGRATIONS == backup_runner.EXPECTED_PRODUCTION_MIGRATIONS
     assert set(smoke.CURRENT_APP_ADDITIONAL_FUNCTIONS) == {
         "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
         "public.chat_participant_public_profile(uuid,uuid)",
         "public.resolve_bearer_session_with_identity(text)",
+        "public.send_current_chat_message(uuid,text,uuid)",
+        "public.chat_list_projection()",
+        "public.mark_current_chat_read(uuid,bigint)",
+        "public.create_current_group_chat(uuid[],text)",
+        "public.rename_current_group_chat(uuid,text)",
     }
 
 
@@ -172,9 +227,16 @@ def _valid_grants_csv() -> str:
         elif section == "sequences":
             pass
         elif section == "capabilities":
-            writer.writerows([[signature, "t", "t"] for signature in range(19)])
-        elif section == "api_roles":
-            writer.writerows([[role, "t", "f", "t"] for role in smoke.SUPABASE_API_ROLE_STUBS])
+            writer.writerows([
+                [signature, "t", "t"]
+                for signature in range(smoke.EXPECTED_RUNTIME_CAPABILITY_COUNT)
+            ])
+        elif section == "protected_api_capabilities":
+            writer.writerows([
+                [signature, role, "t", "t", "t", "f", "f", "t"]
+                for signature in smoke.PROTECTED_API_FUNCTIONS
+                for role in smoke.SUPABASE_API_ROLE_STUBS
+            ])
         elif section == "unexpected_functions":
             pass
         elif section == "owners":
@@ -190,6 +252,13 @@ def test_grants_verifier_accepts_existing_production_grant_script_result_shape()
     smoke.validate_grants_verifier_csv(_valid_grants_csv())
 
 
+def test_grants_verifier_rejects_incomplete_capability_inventory() -> None:
+    output = _valid_grants_csv().replace("23,t,t\n", "", 1)
+
+    with pytest.raises(smoke.RestoreSmokeError, match="capability grant inventory"):
+        smoke.validate_grants_verifier_csv(output)
+
+
 def test_grants_verifier_fails_closed_on_missing_table_coverage() -> None:
     output = _valid_grants_csv().replace(
         'table,SELECT,t,t,t,t\n', '', 1
@@ -200,10 +269,17 @@ def test_grants_verifier_fails_closed_on_missing_table_coverage() -> None:
 
 
 def test_grants_verifier_rejects_api_role_execute_on_backend_resolver() -> None:
-    output = _valid_grants_csv().replace("anon,t,f,t\n", "anon,t,t,f\n", 1)
+    rows = list(csv.reader(io.StringIO(_valid_grants_csv())))
+    for row in rows:
+        if row and row[0] == "public.send_current_chat_message(uuid,text,uuid)" and row[1] == "anon":
+            row[6] = "t"
+            row[7] = "f"
+            break
+    output_buffer = io.StringIO()
+    csv.writer(output_buffer, lineterminator="\n").writerows(rows)
 
-    with pytest.raises(smoke.RestoreSmokeError, match="API role can execute"):
-        smoke.validate_grants_verifier_csv(output)
+    with pytest.raises(smoke.RestoreSmokeError, match="protected capability"):
+        smoke.validate_grants_verifier_csv(output_buffer.getvalue())
 
 
 def test_new_function_api_role_check_is_complete_and_fails_closed() -> None:

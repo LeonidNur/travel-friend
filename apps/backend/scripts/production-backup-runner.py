@@ -23,7 +23,33 @@ REPOSITORY_ROOT = SCRIPT_PATH.parents[3]
 EXPECTED_POSTGRES_MAJOR = 17
 EXPECTED_DATABASE_ROLE = "postgres"
 EXPECTED_TABLE_COUNT = 17
-EXPECTED_MIGRATION_COUNT = 19
+EXPECTED_PRODUCTION_MIGRATIONS = (
+    ("20260826084844", "core_identity"),
+    ("20260826100000", "user_sessions"),
+    ("20260901120000", "discover_interest_decisions_and_matches"),
+    ("20260901130000", "chat_persistence"),
+    ("20260901140000", "trip_persistence"),
+    ("20260901150000", "trip_stops_persistence"),
+    ("20260901160000", "authenticated_user_context"),
+    ("20260901170000", "bearer_session_resolution_capability"),
+    ("20260901180000", "telegram_login_bootstrap_capability"),
+    ("20260901190000", "travel_intents_rls"),
+    ("20260901200000", "profiles_rls"),
+    ("20260901210000", "revoke_trigger_function_public_execute"),
+    ("20260901220000", "user_sessions_rls"),
+    ("20260901230000", "onboarding_completion_capability"),
+    ("20260901240000", "user_activity_states_rls"),
+    ("20260901250000", "discover_match_direct_chat_rls"),
+    ("20260901260000", "chat_rls"),
+    ("20260901270000", "trip_rls"),
+    ("20260901280000", "internal_dormant_tables_rls"),
+    ("20260924090000", "completed_onboarding_active_travel_intent_invariant"),
+    ("20260924100000", "session_lifecycle_baseline"),
+    ("20260924110000", "backend_field_domain_limits"),
+    ("20261003090000", "chat_participant_public_profile"),
+    ("20261018090000", "server_side_tester_admission_session_identity"),
+)
+EXPECTED_MIGRATION_COUNT = len(EXPECTED_PRODUCTION_MIGRATIONS)
 EXPECTED_PUBLIC_TABLES = frozenset({
     "users",
     "telegram_identities",
@@ -619,9 +645,19 @@ def _check_migration_ledger(ledger: dict[str, Any]) -> dict[str, Any]:
     if ledger.get("count") != EXPECTED_MIGRATION_COUNT or len(ledger.get("versions", [])) != EXPECTED_MIGRATION_COUNT:
         raise PreflightStop("MIGRATION_LEDGER")
     migration_dir = REPOSITORY_ROOT / "supabase" / "migrations"
-    local_versions = {path.name.split("_", 1)[0] for path in migration_dir.glob("*.sql")}
-    production_versions = {str(item.get("version", "")) for item in ledger["versions"] if isinstance(item, dict)}
-    if len(production_versions) != EXPECTED_MIGRATION_COUNT or not production_versions.issubset(local_versions):
+    local_migrations = {
+        path.name.split("_", 1)[0]: path.stem.split("_", 1)[1]
+        for path in migration_dir.glob("*.sql")
+    }
+    production_migrations = tuple(
+        (str(item.get("version", "")), str(item.get("name", "")))
+        for item in ledger["versions"]
+        if isinstance(item, dict)
+    )
+    if (
+        production_migrations != EXPECTED_PRODUCTION_MIGRATIONS
+        or any(local_migrations.get(version) != name for version, name in EXPECTED_PRODUCTION_MIGRATIONS)
+    ):
         raise PreflightStop("MIGRATION_LEDGER")
     return ledger
 
