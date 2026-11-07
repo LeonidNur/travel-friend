@@ -614,30 +614,57 @@ VERIFIER_SECTIONS = {
 }
 
 
-def validate_grants_verifier_csv(output: str) -> None:
+def parse_grants_verifier_csv(
+    output: str,
+) -> tuple[dict[str, list[dict[str, str]]], set[str]]:
     sections: dict[str, list[dict[str, str]]] = {section: [] for section in VERIFIER_SECTIONS.values()}
     seen_sections: set[str] = set()
     current_section: str | None = None
     current_header: list[str] = []
     try:
-        rows = csv.reader(io.StringIO(output))
-        for row in rows:
+        for line_number, row in enumerate(csv.reader(io.StringIO(output)), start=1):
+            if not row:
+                continue
             header_section = VERIFIER_SECTIONS.get(tuple(row))
             if header_section is not None:
+                if header_section in seen_sections:
+                    raise RestoreSmokeError(
+                        "GRANTS",
+                        f"malformed verifier CSV at row {line_number}: duplicate section {header_section}.",
+                    )
                 current_section = header_section
                 current_header = row
                 seen_sections.add(header_section)
                 continue
-            if not row:
-                continue
-            if current_section is None or len(row) != len(current_header):
-                raise ValueError
+            if current_section is None:
+                raise RestoreSmokeError(
+                    "GRANTS",
+                    f"malformed verifier CSV at row {line_number}: data appeared before a known section header.",
+                )
+            if len(row) != len(current_header):
+                raise RestoreSmokeError(
+                    "GRANTS",
+                    f"malformed verifier CSV at row {line_number}: section {current_section} expects "
+                    f"{len(current_header)} columns, received {len(row)}.",
+                )
             sections[current_section].append(dict(zip(current_header, row, strict=True)))
+    except RestoreSmokeError:
+        raise
+    except csv.Error:
+        raise RestoreSmokeError("GRANTS", "malformed verifier CSV quoting or row structure.") from None
     except Exception:
-        raise RestoreSmokeError("GRANTS", "the runtime grants verifier output could not be validated safely.") from None
+        raise RestoreSmokeError("GRANTS", "the runtime grants verifier output could not be parsed safely.") from None
+    return sections, seen_sections
+
+
+def validate_grants_verifier_csv(output: str) -> None:
+    sections, seen_sections = parse_grants_verifier_csv(output)
 
     if seen_sections != set(sections):
-        raise RestoreSmokeError("GRANTS", "the runtime grants verifier returned an incomplete result set.")
+        missing_sections = sorted(set(sections) - seen_sections)
+        raise RestoreSmokeError(
+            "GRANTS", f"the runtime grants verifier returned an incomplete result set; missing sections: {', '.join(missing_sections)}."
+        )
     if sections["unexpected_functions"]:
         raise RestoreSmokeError("GRANTS", "the runtime role has unexpected function execution privileges.")
     if len(sections["table_rights"]) != len(EXPECTED_PUBLIC_TABLES) * 7:

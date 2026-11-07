@@ -252,6 +252,24 @@ def test_grants_verifier_accepts_existing_production_grant_script_result_shape()
     smoke.validate_grants_verifier_csv(_valid_grants_csv())
 
 
+@pytest.mark.parametrize(
+    ("output", "diagnostic"),
+    [
+        ("unexpected,data\n", "data appeared before a known section header"),
+        (
+            "is_public_usage_granted,is_public_create_absent\nt,t\n"
+            "is_public_usage_granted,is_public_create_absent\nt,t\n",
+            "duplicate section schema",
+        ),
+    ],
+)
+def test_grants_verifier_reports_malformed_csv_safely(output: str, diagnostic: str) -> None:
+    with pytest.raises(smoke.RestoreSmokeError) as error:
+        smoke.validate_grants_verifier_csv(output)
+
+    assert diagnostic in error.value.reason
+
+
 def test_grants_verifier_rejects_incomplete_capability_inventory() -> None:
     output = _valid_grants_csv().replace("23,t,t\n", "", 1)
 

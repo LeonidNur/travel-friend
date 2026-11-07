@@ -71,10 +71,13 @@ def _verifier_csv_fixture(*, failing_api_pair: bool = False) -> str:
     section(("sequence_name", "privilege_type", "unexpected_effective_privilege", "is_absent"), [])
     section(
         ("function_signature", "execute_granted", "is_expected"),
-        [(f"public.fixture_{index}()", "t", "t") for index in range(19)],
+        [
+            (f"public.fixture_{index}()", "t", "t")
+            for index in range(smoke.RESTORE_SMOKE.EXPECTED_RUNTIME_CAPABILITY_COUNT)
+        ],
     )
     api_rows = []
-    for function_index, function in enumerate(smoke.RESTORE_SMOKE.NEW_BACKEND_FUNCTIONS):
+    for function_index, function in enumerate(smoke.RESTORE_SMOKE.PROTECTED_API_FUNCTIONS):
         for role in smoke.RESTORE_SMOKE.SUPABASE_API_ROLE_STUBS:
             failed = failing_api_pair and function_index == 0 and role == "anon"
             api_rows.append((
@@ -561,7 +564,7 @@ def test_verifier_csv_failure_names_check_and_expected_actual_privileges() -> No
     assert "actual=false" in detail
 
 
-def test_current_sql_verifier_api_header_is_adapted_without_hiding_privilege_values() -> None:
+def test_current_sql_verifier_api_header_is_parsed_without_hiding_privilege_values() -> None:
     signature = "public.resolve_bearer_session_with_identity(text)"
     output = (
         "function_signature,execute_granted,is_expected\n"
@@ -570,14 +573,12 @@ def test_current_sql_verifier_api_header_is_adapted_without_hiding_privilege_val
         f"{signature},anon,t,t,t,f,t,f\n"
     )
 
-    with pytest.raises(smoke.RESTORE_SMOKE.RestoreSmokeError, match="could not be validated safely"):
-        smoke.RESTORE_SMOKE.validate_grants_verifier_csv(output)
-
-    canonical = smoke._canonicalize_privilege_verifier_csv(output)
+    parsed, seen = smoke._parse_privilege_verifier_sections(output)
     detail = smoke._privilege_verifier_failure_details(output)
 
-    assert "role_name,is_present,unexpected_execute,is_exact" in canonical
-    assert f"anon,t,t,f" in canonical
+    assert len(parsed["protected_api_capabilities"]) == 1
+    assert parsed["protected_api_capabilities"][0]["unexpected_execute"] == "t"
+    assert "protected_api_capabilities" in seen
     assert signature in detail
     assert "expected_api_execute=false actual_api_execute=t" in detail
     assert "expected_public_execute=false actual_public_execute=f" in detail
@@ -596,7 +597,7 @@ def test_current_sql_verifier_contract_uses_exact_eight_column_api_result() -> N
     assert "RAISE EXCEPTION 'SQL privilege verification failed" in sql
     assert "USING ERRCODE = '42501'" in sql
     assert actual_api_header in tuple(tuple(row.split(",")) for row in output.splitlines())
-    assert len(parsed["api_roles"]) == 9
+    assert len(parsed["protected_api_capabilities"]) == 24
     assert seen == set(smoke.RESTORE_SMOKE.VERIFIER_SECTIONS.values())
     assert smoke._psql.__kwdefaults__["diagnostics"] is False
 
@@ -613,17 +614,50 @@ def test_local_adapter_accepts_machine_contract_and_names_exact_api_privilege_fa
     assert "expected_api_execute=false actual_api_execute=t" in error.value.reason
 
 
-def test_current_sql_verifier_csv_adapter_preserves_failing_api_execute_value() -> None:
+def test_current_sql_verifier_parser_preserves_all_api_capability_values() -> None:
     signature = "public.resolve_bearer_session_with_identity(text)"
     output = (
         "function_signature,role_name,function_exists,is_present,app_runtime_execute,public_execute,unexpected_execute,is_exact\n"
         f"{signature},anon,t,t,t,f,t,f\n"
     )
 
-    canonical = smoke._canonicalize_privilege_verifier_csv(output)
-    rows = canonical.splitlines()
-    api_row = next(line for line in rows if line.startswith("anon,"))
-    assert api_row == "anon,t,t,f"
+    parsed, seen = smoke._parse_privilege_verifier_sections(output)
+    api_row = parsed["protected_api_capabilities"][0]
+    assert api_row == {
+        "function_signature": signature,
+        "role_name": "anon",
+        "function_exists": "t",
+        "is_present": "t",
+        "app_runtime_execute": "t",
+        "public_execute": "f",
+        "unexpected_execute": "t",
+        "is_exact": "f",
+    }
+    assert "protected_api_capabilities" in seen
+
+
+@pytest.mark.parametrize(
+    ("output", "diagnostic"),
+    [
+        ("", "missing:"),
+        ("unexpected,data\n", "data appeared before a known section header"),
+        ("is_public_usage_granted,is_public_create_absent\nt\n", "expects 2 columns, received 1"),
+        (
+            "is_public_usage_granted,is_public_create_absent\nt,t\n"
+            "is_public_usage_granted,is_public_create_absent\nt,t\n",
+            "duplicate section schema",
+        ),
+    ],
+)
+def test_incomplete_or_malformed_verifier_csv_fails_closed_with_diagnostic(
+    output: str, diagnostic: str,
+) -> None:
+    with pytest.raises(smoke.UpgradeSmokeError) as error:
+        smoke._validate_local_runtime_grants_csv(output)
+
+    assert error.value.stage == "PRIVILEGE_VERIFIER"
+    assert diagnostic in error.value.reason
+    assert "KeyError" not in error.value.reason
 
 
 def test_api_role_denial_failure_identifies_role_function_and_actual_execute() -> None:
