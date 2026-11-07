@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import importlib.util
-import csv
-import io
 import json
 import os
 import re
@@ -621,60 +619,12 @@ def _format_psql_failure(stage: str, exit_code: int, stdout: bytes, stderr: byte
 
 
 def _parse_privilege_verifier_sections(output: str) -> tuple[dict[str, list[dict[str, str]]], set[str]]:
-    section_names = set(RESTORE_SMOKE.VERIFIER_SECTIONS.values())
-    section_headers = {
-        **RESTORE_SMOKE.VERIFIER_SECTIONS,
-        (
-            "function_signature", "role_name", "function_exists", "is_present",
-            "app_runtime_execute", "public_execute", "unexpected_execute", "is_exact",
-        ): "api_roles",
-    }
-    sections: dict[str, list[dict[str, str]]] = {name: [] for name in section_names}
-    seen: set[str] = set()
-    current: str | None = None
-    header: list[str] = []
     try:
-        for row in csv.reader(io.StringIO(output)):
-            section = section_headers.get(tuple(row))
-            if section is not None:
-                current, header = section, row
-                seen.add(section)
-            elif row:
-                if current is None or len(row) != len(header):
-                    raise ValueError
-                sections[current].append(dict(zip(header, row, strict=True)))
-    except Exception:
+        return RESTORE_SMOKE.parse_grants_verifier_csv(output)
+    except RESTORE_SMOKE.RestoreSmokeError as error:
         raise UpgradeSmokeError(
-            "PRIVILEGE_VERIFIER", "check=verifier_output expected=sectioned CSV actual=unparseable"
+            "PRIVILEGE_VERIFIER", f"check=verifier_output expected=well_formed_sectioned_csv actual={error.reason}"
         ) from None
-    return sections, seen
-
-
-def _canonicalize_privilege_verifier_csv(output: str) -> str:
-    """Adapt the current API-role result header to the existing validator shape."""
-    actual_api_header = (
-        "function_signature", "role_name", "function_exists", "is_present",
-        "app_runtime_execute", "public_execute", "unexpected_execute", "is_exact",
-    )
-    validator_api_header = ("role_name", "is_present", "unexpected_execute", "is_exact")
-    source = csv.reader(io.StringIO(output))
-    destination = io.StringIO()
-    writer = csv.writer(destination, lineterminator="\n")
-    current_section: str | None = None
-    for row in source:
-        if tuple(row) == actual_api_header:
-            current_section = "api_roles"
-            writer.writerow(validator_api_header)
-        else:
-            section = RESTORE_SMOKE.VERIFIER_SECTIONS.get(tuple(row))
-            if section is not None:
-                current_section = section
-                writer.writerow(row)
-            elif current_section == "api_roles" and row and len(row) == len(actual_api_header):
-                writer.writerow((row[1], row[3], row[6], row[7]))
-            else:
-                writer.writerow(row)
-    return destination.getvalue()
 
 
 def _privilege_verifier_failure_details(output: str, validation_reason: str = "verification failed") -> str:
@@ -689,10 +639,19 @@ def _privilege_verifier_failure_details(output: str, validation_reason: str = "v
         for field, label in (("is_public_usage_granted", "public_schema_usage"), ("is_public_create_absent", "public_schema_create_denied")):
             if row.get(field) != "t":
                 failures.append(f"check={label} expected=true actual={row.get(field, '<missing>')}")
-    expected_counts = {"table_rights": 17 * 7, "capabilities": 19, "api_roles": 3 * 3, "owners": 17, "policies": 17}
+    expected_counts = {
+        "table_rights": len(RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES) * 7,
+        "capabilities": RESTORE_SMOKE.EXPECTED_RUNTIME_CAPABILITY_COUNT,
+        "protected_api_capabilities": (
+            len(RESTORE_SMOKE.PROTECTED_API_FUNCTIONS) * len(RESTORE_SMOKE.SUPABASE_API_ROLE_STUBS)
+        ),
+        "owners": len(RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES),
+        "policies": len(RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES),
+    }
     for section, expected_count in expected_counts.items():
-        if len(sections[section]) != expected_count:
-            failures.append(f"check={section}_coverage expected={expected_count} actual={len(sections[section])}")
+        actual_count = len(sections.get(section, []))
+        if actual_count != expected_count:
+            failures.append(f"check={section}_coverage expected={expected_count} actual={actual_count}")
 
     for row in sections["table_rights"]:
         if row.get("is_exact") != "t":
@@ -724,7 +683,7 @@ def _privilege_verifier_failure_details(output: str, validation_reason: str = "v
                 f"check=runtime_function_execute function={row.get('function_signature', '<unknown>')} "
                 f"expected=true actual={row.get('execute_granted', '<missing>')}"
             )
-    for row in sections["api_roles"]:
+    for row in sections.get("protected_api_capabilities", []):
         if row.get("is_exact") != "t":
             failures.append(
                 f"check=api_role_backend_only_execute role={row.get('role_name', '<unknown>')} "
@@ -814,7 +773,7 @@ def _api_role_function_denial_failure_details(output: str) -> str:
 
 def _validate_local_runtime_grants_csv(output: str) -> None:
     try:
-        RESTORE_SMOKE.validate_grants_verifier_csv(_canonicalize_privilege_verifier_csv(output))
+        RESTORE_SMOKE.validate_grants_verifier_csv(output)
     except RESTORE_SMOKE.RestoreSmokeError as error:
         raise UpgradeSmokeError(
             "PRIVILEGE_VERIFIER", _privilege_verifier_failure_details(output, error.reason)

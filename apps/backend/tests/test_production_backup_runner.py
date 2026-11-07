@@ -59,6 +59,39 @@ def _valid_preflight_result() -> dict[str, object]:
     }
 
 
+def test_production_migration_ledger_matches_verified_current_database() -> None:
+    ledger = {
+        "count": runner.EXPECTED_MIGRATION_COUNT,
+        "versions": [
+            {"version": version, "name": name}
+            for version, name in runner.EXPECTED_PRODUCTION_MIGRATIONS
+        ],
+    }
+
+    assert runner.EXPECTED_MIGRATION_COUNT == 24
+    assert runner._check_migration_ledger(ledger) == ledger
+
+
+@pytest.mark.parametrize("mutation", ["old_count", "wrong_name", "unexpected_version"])
+def test_production_migration_ledger_rejects_inventory_drift(mutation: str) -> None:
+    versions = [
+        {"version": version, "name": name}
+        for version, name in runner.EXPECTED_PRODUCTION_MIGRATIONS
+    ]
+    if mutation == "old_count":
+        versions = versions[:19]
+    elif mutation == "wrong_name":
+        versions[-1] = {**versions[-1], "name": "unexpected_name"}
+    else:
+        versions[-1] = {"version": "20261105121901", "name": "live_chat_pagination_unread_idempotency"}
+    ledger = {"count": len(versions), "versions": versions}
+
+    with pytest.raises(runner.PreflightStop) as error:
+        runner._check_migration_ledger(ledger)
+
+    assert error.value.stage == "MIGRATION_LEDGER"
+
+
 def _completed(args: list[str], stdout: str = "", stderr: str = "", returncode: int = 0):
     return subprocess.CompletedProcess(args, returncode, stdout=stdout, stderr=stderr)
 
@@ -150,7 +183,7 @@ def test_preflight_only_runs_read_only_checks_without_dump_or_artifacts(
     assert "RLS/read coverage: PASS (17/17 tables)" in output.out
     assert "ACL inventory: PASS" in output.out
     assert "pgcrypto 1.3" in output.out
-    assert "Migration records: 19" in output.out
+    assert f"Migration records: {runner.EXPECTED_MIGRATION_COUNT}" in output.out
     assert "STOP conditions: none detected" in output.out
     assert "No export was attempted" in output.out
     assert SECRET not in output.out + output.err

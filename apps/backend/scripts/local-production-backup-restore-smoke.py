@@ -29,7 +29,41 @@ POSTGRES_IMAGE = "postgres:17-alpine"
 CONTAINER_LABEL_KEY = "com.travel-friend.disposable-backup-restore"
 EXPECTED_DATABASE_PREFIX = "tf_restore_"
 EXPECTED_POSTGRES_MAJOR = 17
-EXPECTED_MIGRATION_COUNT = 19
+EXPECTED_RUNTIME_CAPABILITY_COUNT = 24
+
+# Read-only inventories confirmed in the 2026-10-28 archive and current
+# production database. Newer repository migrations are replayed only locally.
+CURRENT_PRODUCTION_MIGRATIONS = (
+    ("20260826084844", "core_identity"),
+    ("20260826100000", "user_sessions"),
+    ("20260901120000", "discover_interest_decisions_and_matches"),
+    ("20260901130000", "chat_persistence"),
+    ("20260901140000", "trip_persistence"),
+    ("20260901150000", "trip_stops_persistence"),
+    ("20260901160000", "authenticated_user_context"),
+    ("20260901170000", "bearer_session_resolution_capability"),
+    ("20260901180000", "telegram_login_bootstrap_capability"),
+    ("20260901190000", "travel_intents_rls"),
+    ("20260901200000", "profiles_rls"),
+    ("20260901210000", "revoke_trigger_function_public_execute"),
+    ("20260901220000", "user_sessions_rls"),
+    ("20260901230000", "onboarding_completion_capability"),
+    ("20260901240000", "user_activity_states_rls"),
+    ("20260901250000", "discover_match_direct_chat_rls"),
+    ("20260901260000", "chat_rls"),
+    ("20260901270000", "trip_rls"),
+    ("20260901280000", "internal_dormant_tables_rls"),
+    ("20260924090000", "completed_onboarding_active_travel_intent_invariant"),
+    ("20260924100000", "session_lifecycle_baseline"),
+    ("20260924110000", "backend_field_domain_limits"),
+    ("20261003090000", "chat_participant_public_profile"),
+    ("20261018090000", "server_side_tester_admission_session_identity"),
+)
+LEGACY_ARCHIVE_MIGRATIONS = CURRENT_PRODUCTION_MIGRATIONS[:19]
+SUPPORTED_ARCHIVE_MIGRATION_LEDGERS = (
+    LEGACY_ARCHIVE_MIGRATIONS,
+    CURRENT_PRODUCTION_MIGRATIONS,
+)
 
 EXPECTED_PUBLIC_TABLES = frozenset({
     "users",
@@ -56,8 +90,8 @@ EXPECTED_TRIGGERS = frozenset({
     "chat_participants_read_sequences_only_move_forward",
 })
 # These are the function signatures for the 19 migrations recorded by the
-# supplied archive. The restore phase checks this inventory before replaying
-# repository migrations that are absent from the archive ledger.
+# supplied 2026-10-28 archive. The restore phase checks this inventory before
+# replaying repository migrations that are absent from the archive ledger.
 ARCHIVE_EXPECTED_FUNCTIONS = (
     "public.current_authenticated_user_id()",
     "public.resolve_bearer_session(text)",
@@ -82,9 +116,28 @@ CURRENT_APP_ADDITIONAL_FUNCTIONS = (
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
     "public.chat_participant_public_profile(uuid,uuid)",
     "public.resolve_bearer_session_with_identity(text)",
+    "public.send_current_chat_message(uuid,text,uuid)",
+    "public.chat_list_projection()",
+    "public.mark_current_chat_read(uuid,bigint)",
+    "public.create_current_group_chat(uuid[],text)",
+    "public.rename_current_group_chat(uuid,text)",
 )
 CURRENT_APP_EXPECTED_FUNCTIONS = (*ARCHIVE_EXPECTED_FUNCTIONS, *CURRENT_APP_ADDITIONAL_FUNCTIONS)
+PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS = (
+    *ARCHIVE_EXPECTED_FUNCTIONS,
+    *CURRENT_APP_ADDITIONAL_FUNCTIONS[:3],
+)
 SUPABASE_API_ROLE_STUBS = ("anon", "authenticated", "service_role")
+PROTECTED_API_FUNCTIONS = (
+    "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
+    "public.chat_participant_public_profile(uuid,uuid)",
+    "public.resolve_bearer_session_with_identity(text)",
+    "public.send_current_chat_message(uuid,text,uuid)",
+    "public.mark_current_chat_read(uuid,bigint)",
+    "public.chat_list_projection()",
+    "public.create_current_group_chat(uuid[],text)",
+    "public.rename_current_group_chat(uuid,text)",
+)
 NEW_BACKEND_FUNCTIONS = (
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
     "public.chat_participant_public_profile(uuid,uuid)",
@@ -192,9 +245,8 @@ def validate_archive(archive_path: Path, manifest_path: Path) -> dict[str, Any]:
             for item in dependencies
         )
         or not isinstance(ledger, dict)
-        or ledger.get("count") != EXPECTED_MIGRATION_COUNT
+        or not isinstance(ledger.get("count"), int)
         or not isinstance(versions, list)
-        or len(versions) != EXPECTED_MIGRATION_COUNT
         or any(
             not isinstance(item, dict)
             or not isinstance(item.get("version"), str)
@@ -205,7 +257,25 @@ def validate_archive(archive_path: Path, manifest_path: Path) -> dict[str, Any]:
         )
     ):
         raise RestoreSmokeError("ARCHIVE", "manifest restore-dependency or migration metadata is incomplete.")
+    archived_migrations = tuple((item["version"], item["name"]) for item in versions)
+    if (
+        ledger["count"] != len(versions)
+        or archived_migrations not in SUPPORTED_ARCHIVE_MIGRATION_LEDGERS
+    ):
+        raise RestoreSmokeError("ARCHIVE", "manifest migration ledger does not match a reviewed backup baseline.")
     return manifest
+
+
+def expected_archive_functions(manifest: dict[str, Any]) -> tuple[str, ...]:
+    ledger = manifest["observations"]["migration_ledger"]
+    archived_migrations = tuple(
+        (item["version"], item["name"]) for item in ledger["versions"]
+    )
+    if archived_migrations == LEGACY_ARCHIVE_MIGRATIONS:
+        return ARCHIVE_EXPECTED_FUNCTIONS
+    if archived_migrations == CURRENT_PRODUCTION_MIGRATIONS:
+        return PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS
+    raise RestoreSmokeError("ARCHIVE", "archive migration ledger has no reviewed function inventory.")
 
 
 def _docker(
@@ -533,7 +603,10 @@ VERIFIER_SECTIONS = {
     ("table_name", "column_name", "privilege_type", "column_exists", "actual_granted", "is_exact"): "column_rights",
     ("sequence_name", "privilege_type", "unexpected_effective_privilege", "is_absent"): "sequences",
     ("function_signature", "execute_granted", "is_expected"): "capabilities",
-    ("role_name", "is_present", "unexpected_execute", "is_exact"): "api_roles",
+    (
+        "function_signature", "role_name", "function_exists", "is_present",
+        "app_runtime_execute", "public_execute", "unexpected_execute", "is_exact",
+    ): "protected_api_capabilities",
     ("unexpected_function_signature", "unexpected_execute"): "unexpected_functions",
     ("table_name", "owner_role", "is_not_owned_by_app_runtime"): "owners",
     ("table_name", "rls_enabled", "is_not_owned_by_app_runtime", "actual_policy_count", "expected_policy_count", "is_rls_enabled", "is_not_owned", "is_expected_policy_count"): "policies",
@@ -541,42 +614,85 @@ VERIFIER_SECTIONS = {
 }
 
 
-def validate_grants_verifier_csv(output: str) -> None:
+def parse_grants_verifier_csv(
+    output: str,
+) -> tuple[dict[str, list[dict[str, str]]], set[str]]:
     sections: dict[str, list[dict[str, str]]] = {section: [] for section in VERIFIER_SECTIONS.values()}
     seen_sections: set[str] = set()
     current_section: str | None = None
     current_header: list[str] = []
     try:
-        rows = csv.reader(io.StringIO(output))
-        for row in rows:
+        for line_number, row in enumerate(csv.reader(io.StringIO(output)), start=1):
+            if not row:
+                continue
             header_section = VERIFIER_SECTIONS.get(tuple(row))
             if header_section is not None:
+                if header_section in seen_sections:
+                    raise RestoreSmokeError(
+                        "GRANTS",
+                        f"malformed verifier CSV at row {line_number}: duplicate section {header_section}.",
+                    )
                 current_section = header_section
                 current_header = row
                 seen_sections.add(header_section)
                 continue
-            if not row:
-                continue
-            if current_section is None or len(row) != len(current_header):
-                raise ValueError
+            if current_section is None:
+                raise RestoreSmokeError(
+                    "GRANTS",
+                    f"malformed verifier CSV at row {line_number}: data appeared before a known section header.",
+                )
+            if len(row) != len(current_header):
+                raise RestoreSmokeError(
+                    "GRANTS",
+                    f"malformed verifier CSV at row {line_number}: section {current_section} expects "
+                    f"{len(current_header)} columns, received {len(row)}.",
+                )
             sections[current_section].append(dict(zip(current_header, row, strict=True)))
+    except RestoreSmokeError:
+        raise
+    except csv.Error:
+        raise RestoreSmokeError("GRANTS", "malformed verifier CSV quoting or row structure.") from None
     except Exception:
-        raise RestoreSmokeError("GRANTS", "the runtime grants verifier output could not be validated safely.") from None
+        raise RestoreSmokeError("GRANTS", "the runtime grants verifier output could not be parsed safely.") from None
+    return sections, seen_sections
+
+
+def validate_grants_verifier_csv(output: str) -> None:
+    sections, seen_sections = parse_grants_verifier_csv(output)
 
     if seen_sections != set(sections):
-        raise RestoreSmokeError("GRANTS", "the runtime grants verifier returned an incomplete result set.")
+        missing_sections = sorted(set(sections) - seen_sections)
+        raise RestoreSmokeError(
+            "GRANTS", f"the runtime grants verifier returned an incomplete result set; missing sections: {', '.join(missing_sections)}."
+        )
     if sections["unexpected_functions"]:
         raise RestoreSmokeError("GRANTS", "the runtime role has unexpected function execution privileges.")
     if len(sections["table_rights"]) != len(EXPECTED_PUBLIC_TABLES) * 7:
         raise RestoreSmokeError("GRANTS", "the runtime grants verifier did not cover all application tables.")
     if len(sections["owners"]) != len(EXPECTED_PUBLIC_TABLES) or len(sections["policies"]) != len(EXPECTED_PUBLIC_TABLES):
         raise RestoreSmokeError("GRANTS", "the runtime grants verifier did not cover all application tables.")
-    if len(sections["capabilities"]) != 19:
+    if len(sections["capabilities"]) != EXPECTED_RUNTIME_CAPABILITY_COUNT:
         raise RestoreSmokeError("GRANTS", "the runtime capability grant inventory was incomplete.")
-    if {row.get("role_name") for row in sections["api_roles"]} != set(SUPABASE_API_ROLE_STUBS):
-        raise RestoreSmokeError("GRANTS", "the Supabase API role inventory was incomplete.")
-    if any(row.get("unexpected_execute") != "f" for row in sections["api_roles"]):
-        raise RestoreSmokeError("GRANTS", "a Supabase API role can execute the backend-only resolver.")
+    expected_protected_rows = {
+        (signature, role_name)
+        for signature in PROTECTED_API_FUNCTIONS
+        for role_name in SUPABASE_API_ROLE_STUBS
+    }
+    protected_rows = sections["protected_api_capabilities"]
+    actual_protected_rows = {
+        (row.get("function_signature"), row.get("role_name")) for row in protected_rows
+    }
+    if len(protected_rows) != len(expected_protected_rows) or actual_protected_rows != expected_protected_rows:
+        raise RestoreSmokeError("GRANTS", "the protected API capability inventory was incomplete.")
+    if any(
+        row.get("function_exists") != "t"
+        or row.get("app_runtime_execute") != "t"
+        or row.get("public_execute") != "f"
+        or row.get("unexpected_execute") != "f"
+        or row.get("is_exact") != "t"
+        for row in protected_rows
+    ):
+        raise RestoreSmokeError("GRANTS", "a protected capability has unexpected effective API-role privileges.")
 
     for section, rows in sections.items():
         if section == "unexpected_functions":
@@ -762,6 +878,8 @@ def _restore_command(container_name: str, database: str) -> list[str]:
 
 def run_smoke(archive_path: Path, manifest_path: Path) -> int:
     manifest = validate_archive(archive_path, manifest_path)
+    archive_functions = expected_archive_functions(manifest)
+    archive_migration_count = manifest["observations"]["migration_ledger"]["count"]
     container_name, suffix = _container_name()
     database = f"{EXPECTED_DATABASE_PREFIX}{suffix}"
     container_creation_attempted = False
@@ -925,7 +1043,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
             summary = json.loads(_psql(
                 container_name,
                 database,
-                _read_only_inventory_sql(),
+                _read_only_inventory_sql(archive_functions),
                 stage="STRUCTURE",
                 reason="restored structural inventory could not be read safely.",
             ))
@@ -947,7 +1065,12 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
             raise RestoreSmokeError("DATA", "aggregate restored row count was invalid.") from None
         if aggregate_rows < 0:
             raise RestoreSmokeError("DATA", "aggregate restored row count was invalid.")
-        validate_structure(summary, database, aggregate_rows)
+        validate_structure(
+            summary,
+            database,
+            aggregate_rows,
+            expected_functions=archive_functions,
+        )
         partial_summary = [
             "Archive integrity: PASS (manifest size and SHA-256).",
             f"Local PostgreSQL: {server_version} (isolated Docker network; client major {EXPECTED_POSTGRES_MAJOR}).",
@@ -956,7 +1079,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
             f"Aggregate restored public rows: {aggregate_rows} (restored database only; no source-count comparison).",
             f"Structure: PASS (schema-only equality; constraints {summary['constraint_count']}, indexes {summary['index_count']}, triggers {len(summary['trigger_names'])}, functions {summary['function_count']}).",
             f"RLS/policies: PASS ({summary['rls_table_count']}/{len(EXPECTED_PUBLIC_TABLES)} tables, {summary['policy_count']} policies).",
-            "Archive-era expected objects: PASS; manifest records 19 migrations.",
+            f"Archive-era expected objects: PASS; manifest records {archive_migration_count} migrations.",
             "Supabase API roles: PASS (known NOLOGIN role names modeled locally; no unknown roles created).",
         ]
 
@@ -1039,7 +1162,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
         success_summary = [
             *partial_summary,
             "app_runtime grants: PASS (existing grants script and read-only verifier).",
-            "API role capabilities: PASS (no effective EXECUTE on three newly added functions in the local target; production default ACL remains unknown).",
+            "API role capabilities: PASS (no effective EXECUTE on eight protected backend-only functions in the local target; production default ACL remains unknown).",
             "Production Supabase ACL restoration: NOT VERIFIED; --no-acl excluded source ACLs.",
         ]
     except RestoreSmokeError as error:
