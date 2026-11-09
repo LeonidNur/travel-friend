@@ -18,7 +18,9 @@ WITH application_tables (table_name) AS (
     ('user_settings'), ('user_activity_states'), ('travel_intents'),
     ('user_sessions'), ('discover_interest_decisions'), ('matches'), ('chats'),
     ('chat_participants'), ('messages'), ('chat_summaries'), ('trips'),
-    ('trip_participants'), ('trip_stops')
+    ('trip_participants'), ('trip_stops'), ('trip_itinerary_days'),
+    ('trip_itinerary_events'), ('trip_drafts'), ('trip_draft_versions'),
+    ('trip_draft_alternatives')
 ), expected (table_name, privilege_type) AS (
   VALUES
     ('profiles', 'SELECT'), ('profiles', 'INSERT'), ('profiles', 'UPDATE'),
@@ -32,7 +34,10 @@ WITH application_tables (table_name) AS (
     ('messages', 'SELECT'),
     ('trips', 'SELECT'),
     ('trip_participants', 'SELECT'),
-    ('trip_stops', 'SELECT')
+    ('trip_stops', 'SELECT'),
+    ('trip_itinerary_days', 'SELECT'), ('trip_itinerary_events', 'SELECT'),
+    ('trip_drafts', 'SELECT'), ('trip_draft_versions', 'SELECT'),
+    ('trip_draft_alternatives', 'SELECT')
 ), operations (privilege_type, supports_column_privileges) AS (
   VALUES
     ('SELECT', true), ('INSERT', true), ('UPDATE', true), ('DELETE', false),
@@ -81,7 +86,9 @@ WITH application_tables (table_name) AS (
     ('user_settings'), ('user_activity_states'), ('travel_intents'),
     ('user_sessions'), ('discover_interest_decisions'), ('matches'), ('chats'),
     ('chat_participants'), ('messages'), ('chat_summaries'), ('trips'),
-    ('trip_participants'), ('trip_stops')
+    ('trip_participants'), ('trip_stops'), ('trip_itinerary_days'),
+    ('trip_itinerary_events'), ('trip_drafts'), ('trip_draft_versions'),
+    ('trip_draft_alternatives')
 ), expected_column_privilege_groups (table_name, privilege_type, column_names) AS (
   VALUES
     ('profiles', 'SELECT', ARRAY['id', 'user_id', 'display_name', 'birth_date', 'gender', 'city', 'bio', 'travel_style', 'interests', 'budget_level', 'comfort_level', 'created_at', 'updated_at']),
@@ -100,7 +107,12 @@ WITH application_tables (table_name) AS (
     ('messages', 'SELECT', ARRAY['id', 'chat_id', 'sequence_number', 'type', 'sender_user_id', 'recipient_user_id', 'content_text', 'created_at']),
     ('trips', 'SELECT', ARRAY['id', 'chat_id', 'created_by_user_id', 'status', 'membership_version', 'state_version', 'destination_version', 'dates_version', 'budget_version', 'transport_version', 'destination_status', 'dates_status', 'budget_status', 'transport_status', 'date_from', 'date_to', 'budget_min', 'budget_max', 'budget_currency', 'budget_scope', 'started_at', 'completed_at', 'cancelled_at', 'created_at', 'updated_at']),
     ('trip_participants', 'SELECT', ARRAY['trip_id', 'user_id', 'left_at']),
-    ('trip_stops', 'SELECT', ARRAY['id', 'trip_id', 'position', 'place_label', 'country_code', 'place_ref', 'stay_from', 'stay_to', 'notes', 'created_at', 'updated_at'])
+    ('trip_stops', 'SELECT', ARRAY['id', 'trip_id', 'position', 'place_label', 'country_code', 'place_ref', 'stay_from', 'stay_to', 'notes', 'created_at', 'updated_at']),
+    ('trip_itinerary_days', 'SELECT', ARRAY['id', 'trip_id', 'position', 'day_date', 'title', 'notes', 'created_at', 'updated_at']),
+    ('trip_itinerary_events', 'SELECT', ARRAY['id', 'trip_id', 'day_id', 'position', 'kind', 'title', 'start_time', 'duration_minutes', 'address', 'estimated_cost', 'currency', 'notes', 'created_at', 'updated_at']),
+    ('trip_drafts', 'SELECT', ARRAY['trip_id', 'version', 'content', 'updated_by_user_id', 'created_at', 'updated_at']),
+    ('trip_draft_versions', 'SELECT', ARRAY['trip_id', 'version', 'content', 'author_user_id', 'created_at']),
+    ('trip_draft_alternatives', 'SELECT', ARRAY['id', 'trip_id', 'title', 'content', 'created_by_user_id', 'created_at'])
 ), expected_column_privileges AS (
   SELECT table_name, privilege_type, unnest(column_names) AS column_name
   FROM expected_column_privilege_groups
@@ -181,6 +193,8 @@ WITH capability_signatures (function_signature) AS (
     ,('public.chat_list_projection()')
     ,('public.is_current_active_trip_participant(uuid)')
     ,('public.create_current_trip_from_chat(uuid)')
+    ,('public.save_current_trip_draft(uuid,integer,jsonb)')
+    ,('public.save_current_trip_draft_alternative(uuid,text,jsonb)')
 ), required_capabilities AS (
   SELECT function_signature, to_regprocedure(function_signature) AS function_oid
   FROM capability_signatures
@@ -206,6 +220,8 @@ WITH protected_capabilities (function_signature) AS (
     ('public.chat_list_projection()')
     ,('public.create_current_group_chat(uuid[],text)')
     ,('public.rename_current_group_chat(uuid,text)')
+    ,('public.save_current_trip_draft(uuid,integer,jsonb)')
+    ,('public.save_current_trip_draft_alternative(uuid,text,jsonb)')
 ), api_roles (role_name) AS (
   VALUES ('anon'), ('authenticated'), ('service_role')
 ), resolved_capabilities AS (
@@ -288,6 +304,8 @@ WITH capability_signatures (function_signature) AS (
     ,('public.chat_list_projection()')
     ,('public.is_current_active_trip_participant(uuid)')
     ,('public.create_current_trip_from_chat(uuid)')
+    ,('public.save_current_trip_draft(uuid,integer,jsonb)')
+    ,('public.save_current_trip_draft_alternative(uuid,text,jsonb)')
 ), required_capabilities AS (
   SELECT function_signature, to_regprocedure(function_signature) AS function_oid
   FROM capability_signatures
@@ -312,7 +330,9 @@ WITH application_tables (table_name) AS (
     ('user_settings'), ('user_activity_states'), ('travel_intents'),
     ('user_sessions'), ('discover_interest_decisions'), ('matches'), ('chats'),
     ('chat_participants'), ('messages'), ('chat_summaries'), ('trips'),
-    ('trip_participants'), ('trip_stops')
+    ('trip_participants'), ('trip_stops'), ('trip_itinerary_days'),
+    ('trip_itinerary_events'), ('trip_drafts'), ('trip_draft_versions'),
+    ('trip_draft_alternatives')
 )
 SELECT
   tables.table_name,
@@ -335,7 +355,9 @@ WITH application_tables (table_name, expected_policy_count) AS (
     ('travel_intents', 3), ('user_sessions', 2),
     ('discover_interest_decisions', 1), ('matches', 1), ('chats', 1),
     ('chat_participants', 1), ('messages', 1), ('chat_summaries', 0),
-    ('trips', 1), ('trip_participants', 1), ('trip_stops', 1)
+    ('trips', 1), ('trip_participants', 1), ('trip_stops', 1),
+    ('trip_itinerary_days', 1), ('trip_itinerary_events', 1), ('trip_drafts', 1),
+    ('trip_draft_versions', 1), ('trip_draft_alternatives', 1)
 ), relations AS (
   SELECT tables.table_name, tables.expected_policy_count, class.oid, class.relrowsecurity,
     roles.rolname <> 'app_runtime' AS is_not_owned_by_app_runtime

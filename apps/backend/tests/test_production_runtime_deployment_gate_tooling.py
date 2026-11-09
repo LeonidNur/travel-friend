@@ -64,6 +64,8 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "chat_list_projection",
         "is_current_active_trip_participant",
         "create_current_trip_from_chat",
+        "save_current_trip_draft",
+        "save_current_trip_draft_alternative",
         "enforce_direct_chat_participant_count",
         "set_config('app.user_id', %s, true)",
         "public.profiles",
@@ -76,6 +78,11 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "public.trips",
         "public.trip_participants",
         "public.trip_stops",
+        "trip_itinerary_days",
+        "trip_itinerary_events",
+        "trip_drafts",
+        "trip_draft_versions",
+        "trip_draft_alternatives",
         "INTERNAL_DORMANT_TABLES",
         "APPLICATION_TABLES",
         '"users"',
@@ -100,6 +107,8 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "public.chat_list_projection()",
         "public.create_current_group_chat(uuid[],text)",
         "public.rename_current_group_chat(uuid,text)",
+        "public.save_current_trip_draft(uuid,integer,jsonb)",
+        "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
     )
 
     for policy_name in (
@@ -120,6 +129,11 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "trips_select_active_participant",
         "trip_participants_select_active_trip",
         "trip_stops_select_active_participant",
+        "trip_itinerary_days_select_active_participant",
+        "trip_itinerary_events_select_active_participant",
+        "trip_drafts_select_active_participant",
+        "trip_draft_versions_select_active_participant",
+        "trip_draft_alternatives_select_active_participant",
     ):
         assert policy_name in script
 

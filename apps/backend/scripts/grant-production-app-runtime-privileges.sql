@@ -31,6 +31,11 @@ REVOKE ALL PRIVILEGES ON TABLE public.chat_summaries FROM app_runtime;
 REVOKE ALL PRIVILEGES ON TABLE public.trips FROM app_runtime;
 REVOKE ALL PRIVILEGES ON TABLE public.trip_participants FROM app_runtime;
 REVOKE ALL PRIVILEGES ON TABLE public.trip_stops FROM app_runtime;
+REVOKE ALL PRIVILEGES ON TABLE public.trip_itinerary_days FROM app_runtime;
+REVOKE ALL PRIVILEGES ON TABLE public.trip_itinerary_events FROM app_runtime;
+REVOKE ALL PRIVILEGES ON TABLE public.trip_drafts FROM app_runtime;
+REVOKE ALL PRIVILEGES ON TABLE public.trip_draft_versions FROM app_runtime;
+REVOKE ALL PRIVILEGES ON TABLE public.trip_draft_alternatives FROM app_runtime;
 
 GRANT SELECT (id, user_id, display_name, birth_date, gender, city, bio,
   travel_style, interests, budget_level, comfort_level, created_at, updated_at)
@@ -80,6 +85,18 @@ GRANT SELECT (id, trip_id, position, place_label, country_code, place_ref,
   stay_from, stay_to, notes, created_at, updated_at)
   ON TABLE public.trip_stops TO app_runtime;
 
+GRANT SELECT (id, trip_id, position, day_date, title, notes, created_at, updated_at)
+  ON TABLE public.trip_itinerary_days TO app_runtime;
+GRANT SELECT (id, trip_id, day_id, position, kind, title, start_time,
+  duration_minutes, address, estimated_cost, currency, notes, created_at, updated_at)
+  ON TABLE public.trip_itinerary_events TO app_runtime;
+GRANT SELECT (trip_id, version, content, updated_by_user_id, created_at, updated_at)
+  ON TABLE public.trip_drafts TO app_runtime;
+GRANT SELECT (trip_id, version, content, author_user_id, created_at)
+  ON TABLE public.trip_draft_versions TO app_runtime;
+GRANT SELECT (id, trip_id, title, content, created_by_user_id, created_at)
+  ON TABLE public.trip_draft_alternatives TO app_runtime;
+
 -- UUID primary keys use gen_random_uuid(); current migrations define no
 -- application sequence, so this script intentionally grants no sequence rights.
 
@@ -112,6 +129,8 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.mark_current_chat_read(uuid, bigint) FR
 REVOKE ALL PRIVILEGES ON FUNCTION public.chat_list_projection() FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.is_current_active_trip_participant(uuid) FROM app_runtime;
 REVOKE ALL PRIVILEGES ON FUNCTION public.create_current_trip_from_chat(uuid) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.save_current_trip_draft(uuid, integer, jsonb) FROM app_runtime;
+REVOKE ALL PRIVILEGES ON FUNCTION public.save_current_trip_draft_alternative(uuid, text, jsonb) FROM app_runtime;
 
 GRANT EXECUTE ON FUNCTION public.current_authenticated_user_id() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
@@ -141,3 +160,5 @@ GRANT EXECUTE ON FUNCTION public.mark_current_chat_read(uuid, bigint) TO app_run
 GRANT EXECUTE ON FUNCTION public.chat_list_projection() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.is_current_active_trip_participant(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.create_current_trip_from_chat(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.save_current_trip_draft(uuid, integer, jsonb) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.save_current_trip_draft_alternative(uuid, text, jsonb) TO app_runtime;

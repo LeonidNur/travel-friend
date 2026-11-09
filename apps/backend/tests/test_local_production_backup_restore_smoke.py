@@ -118,6 +118,7 @@ def test_validate_archive_accepts_current_production_migration_and_function_base
     ] == [
         "20261105121901_live_chat_pagination_unread_idempotency.sql",
         "20261106080902_group_chat_titles_and_rename.sql",
+        "20261109120000_trip_itinerary_shared_draft.sql",
     ]
 
 
@@ -137,8 +138,8 @@ def test_validate_archive_rejects_unreviewed_same_count_migration_ledger(
 def test_expected_function_inventory_matches_archived_migration_era() -> None:
     assert len(smoke.ARCHIVE_EXPECTED_FUNCTIONS) == 18
     assert len(smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 21
-    assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 26
-    assert smoke.EXPECTED_RUNTIME_CAPABILITY_COUNT == 24
+    assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 28
+    assert smoke.EXPECTED_RUNTIME_CAPABILITY_COUNT == 26
     assert smoke.CURRENT_PRODUCTION_MIGRATIONS == backup_runner.EXPECTED_PRODUCTION_MIGRATIONS
     assert set(smoke.CURRENT_APP_ADDITIONAL_FUNCTIONS) == {
         "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
@@ -149,6 +150,8 @@ def test_expected_function_inventory_matches_archived_migration_era() -> None:
         "public.mark_current_chat_read(uuid,bigint)",
         "public.create_current_group_chat(uuid[],text)",
         "public.rename_current_group_chat(uuid,text)",
+        "public.save_current_trip_draft(uuid,integer,jsonb)",
+        "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
     }
 
 
@@ -156,7 +159,7 @@ def _valid_structure() -> dict[str, object]:
     return {
         "database": "tf_restore_ab12",
         "server_version": "17.6",
-        "tables": sorted(smoke.EXPECTED_PUBLIC_TABLES),
+        "tables": sorted(smoke.ARCHIVE_EXPECTED_PUBLIC_TABLES),
         "constraint_count": 50,
         "index_count": 40,
         "trigger_names": sorted(smoke.EXPECTED_TRIGGERS),
@@ -177,10 +180,16 @@ def test_validate_structure_accepts_expected_inventory() -> None:
 def test_validate_structure_accepts_post_migration_function_inventory() -> None:
     summary = _valid_structure()
     summary["function_count"] = len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS)
+    summary["tables"] = sorted(smoke.EXPECTED_PUBLIC_TABLES)
+    summary["rls_table_count"] = len(smoke.EXPECTED_PUBLIC_TABLES)
+    summary["policy_count"] = len(smoke.CURRENT_APP_EXPECTED_POLICY_NAMES)
+    summary["expected_policy_count"] = len(smoke.CURRENT_APP_EXPECTED_POLICY_NAMES)
     smoke.validate_structure(
         summary,
         "tf_restore_ab12",
         expected_functions=smoke.CURRENT_APP_EXPECTED_FUNCTIONS,
+        expected_tables=smoke.EXPECTED_PUBLIC_TABLES,
+        expected_policy_names=smoke.CURRENT_APP_EXPECTED_POLICY_NAMES,
     )
 
 
@@ -221,7 +230,7 @@ def _valid_grants_csv() -> str:
         if section == "schema":
             writer.writerow(["t", "t"])
         elif section == "table_rights":
-            writer.writerows([["table", "SELECT", "t", "t", "t", "t"] for _ in range(17 * 7)])
+            writer.writerows([["table", "SELECT", "t", "t", "t", "t"] for _ in range(len(smoke.EXPECTED_PUBLIC_TABLES) * 7)])
         elif section == "column_rights":
             writer.writerow(["profiles", "id", "SELECT", "t", "t", "t"])
         elif section == "sequences":
@@ -240,9 +249,9 @@ def _valid_grants_csv() -> str:
         elif section == "unexpected_functions":
             pass
         elif section == "owners":
-            writer.writerows([["table", "postgres", "t"] for _ in range(17)])
+            writer.writerows([["table", "postgres", "t"] for _ in range(len(smoke.EXPECTED_PUBLIC_TABLES))])
         elif section == "policies":
-            writer.writerows([["table", "t", "t", "1", "1", "t", "t", "t"] for _ in range(17)])
+            writer.writerows([["table", "t", "t", "1", "1", "t", "t", "t"] for _ in range(len(smoke.EXPECTED_PUBLIC_TABLES))])
         elif section == "role_attributes":
             writer.writerow(["t", "t", "t", "t", "t"])
     return output.getvalue()
@@ -303,7 +312,7 @@ def test_grants_verifier_rejects_api_role_execute_on_backend_resolver() -> None:
 def test_new_function_api_role_check_is_complete_and_fails_closed() -> None:
     sql = smoke._api_role_function_denials_sql()
 
-    assert "count(*) = 9" in sql
+    assert "count(*) = 15" in sql
     assert all(signature in sql for signature in smoke.NEW_BACKEND_FUNCTIONS)
     assert "has_function_privilege" in sql
     smoke.validate_api_role_function_denials("t")
@@ -361,13 +370,17 @@ def test_supabase_api_roles_are_only_local_nologin_stubs(monkeypatch: pytest.Mon
 
 
 def test_migration_row_count_check_compares_only_complete_aggregate_inventory() -> None:
-    before = json.dumps({table: 1 for table in smoke.EXPECTED_PUBLIC_TABLES})
-    unchanged = json.dumps({table: 1 for table in smoke.EXPECTED_PUBLIC_TABLES})
-    changed = json.dumps({table: 1 for table in smoke.EXPECTED_PUBLIC_TABLES if table != "messages"} | {"messages": 2})
+    before_counts = {table: 1 for table in smoke.ARCHIVE_EXPECTED_PUBLIC_TABLES}
+    after_counts = {**before_counts, "trip_drafts": 1, "trip_draft_versions": 1,
+                    "trip_itinerary_days": 0, "trip_itinerary_events": 0,
+                    "trip_draft_alternatives": 0}
+    before = json.dumps(before_counts)
+    unchanged = json.dumps(after_counts)
+    changed = json.dumps({**after_counts, "messages": 2})
 
     smoke.validate_migration_row_counts(before, unchanged)
 
-    with pytest.raises(smoke.RestoreSmokeError, match="changed application table row counts"):
+    with pytest.raises(smoke.RestoreSmokeError, match="changed legacy application table row counts"):
         smoke.validate_migration_row_counts(before, changed)
 
 
@@ -375,9 +388,10 @@ def test_migration_row_count_check_fails_closed_on_incomplete_or_invalid_invento
     with pytest.raises(smoke.RestoreSmokeError, match="incomplete or invalid"):
         smoke.validate_migration_row_counts('{"users": 0}', '{"users": 0}')
 
-    invalid = json.dumps({table: -1 for table in smoke.EXPECTED_PUBLIC_TABLES})
+    invalid = json.dumps({table: -1 for table in smoke.ARCHIVE_EXPECTED_PUBLIC_TABLES})
+    invalid_after = json.dumps({table: -1 for table in smoke.EXPECTED_PUBLIC_TABLES})
     with pytest.raises(smoke.RestoreSmokeError, match="incomplete or invalid"):
-        smoke.validate_migration_row_counts(invalid, invalid)
+        smoke.validate_migration_row_counts(invalid, invalid_after)
 
 
 def test_cleanup_only_stops_exact_container_after_per_run_identity_check(monkeypatch: pytest.MonkeyPatch) -> None:

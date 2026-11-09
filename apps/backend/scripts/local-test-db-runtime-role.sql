@@ -41,6 +41,17 @@ GRANT SELECT (id, chat_id, sequence_number, type, sender_user_id,
 GRANT SELECT ON TABLE public.trips TO app_runtime;
 GRANT SELECT (trip_id, user_id, left_at) ON TABLE public.trip_participants TO app_runtime;
 GRANT SELECT ON TABLE public.trip_stops TO app_runtime;
+GRANT SELECT (id, trip_id, position, day_date, title, notes, created_at, updated_at)
+  ON TABLE public.trip_itinerary_days TO app_runtime;
+GRANT SELECT (id, trip_id, day_id, position, kind, title, start_time,
+  duration_minutes, address, estimated_cost, currency, notes, created_at, updated_at)
+  ON TABLE public.trip_itinerary_events TO app_runtime;
+GRANT SELECT (trip_id, version, content, updated_by_user_id, created_at, updated_at)
+  ON TABLE public.trip_drafts TO app_runtime;
+GRANT SELECT (trip_id, version, content, author_user_id, created_at)
+  ON TABLE public.trip_draft_versions TO app_runtime;
+GRANT SELECT (id, trip_id, title, content, created_by_user_id, created_at)
+  ON TABLE public.trip_draft_alternatives TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session_with_identity(text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
@@ -68,6 +79,8 @@ GRANT EXECUTE ON FUNCTION public.mark_current_chat_read(uuid, bigint) TO app_run
 GRANT EXECUTE ON FUNCTION public.chat_list_projection() TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.is_current_active_trip_participant(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.create_current_trip_from_chat(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.save_current_trip_draft(uuid, integer, jsonb) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.save_current_trip_draft_alternative(uuid, text, jsonb) TO app_runtime;
 
 -- Future objects created by this migration/test owner receive no runtime grant.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM app_runtime;

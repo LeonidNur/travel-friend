@@ -43,6 +43,8 @@ REQUIRED_CAPABILITIES = {
     "public.chat_list_projection()",
     "public.is_current_active_trip_participant(uuid)",
     "public.create_current_trip_from_chat(uuid)",
+    "public.save_current_trip_draft(uuid, integer, jsonb)",
+    "public.save_current_trip_draft_alternative(uuid, text, jsonb)",
 }
 
 EXPECTED_TRIGGER_FUNCTION_FINDINGS = [
@@ -92,6 +94,11 @@ def test_production_grants_cover_the_audited_runtime_matrix() -> None:
         "trips",
         "trip_participants",
         "trip_stops",
+        "trip_itinerary_days",
+        "trip_itinerary_events",
+        "trip_drafts",
+        "trip_draft_versions",
+        "trip_draft_alternatives",
     ):
         assert f"REVOKE ALL PRIVILEGES ON TABLE public.{table_name} FROM app_runtime;" in script
 
@@ -256,7 +263,7 @@ def test_production_runtime_grants_and_verifier_execute_against_migrated_schema(
         )
 
         baseline_table_operations = table_operation_rows(verification_results)
-        assert len(baseline_table_operations) == 17 * 7
+        assert len(baseline_table_operations) == 22 * 7
         assert all(row[3] == row[4] and row[5] is True for row in baseline_table_operations)
 
         assert_verifier_rejects_mutation(
@@ -291,6 +298,8 @@ def test_production_runtime_grants_and_verifier_execute_against_migrated_schema(
             "public.create_current_group_chat(uuid[],text)",
             "public.mark_current_chat_read(uuid,bigint)",
             "public.rename_current_group_chat(uuid,text)",
+            "public.save_current_trip_draft(uuid,integer,jsonb)",
+            "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
             "public.resolve_bearer_session_with_identity(text)",
             "public.send_current_chat_message(uuid,text,uuid)",
         ))
