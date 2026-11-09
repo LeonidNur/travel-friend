@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
-import { ApiError, createBackendApiClient, type TripDetailResponse } from '@/lib/backend-api-client';
+import { ApiError, createBackendApiClient, type TripDetailResponse, type TripDraftDetailResponse, type TripItineraryResponse } from '@/lib/backend-api-client';
+import { TripDraftEditor } from '@/components/TripDraftEditor';
+import { formatRussianDate } from '@/lib/russian-date-format';
 import {
   formatTripBudget,
   formatTripDetailDates,
@@ -25,11 +27,23 @@ const backendApiClient = createBackendApiClient();
 export default function TripDetailsPage({ params }: TripDetailsPageProps) {
   const { id } = use(params);
   const { session } = useTelegramAuthSession();
+  return <TripDetailsContent key={`${id}:${session?.userId ?? 'unauthenticated'}`} id={id} session={session} />;
+}
+
+type TripSession = ReturnType<typeof useTelegramAuthSession>['session'];
+
+function TripDetailsContent({ id, session }: Readonly<{ id: string; session: TripSession }>) {
   const [detail, setDetail] = useState<TripDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [draftDetail, setDraftDetail] = useState<TripDraftDetailResponse | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [draftReloadKey, setDraftReloadKey] = useState(0);
+  const [itinerary, setItinerary] = useState<TripItineraryResponse | null>(null);
+  const [itineraryError, setItineraryError] = useState<string | null>(null);
+  const [itineraryReloadKey, setItineraryReloadKey] = useState(0);
 
   useEffect(() => {
     if (session === null) {
@@ -57,6 +71,26 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
       isCurrent = false;
     };
   }, [id, reloadKey, session]);
+
+  useEffect(() => {
+    if (session === null) return;
+    let isCurrent = true;
+    void backendApiClient.getTripDraft(session.accessToken, id).then(
+      (value) => { if (isCurrent) { setDraftDetail(value); setDraftError(null); } },
+      () => { if (isCurrent) setDraftError('Не удалось загрузить общий черновик. Попробуйте ещё раз.'); }
+    );
+    return () => { isCurrent = false; };
+  }, [draftReloadKey, id, session]);
+
+  useEffect(() => {
+    if (session === null) return;
+    let isCurrent = true;
+    void backendApiClient.getTripItinerary(session.accessToken, id).then(
+      (value) => { if (isCurrent) { setItinerary(value); setItineraryError(null); } },
+      () => { if (isCurrent) setItineraryError('Не удалось загрузить согласованную программу. Попробуйте ещё раз.'); }
+    );
+    return () => { isCurrent = false; };
+  }, [id, itineraryReloadKey, session]);
 
   const screenState = getTripDetailScreenState({
     isLoading,
@@ -125,6 +159,52 @@ export default function TripDetailsPage({ params }: TripDetailsPageProps) {
         {dates !== null ? <TripDetailSection heading="Даты" value={dates} /> : null}
         {budget !== null ? <TripDetailSection heading="Бюджет" value={budget} /> : null}
       </section>
+
+      <section className="trip-confirmed-itinerary" aria-labelledby="confirmed-itinerary-title">
+        <h3 id="confirmed-itinerary-title">Согласованная программа по дням</h3>
+        {itineraryError ? <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">{itineraryError}</p> : null}
+        {itinerary === null && itineraryError === null ? <p className="surface-card__copy">Загружаем программу…</p> : null}
+        {itineraryError ? <button className="profile-button profile-button--secondary" type="button" onClick={() => setItineraryReloadKey((key) => key + 1)}>Повторить</button> : null}
+        {itinerary !== null && itinerary.days.length === 0 ? <p className="surface-card__copy">Подтверждённых дней пока нет. Их можно подготовить в рабочем черновике.</p> : null}
+        {itinerary?.days.map((day) => (
+          <article className="trip-confirmed-itinerary__day" key={day.id}>
+            <h4>{formatRussianDate(day.day_date)}{day.title ? ` · ${day.title}` : ''}</h4>
+            {day.notes ? <p>{day.notes}</p> : null}
+            {day.events.length === 0 ? <p className="surface-card__copy">Свободный день</p> : null}
+            {day.events.map((event) => (
+              <p className="trip-confirmed-itinerary__event" key={event.id}>
+                {event.start_time ? `${event.start_time.slice(0, 5)} · ` : ''}{event.title}
+                {event.duration_minutes ? ` · ${event.duration_minutes} мин.` : ''}
+                {event.address ? ` · ${event.address}` : ''}
+                {event.estimated_cost !== null ? ` · ${event.estimated_cost}${event.currency ? ` ${event.currency}` : ''}` : ''}
+                {event.notes ? ` — ${event.notes}` : ''}
+              </p>
+            ))}
+          </article>
+        ))}
+      </section>
+
+      {draftError ? (
+        <section className="trip-draft-editor" aria-label="Рабочий черновик">
+          <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">{draftError}</p>
+          <button className="profile-button profile-button--secondary" type="button" onClick={() => setDraftReloadKey((key) => key + 1)}>Повторить</button>
+        </section>
+      ) : null}
+      {draftDetail === null && draftError === null ? (
+        <section className="trip-draft-editor" aria-label="Рабочий черновик" aria-live="polite">
+          <p className="surface-card__copy">Загружаем общий черновик…</p>
+        </section>
+      ) : null}
+      {draftDetail !== null && session !== null ? (
+        <TripDraftEditor
+          key={draftDetail.draft.trip_id}
+          token={session.accessToken}
+          draft={draftDetail.draft}
+          alternatives={draftDetail.alternatives}
+          api={backendApiClient}
+          authorLabel={(userId) => detail.participants.find((participant) => participant.user_id === userId)?.display_name ?? 'участник поездки'}
+        />
+      ) : null}
     </section>
   );
 }

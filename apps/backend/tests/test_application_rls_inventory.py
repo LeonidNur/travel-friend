@@ -30,6 +30,11 @@ APPLICATION_TABLES = (
     "trips",
     "trip_participants",
     "trip_stops",
+    "trip_itinerary_days",
+    "trip_itinerary_events",
+    "trip_drafts",
+    "trip_draft_versions",
+    "trip_draft_alternatives",
 )
 
 EXPECTED_RUNTIME_POLICIES = [
@@ -44,6 +49,11 @@ EXPECTED_RUNTIME_POLICIES = [
     ("travel_intents", "travel_intents_insert_own_active", "INSERT", "{app_runtime}"),
     ("travel_intents", "travel_intents_select_own_active", "SELECT", "{app_runtime}"),
     ("travel_intents", "travel_intents_update_own_active", "UPDATE", "{app_runtime}"),
+    ("trip_draft_alternatives", "trip_draft_alternatives_select_active_participant", "SELECT", "{app_runtime}"),
+    ("trip_draft_versions", "trip_draft_versions_select_active_participant", "SELECT", "{app_runtime}"),
+    ("trip_drafts", "trip_drafts_select_active_participant", "SELECT", "{app_runtime}"),
+    ("trip_itinerary_days", "trip_itinerary_days_select_active_participant", "SELECT", "{app_runtime}"),
+    ("trip_itinerary_events", "trip_itinerary_events_select_active_participant", "SELECT", "{app_runtime}"),
     ("trip_participants", "trip_participants_select_active_trip", "SELECT", "{app_runtime}"),
     ("trip_stops", "trip_stops_select_active_participant", "SELECT", "{app_runtime}"),
     ("trips", "trips_select_active_participant", "SELECT", "{app_runtime}"),

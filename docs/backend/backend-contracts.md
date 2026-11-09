@@ -61,6 +61,11 @@ MVP применяет только небольшой per-process fixed-window 
 | `POST` | `/chats/{chat_id}/trips` | создать одну `forming` Trip из доступного direct или group Chat |
 | `GET` | `/trips` | Trip текущего участника |
 | `GET` | `/trips/{trip_id}` | detail Trip с route stops и активными participants |
+| `GET` | `/trips/{trip_id}/itinerary` | confirmed days/events, доступные участнику Trip |
+| `GET` | `/trips/{trip_id}/draft` | основной shared Draft и компактные метаданные alternatives |
+| `PUT` | `/trips/{trip_id}/draft` | сохранить ручные изменения Draft по `base_version` |
+| `POST` | `/trips/{trip_id}/draft/alternatives` | сохранить alternative Draft |
+| `GET` | `/trips/{trip_id}/draft/alternatives/{alternative_id}` | прочитать один сохранённый snapshot участнику Trip |
 
 Path-параметры в FastAPI объявлены как `target_user_id`, `chat_id`, `user_id` и `trip_id`; фактические URL path segments показаны в таблице. Все endpoints, кроме `GET /health`, `GET /ready` и `POST /auth/telegram`, требуют активную Bearer session; отсутствие, недействительность или истечение сессии даёт `401`. Валидация path/body и запрещённых дополнительных полей даёт `422`, если ниже не указан более конкретный ответ.
 
@@ -74,6 +79,12 @@ Path-параметры в FastAPI объявлены как `target_user_id`, `
 
 `POST /chats/{chat_id}/trips` не принимает body, возвращает `201` с начальным Trip snapshot; отсутствующий или недоступный инициатору Chat даёт `404`, уже существующий unfinished Trip в Chat — `409`. `GET /trips` возвращает только Trips, где пользователь является текущим участником; `GET /trips/{trip_id}` возвращает persisted snapshot, упорядоченные `route_stops` и текущих участников. Для отсутствующего Trip, бывшего участника и постороннего пользователя detail одинаково отвечает `404`.
 
+Trip itinerary и shared Draft: `GET /trips/{trip_id}/itinerary` возвращает `{trip_id, days}`; пустой `days` означает, что подтверждённая программа ещё не задана. День содержит stable `id`, `position`, optional `day_date`, `title`, `notes` и `events`; событие содержит stable `id`, `day_id`, `position`, kind, title, optional time/duration/address/cost/currency/notes. Эти endpoints только читают confirmed itinerary: ни один новый Draft endpoint не меняет `trips` или `trip_stops`.
+
+`GET /trips/{trip_id}/draft` возвращает текущий `{draft, alternatives}`; полный version history хранится неизменным, но не включается в этот ответ. Список содержит только компактные метаданные максимум 20 последних альтернатив. Один основной Draft на Trip содержит route stops, dates, accommodations, transport, budget, days/events и notes; элементы имеют стабильные IDs, пустые дни и частично заполненные поля допустимы. При создании Trip и обратном заполнении legacy Trips начальная пустая версия 1 атрибутируется Trip creator как технический seed; это не административная роль и не свидетельство последующего редактирования. `PUT /trips/{trip_id}/draft` принимает `{base_version, content}`; успешное сохранение создаёт следующую версию с автором из Bearer session. Несовпадающий `base_version` возвращает `409` без изменения текущего Draft. JSONB snapshot размером больше 256 KiB возвращает безопасный `422`; API распознаёт только именованную ошибку лимита, остальные SQL errors не маскируются. `POST /trips/{trip_id}/draft/alternatives` принимает `{title, content}` и сохраняет отдельную альтернативу, не меняя основной Draft; размер snapshot больше 256 KiB даёт `422`, после 20 сохранённых альтернатив новые записи отклоняются с `409`. `GET /trips/{trip_id}/draft/alternatives/{alternative_id}` возвращает ровно один snapshot, не превышающий тот же лимит. Старые версии и альтернативы не удаляются и не переписываются. Только текущий активный Trip participant может читать/сохранять; чужой, недоступный или уже неактивный участник скрывается как `404`. Невалидное содержимое или дополнительные поля дают `422`. PostgreSQL capabilities сами проверяют участника и версию; runtime не получает прямые INSERT/UPDATE/DELETE privileges на новые таблицы, а `PUBLIC`, `anon`, `authenticated` и `service_role` не получают прямые привилегии на них. Наследуемые Trip/TripStop остаются без destructive rewrite.
+
+Внутренняя pure-функция `validate_trip_draft_fragment_for_confirmation` возвращает структурированные readiness issues для неполных Draft-фрагментов (например, события без названия). Она не пишет данные, не меняет Draft/Confirmed Trip и не создаёт Proposal; это повторно используемая проверка для будущего Loop B, а не API или реализация голосования.
+
 Текущие ограничения реализации:
 
 - `GET /chats/{chatId}` и realtime не реализованы. Legacy `GET /chats/{chat_id}/messages` остаётся неограниченным для совместимости; новые клиенты используют bounded `/messages/page`.
@@ -85,7 +96,7 @@ Path-параметры в FastAPI объявлены как `target_user_id`, `
 - `POST /chats/{chat_id}/messages` принимает nonblank `content_text` до 4000 characters после `trim`; `POST /chats/groups` принимает от 2 до 20 unique companion IDs. Existing no-self и matched direct-chat prerequisite сохраняются. Это field/domain limits, а не общий HTTP request-body byte limit.
 - `POST /chats/{chat_id}/trips` разрешает только один незавершённый (`forming`/`active`) Trip на Chat и отвечает `409` при повторе.
 - Trip создаётся из direct или group Chat. Backend в одной transaction читает всех активных ChatParticipant и сразу создаёт столько же `TripParticipant`; `TripInvitation` в этом MVP flow не создаётся и не используется.
-- `GET /trips` и `GET /trips/{trip_id}` — read contracts. Нет Trip/stop write API, start/complete/cancel/leave, invitation или Proposal endpoints. Baseline Proposal/AI — обязательный Pre-Beta slice, ещё не реализованный. Mini App при `409` использует `GET /trips`, чтобы найти unfinished Trip того же Chat и открыть её.
+- `GET /trips` и `GET /trips/{trip_id}` остаются read contracts; новые itinerary endpoints читают confirmed state, а draft endpoints меняют только отдельный Draft. Нет Trip/stop write API, start/complete/cancel/leave, invitation или Proposal endpoints. Baseline Proposal/AI — обязательный Pre-Beta slice, ещё не реализованный. Mini App при `409` создания Trip использует `GET /trips`, чтобы найти unfinished Trip того же Chat и открыть её.
 - Actual Discover не использует `DiscoverImpression`, отдельные Like records, filters или ranking: решение хранится как `discover_interest_decisions` с `interested`/`rejected`.
 
 ## Логические contracts целевого Pre-Beta design (не реализованы)

@@ -193,6 +193,104 @@ export type TripDetailResponse = Readonly<{
   }>>;
 }>;
 
+export type TripDraftEvent = Readonly<{
+  id: string;
+  kind: 'activity' | 'transport' | 'accommodation' | 'meal' | 'note' | 'other';
+  title: string;
+  start_time: string | null;
+  duration_minutes: number | null;
+  address: string | null;
+  estimated_cost: string | null;
+  currency: string | null;
+  notes: string | null;
+}>;
+
+export type TripDraftDay = Readonly<{
+  id: string;
+  date: string | null;
+  title: string | null;
+  notes: string | null;
+  events: readonly TripDraftEvent[];
+}>;
+
+export type TripDraftContent = Readonly<{
+  route_stops: readonly Readonly<{
+    id: string;
+    place_label: string;
+    country_code: string | null;
+    place_ref: string | null;
+    stay_from: string | null;
+    stay_to: string | null;
+    notes: string | null;
+  }>[];
+  date_from: string | null;
+  date_to: string | null;
+  accommodations: readonly Readonly<{
+    id: string;
+    name: string;
+    location: string | null;
+    date_from: string | null;
+    date_to: string | null;
+    notes: string | null;
+  }>[];
+  transport: readonly Readonly<{
+    id: string;
+    mode: string;
+    origin: string | null;
+    destination: string | null;
+    departure_at: string | null;
+    arrival_at: string | null;
+    notes: string | null;
+  }>[];
+  budget: Readonly<{
+    min: string | null;
+    max: string | null;
+    currency: string | null;
+    scope: 'per_person' | 'group_total' | null;
+  }>;
+  days: readonly TripDraftDay[];
+  notes: string;
+}>;
+
+export type TripDraftSaveRequest = Readonly<{ base_version: number; content: TripDraftContent }>;
+
+export type TripDraftResponse = Readonly<{
+  trip_id: string;
+  version: number;
+  content: TripDraftContent;
+  updated_by_user_id: string;
+  updated_at: string;
+}>;
+
+export type TripDraftAlternativeMetadataResponse = Readonly<{
+  id: string;
+  trip_id: string;
+  title: string;
+  created_by_user_id: string;
+  created_at: string;
+}>;
+
+export type TripDraftAlternativeResponse = TripDraftAlternativeMetadataResponse & Readonly<{
+  content: TripDraftContent;
+}>;
+
+export type TripDraftDetailResponse = Readonly<{
+  draft: TripDraftResponse;
+  alternatives: readonly TripDraftAlternativeMetadataResponse[];
+}>;
+
+export type TripItineraryResponse = Readonly<{
+  trip_id: string;
+  days: readonly Readonly<{
+    id: string;
+    position: number;
+    day_date: string | null;
+    title: string | null;
+    notes: string | null;
+    events: readonly (TripDraftEvent & Readonly<{ day_id: string; position: number }>)[];
+  }>[];
+}>;
+
 export type ChatMessageResponse = Readonly<{
   message_id: string;
   chat_id: string;
@@ -292,6 +390,16 @@ export type BackendApiClient = Readonly<{
   createTrip: (token: string, chatId: string) => Promise<TripCreateResponse>;
   getTrips: (token: string) => Promise<TripListItemResponse[]>;
   getTrip: (token: string, tripId: string) => Promise<TripDetailResponse>;
+  getTripItinerary: (token: string, tripId: string) => Promise<TripItineraryResponse>;
+  getTripDraft: (token: string, tripId: string) => Promise<TripDraftDetailResponse>;
+  getTripDraftAlternative: (token: string, tripId: string, alternativeId: string) => Promise<TripDraftAlternativeResponse>;
+  saveTripDraft: (token: string, tripId: string, payload: TripDraftSaveRequest) => Promise<TripDraftResponse>;
+  saveTripDraftAlternative: (
+    token: string,
+    tripId: string,
+    title: string,
+    content: TripDraftContent
+  ) => Promise<TripDraftAlternativeMetadataResponse>;
   getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
   getChatMessagePage: (
     token: string,
@@ -412,6 +520,18 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
       request<TripCreateResponse>(`/chats/${chatId}/trips`, { method: 'POST', token }),
     getTrips: (token) => request<TripListItemResponse[]>('/trips', { method: 'GET', token }),
     getTrip: (token, tripId) => request<TripDetailResponse>(`/trips/${tripId}`, { method: 'GET', token }),
+    getTripItinerary: (token, tripId) =>
+      request<TripItineraryResponse>(`/trips/${tripId}/itinerary`, { method: 'GET', token }),
+    getTripDraft: (token, tripId) =>
+      request<TripDraftDetailResponse>(`/trips/${tripId}/draft`, { method: 'GET', token }),
+    getTripDraftAlternative: (token, tripId, alternativeId) =>
+      request<TripDraftAlternativeResponse>(`/trips/${tripId}/draft/alternatives/${alternativeId}`, { method: 'GET', token }),
+    saveTripDraft: (token, tripId, payload) =>
+      request<TripDraftResponse>(`/trips/${tripId}/draft`, { method: 'PUT', token, body: payload }),
+    saveTripDraftAlternative: (token, tripId, title, content) =>
+      request<TripDraftAlternativeMetadataResponse>(`/trips/${tripId}/draft/alternatives`, {
+        method: 'POST', token, body: { title, content }
+      }),
     getChatMessages: (token, chatId) =>
       request<ChatMessageResponse[]>(`/chats/${chatId}/messages`, { method: 'GET', token }),
     getChatMessagePage: (token, chatId, options = {}) => {
