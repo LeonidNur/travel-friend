@@ -55,6 +55,8 @@ AI-разработчик **не** владеет SQL migrations, RLS, голо�
 
 ### Loop A — Trip domain, itinerary и общий Draft
 
+**Статус:** реализовано в текущей feature-ветке; локальные backend PostgreSQL integration и frontend checks пройдены. Миграция не применялась к production; release/deployment gates остаются отдельными.
+
 **Цель:** надёжный day-based план и ручное редактирование без AI. Существующие Trips/TripStops не терять.
 
 Включает migration path для дней/событий/проживания/других областей, стабильно идентифицируемые объекты и версионирование, read APIs, один shared working Draft + alternatives, ручное сохранение по base version, экран подробной Trip и Draft, состояние unknown/empty days. Базовое history/audit для содержательных операций. RLS и scoped capabilities строятся в той же миграции, запрет client-initiated confirmed writes.

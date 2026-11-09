@@ -29,7 +29,7 @@ POSTGRES_IMAGE = "postgres:17-alpine"
 CONTAINER_LABEL_KEY = "com.travel-friend.disposable-backup-restore"
 EXPECTED_DATABASE_PREFIX = "tf_restore_"
 EXPECTED_POSTGRES_MAJOR = 17
-EXPECTED_RUNTIME_CAPABILITY_COUNT = 24
+EXPECTED_RUNTIME_CAPABILITY_COUNT = 26
 
 # Read-only inventories confirmed in the 2026-10-28 archive and current
 # production database. Newer repository migrations are replayed only locally.
@@ -65,7 +65,7 @@ SUPPORTED_ARCHIVE_MIGRATION_LEDGERS = (
     CURRENT_PRODUCTION_MIGRATIONS,
 )
 
-EXPECTED_PUBLIC_TABLES = frozenset({
+ARCHIVE_EXPECTED_PUBLIC_TABLES = frozenset({
     "users",
     "telegram_identities",
     "profiles",
@@ -84,10 +84,34 @@ EXPECTED_PUBLIC_TABLES = frozenset({
     "trip_participants",
     "trip_stops",
 })
+EXPECTED_PUBLIC_TABLES = ARCHIVE_EXPECTED_PUBLIC_TABLES | frozenset({
+    "trip_itinerary_days",
+    "trip_itinerary_events",
+    "trip_drafts",
+    "trip_draft_versions",
+    "trip_draft_alternatives",
+})
 EXPECTED_TRIGGERS = frozenset({
     "chats_direct_participant_count",
     "chat_participants_direct_participant_count",
     "chat_participants_read_sequences_only_move_forward",
+})
+ARCHIVE_EXPECTED_POLICY_NAMES = frozenset({
+    "profiles_select_own", "profiles_insert_own", "profiles_update_own",
+    "user_activity_states_select_own", "travel_intents_select_own_active",
+    "travel_intents_insert_own_active", "travel_intents_update_own_active",
+    "user_sessions_select_own", "user_sessions_update_own",
+    "discover_interest_decisions_select_own", "matches_select_participant",
+    "chats_select_active_participant", "chat_participants_select_active_chat",
+    "messages_select_active_participant", "trips_select_active_participant",
+    "trip_participants_select_active_trip", "trip_stops_select_active_participant",
+})
+CURRENT_APP_EXPECTED_POLICY_NAMES = ARCHIVE_EXPECTED_POLICY_NAMES | frozenset({
+    "trip_itinerary_days_select_active_participant",
+    "trip_itinerary_events_select_active_participant",
+    "trip_drafts_select_active_participant",
+    "trip_draft_versions_select_active_participant",
+    "trip_draft_alternatives_select_active_participant",
 })
 # These are the function signatures for the 19 migrations recorded by the
 # supplied 2026-10-28 archive. The restore phase checks this inventory before
@@ -121,6 +145,8 @@ CURRENT_APP_ADDITIONAL_FUNCTIONS = (
     "public.mark_current_chat_read(uuid,bigint)",
     "public.create_current_group_chat(uuid[],text)",
     "public.rename_current_group_chat(uuid,text)",
+    "public.save_current_trip_draft(uuid,integer,jsonb)",
+    "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
 )
 CURRENT_APP_EXPECTED_FUNCTIONS = (*ARCHIVE_EXPECTED_FUNCTIONS, *CURRENT_APP_ADDITIONAL_FUNCTIONS)
 PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS = (
@@ -137,11 +163,15 @@ PROTECTED_API_FUNCTIONS = (
     "public.chat_list_projection()",
     "public.create_current_group_chat(uuid[],text)",
     "public.rename_current_group_chat(uuid,text)",
+    "public.save_current_trip_draft(uuid,integer,jsonb)",
+    "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
 )
 NEW_BACKEND_FUNCTIONS = (
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
     "public.chat_participant_public_profile(uuid,uuid)",
     "public.resolve_bearer_session_with_identity(text)",
+    "public.save_current_trip_draft(uuid,integer,jsonb)",
+    "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
 )
 SUPABASE_API_ROLE_STUB_SETUP_SQL = """\
 DO $do$
@@ -383,11 +413,16 @@ def _psql(container_name: str, database: str, sql: str, *, stage: str, reason: s
         raise RestoreSmokeError(stage, reason) from None
 
 
-def _read_only_inventory_sql(expected_functions: tuple[str, ...] = ARCHIVE_EXPECTED_FUNCTIONS) -> str:
+def _read_only_inventory_sql(
+    expected_functions: tuple[str, ...] = ARCHIVE_EXPECTED_FUNCTIONS,
+    expected_tables: frozenset[str] = ARCHIVE_EXPECTED_PUBLIC_TABLES,
+    expected_policy_names: frozenset[str] = ARCHIVE_EXPECTED_POLICY_NAMES,
+) -> str:
     sql_literal = lambda value: "'" + value.replace("'", "''") + "'"
-    table_values = ", ".join("(" + sql_literal(name) + ")" for name in sorted(EXPECTED_PUBLIC_TABLES))
+    table_values = ", ".join("(" + sql_literal(name) + ")" for name in sorted(expected_tables))
     function_values = ", ".join("(" + sql_literal(signature) + ")" for signature in expected_functions)
     trigger_values = ", ".join("(" + sql_literal(name) + ")" for name in sorted(EXPECTED_TRIGGERS))
+    policy_values = ", ".join(sql_literal(name) for name in sorted(expected_policy_names))
     return f"""
 WITH expected_tables(table_name) AS (VALUES {table_values}),
 expected_functions(signature) AS (VALUES {function_values}),
@@ -418,36 +453,27 @@ SELECT json_build_object(
     WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r','p') AND c.relrowsecurity),
   'policy_count', (SELECT count(*) FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
     WHERE c.relnamespace = 'public'::regnamespace),
-  'expected_policy_count', (SELECT count(*) FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
-    WHERE c.relnamespace = 'public'::regnamespace AND p.polname IN (
-      'profiles_select_own','profiles_insert_own','profiles_update_own',
-      'user_activity_states_select_own','travel_intents_select_own_active',
-      'travel_intents_insert_own_active','travel_intents_update_own_active',
-      'user_sessions_select_own','user_sessions_update_own',
-      'discover_interest_decisions_select_own','matches_select_participant',
-      'chats_select_active_participant','chat_participants_select_active_chat',
-      'messages_select_active_participant','trips_select_active_participant',
-      'trip_participants_select_active_trip','trip_stops_select_active_participant'
-    )),
-  'all_expected_tables_rls_enabled', (SELECT count(*) = 17 AND bool_and(c.relrowsecurity)
+    'expected_policy_count', (SELECT count(*) FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
+    WHERE c.relnamespace = 'public'::regnamespace AND p.polname IN ({policy_values})),
+  'all_expected_tables_rls_enabled', (SELECT count(*) = {len(expected_tables)} AND bool_and(c.relrowsecurity)
     FROM expected_tables e LEFT JOIN pg_class c ON c.relnamespace = 'public'::regnamespace
       AND c.relname = e.table_name AND c.relkind IN ('r','p'))
 )::text;
 """.strip()
 
 
-def _row_count_sql() -> str:
+def _row_count_sql(tables: frozenset[str] = ARCHIVE_EXPECTED_PUBLIC_TABLES) -> str:
     table_counts = " UNION ALL ".join(
         f'SELECT count(*)::bigint AS row_count FROM public."{name}"'
-        for name in sorted(EXPECTED_PUBLIC_TABLES)
+        for name in sorted(tables)
     )
     return f"SELECT COALESCE(sum(row_count), 0)::bigint FROM ({table_counts}) counts"
 
 
-def _table_row_counts_sql() -> str:
+def _table_row_counts_sql(tables: frozenset[str] = ARCHIVE_EXPECTED_PUBLIC_TABLES) -> str:
     table_counts = " UNION ALL ".join(
         f"SELECT '{name}'::text AS table_name, count(*)::bigint AS row_count FROM public.\"{name}\""
-        for name in sorted(EXPECTED_PUBLIC_TABLES)
+        for name in sorted(tables)
     )
     return f"SELECT jsonb_object_agg(table_name, row_count ORDER BY table_name) FROM ({table_counts}) counts"
 
@@ -483,15 +509,26 @@ def validate_migration_row_counts(before: str, after: str) -> None:
         after_counts = json.loads(after)
     except (TypeError, json.JSONDecodeError):
         raise RestoreSmokeError("DATA", "application table row-count inventory could not be parsed safely.") from None
-    for counts in (before_counts, after_counts):
-        if (
-            not isinstance(counts, dict)
-            or set(counts) != EXPECTED_PUBLIC_TABLES
-            or any(type(value) is not int or value < 0 for value in counts.values())
-        ):
-            raise RestoreSmokeError("DATA", "application table row-count inventory was incomplete or invalid.")
-    if before_counts != after_counts:
-        raise RestoreSmokeError("DATA", "repository migration replay changed application table row counts.")
+    if (
+        not isinstance(before_counts, dict)
+        or set(before_counts) != ARCHIVE_EXPECTED_PUBLIC_TABLES
+        or any(type(value) is not int or value < 0 for value in before_counts.values())
+        or not isinstance(after_counts, dict)
+        or set(after_counts) != EXPECTED_PUBLIC_TABLES
+        or any(type(value) is not int or value < 0 for value in after_counts.values())
+    ):
+        raise RestoreSmokeError("DATA", "application table row-count inventory was incomplete or invalid.")
+    if any(before_counts[name] != after_counts[name] for name in ARCHIVE_EXPECTED_PUBLIC_TABLES):
+        raise RestoreSmokeError("DATA", "repository migration replay changed legacy application table row counts.")
+    trip_count = after_counts["trips"]
+    if (
+        after_counts["trip_drafts"] != trip_count
+        or after_counts["trip_draft_versions"] != trip_count
+        or any(after_counts[name] != 0 for name in (
+            "trip_itinerary_days", "trip_itinerary_events", "trip_draft_alternatives"
+        ))
+    ):
+        raise RestoreSmokeError("DATA", "Trip Draft backfill did not preserve legacy data and seed one empty main Draft per Trip.")
 
 
 def normalize_schema_dump(dump: str) -> str:
@@ -553,6 +590,8 @@ def validate_structure(
     expected_database: str,
     aggregate_rows: int | None = None,
     expected_functions: tuple[str, ...] = ARCHIVE_EXPECTED_FUNCTIONS,
+    expected_tables: frozenset[str] = ARCHIVE_EXPECTED_PUBLIC_TABLES,
+    expected_policy_names: frozenset[str] = ARCHIVE_EXPECTED_POLICY_NAMES,
 ) -> None:
     tables = summary.get("tables")
     triggers = summary.get("trigger_names")
@@ -563,7 +602,7 @@ def validate_structure(
         failures.append("TARGET")
     if major is None or int(major.group(1)) != EXPECTED_POSTGRES_MAJOR:
         failures.append("VERSION")
-    if not isinstance(tables, list) or set(tables) != EXPECTED_PUBLIC_TABLES:
+    if not isinstance(tables, list) or set(tables) != expected_tables:
         failures.append("TABLES")
     if not isinstance(summary.get("constraint_count"), int) or summary["constraint_count"] <= 0:
         failures.append("CONSTRAINTS")
@@ -579,17 +618,17 @@ def validate_structure(
             failures.append("FUNCTIONS")
     if summary.get("function_count") != len(expected_functions):
         failures.append("FUNCTION_COUNT")
-    if summary.get("rls_table_count") != len(EXPECTED_PUBLIC_TABLES) or summary.get("all_expected_tables_rls_enabled") is not True:
+    if summary.get("rls_table_count") != len(expected_tables) or summary.get("all_expected_tables_rls_enabled") is not True:
         failures.append("RLS")
-    if summary.get("policy_count") != 17 or summary.get("expected_policy_count") != 17:
+    if summary.get("policy_count") != len(expected_policy_names) or summary.get("expected_policy_count") != len(expected_policy_names):
         failures.append("POLICIES")
     if failures:
         table_count = len(tables) if isinstance(tables, list) else 0
         trigger_count = len(triggers) if isinstance(triggers, list) else 0
         counts = (
-            f"aggregates tables={table_count}/17 constraints={summary.get('constraint_count', 0)} "
+            f"aggregates tables={table_count}/{len(expected_tables)} constraints={summary.get('constraint_count', 0)} "
             f"indexes={summary.get('index_count', 0)} triggers={trigger_count}/3 "
-            f"functions={summary.get('function_count', 0)} RLS={summary.get('rls_table_count', 0)}/17 "
+            f"functions={summary.get('function_count', 0)} RLS={summary.get('rls_table_count', 0)}/{len(expected_tables)} "
             f"policies={summary.get('policy_count', 0)}"
         )
         if aggregate_rows is not None:
@@ -1075,10 +1114,10 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
             "Archive integrity: PASS (manifest size and SHA-256).",
             f"Local PostgreSQL: {server_version} (isolated Docker network; client major {EXPECTED_POSTGRES_MAJOR}).",
             "Schema/data restore: PASS (--no-owner --no-acl; --exit-on-error; separate empty database).",
-            f"Public tables: {len(summary['tables'])}/{len(EXPECTED_PUBLIC_TABLES)}.",
+            f"Public tables: {len(summary['tables'])}/{len(ARCHIVE_EXPECTED_PUBLIC_TABLES)}.",
             f"Aggregate restored public rows: {aggregate_rows} (restored database only; no source-count comparison).",
             f"Structure: PASS (schema-only equality; constraints {summary['constraint_count']}, indexes {summary['index_count']}, triggers {len(summary['trigger_names'])}, functions {summary['function_count']}).",
-            f"RLS/policies: PASS ({summary['rls_table_count']}/{len(EXPECTED_PUBLIC_TABLES)} tables, {summary['policy_count']} policies).",
+            f"RLS/policies: PASS ({summary['rls_table_count']}/{len(ARCHIVE_EXPECTED_PUBLIC_TABLES)} tables, {summary['policy_count']} policies).",
             f"Archive-era expected objects: PASS; manifest records {archive_migration_count} migrations.",
             "Supabase API roles: PASS (known NOLOGIN role names modeled locally; no unknown roles created).",
         ]
@@ -1086,7 +1125,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
         pre_migration_row_counts = _psql(
             container_name,
             database,
-            _table_row_counts_sql(),
+            _table_row_counts_sql(ARCHIVE_EXPECTED_PUBLIC_TABLES),
             stage="DATA",
             reason="application table row counts could not be checked before migration replay.",
         )
@@ -1094,7 +1133,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
         post_migration_row_counts = _psql(
             container_name,
             database,
-            _table_row_counts_sql(),
+            _table_row_counts_sql(EXPECTED_PUBLIC_TABLES),
             stage="DATA",
             reason="application table row counts could not be checked after migration replay.",
         )
@@ -1106,7 +1145,11 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
         current_summary = json.loads(_psql(
             container_name,
             database,
-            _read_only_inventory_sql(CURRENT_APP_EXPECTED_FUNCTIONS),
+            _read_only_inventory_sql(
+                CURRENT_APP_EXPECTED_FUNCTIONS,
+                EXPECTED_PUBLIC_TABLES,
+                CURRENT_APP_EXPECTED_POLICY_NAMES,
+            ),
             stage="MIGRATIONS",
             reason="the post-migration application inventory could not be checked safely.",
         ))
@@ -1115,6 +1158,8 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
             database,
             aggregate_rows,
             expected_functions=CURRENT_APP_EXPECTED_FUNCTIONS,
+            expected_tables=EXPECTED_PUBLIC_TABLES,
+            expected_policy_names=CURRENT_APP_EXPECTED_POLICY_NAMES,
         )
         migration_summary = (
             f"Current application migrations: PASS ({len(repository_migrations)} repository migrations "

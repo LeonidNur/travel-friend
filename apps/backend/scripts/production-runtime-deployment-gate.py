@@ -21,6 +21,8 @@ BACKEND_ONLY_FUNCTIONS = (
     "public.chat_list_projection()",
     "public.create_current_group_chat(uuid[],text)",
     "public.rename_current_group_chat(uuid,text)",
+    "public.save_current_trip_draft(uuid,integer,jsonb)",
+    "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
 )
 INTERNAL_DORMANT_TABLES = (
     "users",
@@ -47,6 +49,11 @@ APPLICATION_TABLES = (
     "trips",
     "trip_participants",
     "trip_stops",
+    "trip_itinerary_days",
+    "trip_itinerary_events",
+    "trip_drafts",
+    "trip_draft_versions",
+    "trip_draft_alternatives",
 )
 REQUIRED_FUNCTIONS = (
     "public.current_authenticated_user_id()",
@@ -73,6 +80,8 @@ REQUIRED_FUNCTIONS = (
     "public.chat_list_projection()",
     "public.is_current_active_trip_participant(uuid)",
     "public.create_current_trip_from_chat(uuid)",
+    "public.save_current_trip_draft(uuid,integer,jsonb)",
+    "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
 )
 
 RUNTIME_TABLE_OPERATION_SURFACE = {
@@ -82,6 +91,11 @@ RUNTIME_TABLE_OPERATION_SURFACE = {
     "trips": {"SELECT"},
     "trip_participants": {"SELECT"},
     "trip_stops": {"SELECT"},
+    "trip_itinerary_days": {"SELECT"},
+    "trip_itinerary_events": {"SELECT"},
+    "trip_drafts": {"SELECT"},
+    "trip_draft_versions": {"SELECT"},
+    "trip_draft_alternatives": {"SELECT"},
 }
 
 RUNTIME_COLUMN_PRIVILEGES = {
@@ -109,6 +123,22 @@ RUNTIME_COLUMN_PRIVILEGES = {
     ("trip_stops", "SELECT"): {
         "id", "trip_id", "position", "place_label", "country_code", "place_ref",
         "stay_from", "stay_to", "notes", "created_at", "updated_at",
+    },
+    ("trip_itinerary_days", "SELECT"): {
+        "id", "trip_id", "position", "day_date", "title", "notes", "created_at", "updated_at",
+    },
+    ("trip_itinerary_events", "SELECT"): {
+        "id", "trip_id", "day_id", "position", "kind", "title", "start_time",
+        "duration_minutes", "address", "estimated_cost", "currency", "notes", "created_at", "updated_at",
+    },
+    ("trip_drafts", "SELECT"): {
+        "trip_id", "version", "content", "updated_by_user_id", "created_at", "updated_at",
+    },
+    ("trip_draft_versions", "SELECT"): {
+        "trip_id", "version", "content", "author_user_id", "created_at",
+    },
+    ("trip_draft_alternatives", "SELECT"): {
+        "id", "trip_id", "title", "content", "created_by_user_id", "created_at",
     },
 }
 
@@ -200,6 +230,8 @@ def check_capability_metadata(connection: psycopg.Connection) -> None:
         "public.chat_participant_public_profile(uuid,uuid)": True,
         "public.is_current_active_trip_participant(uuid)": True,
         "public.create_current_trip_from_chat(uuid)": True,
+        "public.save_current_trip_draft(uuid,integer,jsonb)": True,
+        "public.save_current_trip_draft_alternative(uuid,text,jsonb)": True,
         "public.enforce_direct_chat_participant_count()": False,
     }
     rows = connection.execute(
@@ -256,7 +288,10 @@ def check_runtime_table_privileges(connection: psycopg.Connection) -> None:
         WITH expected(table_name, privilege_type) AS (
           VALUES
             ('chats', 'SELECT'), ('chat_participants', 'SELECT'), ('messages', 'SELECT'),
-            ('trips', 'SELECT'), ('trip_participants', 'SELECT'), ('trip_stops', 'SELECT')
+            ('trips', 'SELECT'), ('trip_participants', 'SELECT'), ('trip_stops', 'SELECT'),
+            ('trip_itinerary_days', 'SELECT'), ('trip_itinerary_events', 'SELECT'),
+            ('trip_drafts', 'SELECT'), ('trip_draft_versions', 'SELECT'),
+            ('trip_draft_alternatives', 'SELECT')
         ), operations(privilege_type) AS (
           VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')
         )
@@ -295,7 +330,9 @@ def check_runtime_table_privileges(connection: psycopg.Connection) -> None:
         """
         WITH tables(table_name) AS (
           VALUES ('chats'), ('chat_participants'), ('messages'), ('trips'),
-            ('trip_participants'), ('trip_stops')
+            ('trip_participants'), ('trip_stops'), ('trip_itinerary_days'),
+            ('trip_itinerary_events'), ('trip_drafts'), ('trip_draft_versions'),
+            ('trip_draft_alternatives')
         ), operations(privilege_type) AS (
           VALUES ('SELECT'), ('INSERT'), ('UPDATE')
         )
@@ -386,6 +423,11 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
             "trips": (True, True),
             "trip_participants": (True, True),
             "trip_stops": (True, True),
+            "trip_itinerary_days": (True, True),
+            "trip_itinerary_events": (True, True),
+            "trip_drafts": (True, True),
+            "trip_draft_versions": (True, True),
+            "trip_draft_alternatives": (True, True),
         },
         "RLS must be enabled and app_runtime must not own protected runtime tables",
     )
@@ -436,6 +478,16 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
             ('trip_participants_select_active_trip', 'trip_participants', 'r',
               '((left_at IS NULL) AND is_current_active_trip_participant(trip_id))', NULL::text),
             ('trip_stops_select_active_participant', 'trip_stops', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_itinerary_days_select_active_participant', 'trip_itinerary_days', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_itinerary_events_select_active_participant', 'trip_itinerary_events', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_drafts_select_active_participant', 'trip_drafts', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_draft_versions_select_active_participant', 'trip_draft_versions', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_draft_alternatives_select_active_participant', 'trip_draft_alternatives', 'r',
               'is_current_active_trip_participant(trip_id)', NULL::text)
         )
         SELECT expected.policy_name,
@@ -481,6 +533,11 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         ("trips", [("trips_select_active_participant", "SELECT")]),
         ("trip_participants", [("trip_participants_select_active_trip", "SELECT")]),
         ("trip_stops", [("trip_stops_select_active_participant", "SELECT")]),
+        ("trip_itinerary_days", [("trip_itinerary_days_select_active_participant", "SELECT")]),
+        ("trip_itinerary_events", [("trip_itinerary_events_select_active_participant", "SELECT")]),
+        ("trip_drafts", [("trip_drafts_select_active_participant", "SELECT")]),
+        ("trip_draft_versions", [("trip_draft_versions_select_active_participant", "SELECT")]),
+        ("trip_draft_alternatives", [("trip_draft_alternatives_select_active_participant", "SELECT")]),
     ):
         surface = connection.execute(
             "SELECT policyname, cmd FROM pg_policies WHERE schemaname='public' "
@@ -564,6 +621,14 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
         require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.trips)") is False, "trips RLS did not fail closed without authenticated context")
         require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.trip_participants)") is False, "trip participants RLS did not fail closed without authenticated context")
         require(scalar(connection, "SELECT EXISTS (SELECT 1 FROM public.trip_stops)") is False, "trip stops RLS did not fail closed without authenticated context")
+        for table_name in (
+            "trip_itinerary_days", "trip_itinerary_events", "trip_drafts",
+            "trip_draft_versions", "trip_draft_alternatives",
+        ):
+            require(
+                scalar(connection, f"SELECT EXISTS (SELECT 1 FROM public.{table_name})") is False,
+                f"{table_name} RLS did not fail closed without authenticated context",
+            )
 
     for context in (None, "00000000-0000-0000-0000-000000000001"):
         with connection.transaction():
@@ -590,6 +655,12 @@ def check_mutations_are_denied_and_rolled_back(connection: psycopg.Connection) -
         "INSERT INTO public.trip_stops (trip_id, position, place_label) SELECT NULL, 1, 'blocked' WHERE false",
         "UPDATE public.trip_stops SET place_label='blocked' WHERE false",
         "DELETE FROM public.trip_stops WHERE false",
+        "INSERT INTO public.trip_itinerary_days (trip_id, position) SELECT NULL, 1 WHERE false",
+        "UPDATE public.trip_itinerary_days SET title='blocked' WHERE false",
+        "DELETE FROM public.trip_itinerary_days WHERE false",
+        "INSERT INTO public.trip_drafts (trip_id, content, updated_by_user_id) SELECT NULL, '{}'::jsonb, NULL WHERE false",
+        "UPDATE public.trip_drafts SET content='{}'::jsonb WHERE false",
+        "DELETE FROM public.trip_drafts WHERE false",
     ):
         try:
             with connection.transaction():

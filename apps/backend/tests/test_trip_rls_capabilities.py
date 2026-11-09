@@ -8,6 +8,7 @@ from uuid import UUID
 
 import psycopg
 import pytest
+from psycopg.types.json import Jsonb
 
 from integration_database import (
     APP_RUNTIME_ROLE,
@@ -19,6 +20,8 @@ from integration_database import (
 
 ACTIVE_TRIP_PARTICIPANT_PREDICATE = "public.is_current_active_trip_participant(uuid)"
 CREATE_TRIP_CAPABILITY = "public.create_current_trip_from_chat(uuid)"
+DRAFT_SAVE_CAPABILITY = "public.save_current_trip_draft(uuid,integer,jsonb)"
+DRAFT_ALTERNATIVE_CAPABILITY = "public.save_current_trip_draft_alternative(uuid,text,jsonb)"
 
 
 @pytest.fixture
@@ -33,7 +36,7 @@ def database_url() -> str:
 def clean_database(database_url: str):
     truncate_disposable_test_database(
         database_url,
-        "TRUNCATE public.trip_stops, public.trip_participants, public.trips, public.chat_summaries, "
+        "TRUNCATE public.trip_draft_alternatives, public.trip_draft_versions, public.trip_drafts, public.trip_itinerary_events, public.trip_itinerary_days, public.trip_stops, public.trip_participants, public.trips, public.chat_summaries, "
         "public.messages, public.chat_participants, public.matches, public.chats, "
         "public.discover_interest_decisions, public.user_sessions, public.travel_intents, "
         "public.profile_photos, public.profiles, public.user_activity_states, public.user_settings, "
@@ -73,18 +76,33 @@ def test_trip_rls_catalog_policies_and_capabilities_are_exact(database_url: str)
         assert owner.execute(
             "SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class "
             "WHERE oid IN ('public.trips'::regclass, 'public.trip_participants'::regclass, "
-            "'public.trip_stops'::regclass) ORDER BY relname"
+            "'public.trip_stops'::regclass, 'public.trip_itinerary_days'::regclass, "
+            "'public.trip_itinerary_events'::regclass, 'public.trip_drafts'::regclass, "
+            "'public.trip_draft_versions'::regclass, 'public.trip_draft_alternatives'::regclass) "
+            "ORDER BY relname"
         ).fetchall() == [
+            ("trip_draft_alternatives", True, False),
+            ("trip_draft_versions", True, False),
+            ("trip_drafts", True, False),
+            ("trip_itinerary_days", True, False),
+            ("trip_itinerary_events", True, False),
             ("trip_participants", True, False),
             ("trip_stops", True, False),
             ("trips", True, False),
         ]
         policies = owner.execute(
             "SELECT tablename, cmd, roles::text, qual, with_check FROM pg_policies "
-            "WHERE schemaname='public' AND tablename IN ('trips', 'trip_participants', 'trip_stops') "
+            "WHERE schemaname='public' AND tablename IN ('trips', 'trip_participants', 'trip_stops', "
+            "'trip_itinerary_days', 'trip_itinerary_events', 'trip_drafts', 'trip_draft_versions', "
+            "'trip_draft_alternatives') "
             "ORDER BY tablename, cmd"
         ).fetchall()
         assert [(table, command, roles) for table, command, roles, _, _ in policies] == [
+            ("trip_draft_alternatives", "SELECT", "{app_runtime}"),
+            ("trip_draft_versions", "SELECT", "{app_runtime}"),
+            ("trip_drafts", "SELECT", "{app_runtime}"),
+            ("trip_itinerary_days", "SELECT", "{app_runtime}"),
+            ("trip_itinerary_events", "SELECT", "{app_runtime}"),
             ("trip_participants", "SELECT", "{app_runtime}"),
             ("trip_stops", "SELECT", "{app_runtime}"),
             ("trips", "SELECT", "{app_runtime}"),
@@ -92,7 +110,23 @@ def test_trip_rls_catalog_policies_and_capabilities_are_exact(database_url: str)
         assert all(check is None for _, _, _, _, check in policies)
         predicate = ACTIVE_TRIP_PARTICIPANT_PREDICATE.rsplit(".", maxsplit=1)[1].split("(", maxsplit=1)[0]
         assert all(predicate in (qual or "") for _, _, _, qual, _ in policies)
-        for function_name in (ACTIVE_TRIP_PARTICIPANT_PREDICATE, CREATE_TRIP_CAPABILITY):
+        assert owner.execute(
+            "WITH protected_tables(table_name) AS (VALUES "
+            "('trip_itinerary_days'), ('trip_itinerary_events'), ('trip_drafts'), "
+            "('trip_draft_versions'), ('trip_draft_alternatives')), "
+            "api_roles(role_name) AS (VALUES ('public'), ('anon'), ('authenticated'), ('service_role')) "
+            "SELECT api_roles.role_name, protected_tables.table_name "
+            "FROM api_roles CROSS JOIN protected_tables "
+            "JOIN pg_class AS relations ON relations.oid=('public.' || protected_tables.table_name)::regclass "
+            "WHERE has_table_privilege(api_roles.role_name, relations.oid, 'SELECT') "
+            "OR has_any_column_privilege(api_roles.role_name, relations.oid, 'SELECT')"
+        ).fetchall() == []
+        for function_name in (
+            ACTIVE_TRIP_PARTICIPANT_PREDICATE,
+            CREATE_TRIP_CAPABILITY,
+            DRAFT_SAVE_CAPABILITY,
+            DRAFT_ALTERNATIVE_CAPABILITY,
+        ):
             assert owner.execute(
                 "SELECT prosecdef, proconfig, has_function_privilege('public', oid, 'EXECUTE'), "
                 "has_function_privilege(%s, oid, 'EXECUTE') FROM pg_proc WHERE oid=%s::regprocedure",
@@ -118,6 +152,19 @@ def test_trip_reads_and_active_roster_are_scoped_to_active_participants(
             "INSERT INTO public.trip_stops (trip_id, position, place_label) VALUES (%s, 1, 'Moscow')",
             (trip_id,),
         )
+        draft_content = {
+            "route_stops": [], "date_from": None, "date_to": None, "accommodations": [],
+            "transport": [], "budget": {"min": None, "max": None, "currency": None, "scope": None},
+            "days": [], "notes": "",
+        }
+        owner.execute(
+            "INSERT INTO public.trip_drafts (trip_id, content, updated_by_user_id) VALUES (%s, %s, %s)",
+            (trip_id, Jsonb(draft_content), actor),
+        )
+        owner.execute(
+            "INSERT INTO public.trip_draft_versions (trip_id, version, content, author_user_id) VALUES (%s, 1, %s, %s)",
+            (trip_id, Jsonb(draft_content), actor),
+        )
         owner.execute(
             "UPDATE public.trip_participants SET left_at=now() WHERE trip_id=%s AND user_id=%s",
             (trip_id, former),
@@ -132,6 +179,12 @@ def test_trip_reads_and_active_roster_are_scoped_to_active_participants(
             assert runtime.execute(
                 "SELECT place_label FROM public.trip_stops WHERE trip_id=%s", (trip_id,)
             ).fetchall() == [("Moscow",)]
+            assert runtime.execute(
+                "SELECT version FROM public.trip_drafts WHERE trip_id=%s", (trip_id,)
+            ).fetchall() == [(1,)]
+            assert runtime.execute(
+                "SELECT count(*) FROM public.trip_draft_versions WHERE trip_id=%s", (trip_id,)
+            ).fetchone() == (1,)
         for user_id in (former, outsider):
             with runtime.transaction():
                 set_authenticated_user(runtime, user_id)
@@ -141,6 +194,12 @@ def test_trip_reads_and_active_roster_are_scoped_to_active_participants(
                 ).fetchall() == []
                 assert runtime.execute(
                     "SELECT id FROM public.trip_stops WHERE trip_id=%s", (trip_id,)
+                ).fetchall() == []
+                assert runtime.execute(
+                    "SELECT trip_id FROM public.trip_drafts WHERE trip_id=%s", (trip_id,)
+                ).fetchall() == []
+                assert runtime.execute(
+                    "SELECT trip_id FROM public.trip_draft_versions WHERE trip_id=%s", (trip_id,)
                 ).fetchall() == []
 
 
@@ -170,6 +229,21 @@ def test_runtime_trip_mutations_are_denied_and_creation_snapshots_only_active_ch
             "INSERT INTO public.trip_stops (trip_id, position, place_label) VALUES ('00000000-0000-0000-0000-000000000000', 1, 'spoof')",
             "UPDATE public.trip_stops SET place_label='spoof' WHERE trip_id='%s'" % trip_id,
             "DELETE FROM public.trip_stops WHERE trip_id='%s'" % trip_id,
+            "INSERT INTO public.trip_itinerary_days (trip_id, position) VALUES ('%s', 1)" % trip_id,
+            "UPDATE public.trip_itinerary_days SET title='spoof' WHERE trip_id='%s'" % trip_id,
+            "DELETE FROM public.trip_itinerary_days WHERE trip_id='%s'" % trip_id,
+            "INSERT INTO public.trip_drafts (trip_id, content, updated_by_user_id) VALUES ('%s', '{}', '%s')" % (trip_id, actor),
+            "UPDATE public.trip_drafts SET content='{}' WHERE trip_id='%s'" % trip_id,
+            "DELETE FROM public.trip_drafts WHERE trip_id='%s'" % trip_id,
+            "INSERT INTO public.trip_itinerary_events (trip_id, day_id, position, kind, title) SELECT NULL, NULL, 1, 'note', 'blocked' WHERE false",
+            "UPDATE public.trip_itinerary_events SET title='blocked' WHERE false",
+            "DELETE FROM public.trip_itinerary_events WHERE false",
+            "INSERT INTO public.trip_draft_versions (trip_id, version, content, author_user_id) SELECT NULL, 1, '{}'::jsonb, NULL WHERE false",
+            "UPDATE public.trip_draft_versions SET content='{}'::jsonb WHERE false",
+            "DELETE FROM public.trip_draft_versions WHERE false",
+            "INSERT INTO public.trip_draft_alternatives (trip_id, title, content, created_by_user_id) SELECT NULL, 'blocked', '{}'::jsonb, NULL WHERE false",
+            "UPDATE public.trip_draft_alternatives SET title='blocked' WHERE false",
+            "DELETE FROM public.trip_draft_alternatives WHERE false",
         ):
             with pytest.raises(psycopg.Error):
                 with runtime.transaction():

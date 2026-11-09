@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay the verified 19-to-24 migration path on a task-owned local database."""
+"""Replay the verified archive-to-current migration path on an isolated local database."""
 
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ EXPECTED_PENDING_NAMES = (
     "20261018090000_server_side_tester_admission_session_identity.sql",
     "20261105121901_live_chat_pagination_unread_idempotency.sql",
     "20261106080902_group_chat_titles_and_rename.sql",
+    "20261109120000_trip_itinerary_shared_draft.sql",
 )
 EXPECTED_DATABASE_PREFIX = "tf_restore_"
 DDL_OPTIONS = "-c lock_timeout=5s -c statement_timeout=120s"
@@ -283,7 +284,7 @@ def validate_repository_migration_sequence(manifest: dict[str, Any]) -> tuple[li
         raise UpgradeSmokeError("MIGRATIONS", "the manifest is not the ordered 19-migration repository prefix.")
     pending = repository_files[EXPECTED_APPLIED_COUNT:]
     if tuple(path.name for path in pending) != EXPECTED_PENDING_NAMES:
-        raise UpgradeSmokeError("MIGRATIONS", "the repository pending suffix differs from the seven approved migrations.")
+        raise UpgradeSmokeError("MIGRATIONS", "the repository pending suffix differs from the approved migrations.")
     return applied, pending
 
 
@@ -364,14 +365,23 @@ def _redacted_cli_lines(output: bytes, sensitive_values: list[str]) -> list[str]
 
 def _dry_run_versions(lines: list[str]) -> tuple[list[str], list[str]]:
     filenames: list[str] = []
-    versions: list[str] = []
+    in_pending_list = False
     # CLI prints an ellipsis immediately after the .sql suffix, so '.' cannot
     # be treated as part of the filename boundary here.
     filename_pattern = re.compile(r"(?<!\d)(\d{14}_[A-Za-z0-9][A-Za-z0-9_.-]*\.sql)(?![A-Za-z0-9_-])")
-    version_pattern = re.compile(r"(?<!\d)(\d{14})(?!\d)")
     for line in lines:
-        filenames.extend(filename_pattern.findall(line))
-        versions.extend(version_pattern.findall(line))
+        normalized = line.strip().lower()
+        if re.search(r"\bwould push these migrations\b", normalized):
+            in_pending_list = True
+            continue
+        if in_pending_list and re.search(r"\bfinished supabase db push\b", normalized):
+            in_pending_list = False
+            continue
+        if re.search(r"\bwould push migration\b", normalized):
+            filenames.extend(filename_pattern.findall(line))
+        elif in_pending_list:
+            filenames.extend(filename_pattern.findall(line))
+    versions = [filename.split("_", 1)[0] for filename in filenames]
     return filenames, versions
 
 
@@ -936,7 +946,7 @@ def run_local_dry_run(database_url: str, password: str, pending_names: list[str]
         ) from None
     except UpgradeSmokeError:
         raise UpgradeSmokeError(
-            "DRY_RUN", "CLI_START_ERROR exit_code=<unavailable>; expected seven pending migrations; "
+            "DRY_RUN", "CLI_START_ERROR exit_code=<unavailable>; expected approved pending migrations; "
             "actual versions [<unavailable>]; CLI: <process did not return output>.",
         ) from None
     output = stdout + b"\n" + stderr
@@ -983,8 +993,8 @@ def run_local_db_push(
     run_id: str,
     port: int,
 ) -> None:
-    if tuple(pending_names) != EXPECTED_PENDING_NAMES or len(pending_names) != 7:
-        raise UpgradeSmokeError("DRY_RUN", "db push requires the exact seven approved pending migrations.")
+    if tuple(pending_names) != EXPECTED_PENDING_NAMES or len(pending_names) != len(EXPECTED_PENDING_NAMES):
+        raise UpgradeSmokeError("DRY_RUN", "db push requires the exact approved pending migration suffix.")
     if re.fullmatch(r"[a-f0-9]{12}", run_id) is None or re.fullmatch(
         rf"tf-upgrade-\d{{14}}-{re.escape(run_id)}", container_name
     ) is None:
@@ -1035,9 +1045,13 @@ def format_stop(error: UpgradeSmokeError, cleanup_status: str, cleanup_error: st
     return f"STOP [{error.stage}]: {error.reason}; {details}"
 
 
-def _read_counts(container: str, password: str, database: str) -> str:
+def _read_counts(container: str, password: str, database: str, *, current: bool) -> str:
     return _psql(
-        container, password, database, RESTORE_SMOKE._table_row_counts_sql(),
+        container, password, database,
+        RESTORE_SMOKE._table_row_counts_sql(
+            RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES if current
+            else RESTORE_SMOKE.ARCHIVE_EXPECTED_PUBLIC_TABLES
+        ),
         stage="DATA", reason="aggregate per-table row counts could not be read safely.",
     )
 
@@ -1076,8 +1090,12 @@ SELECT jsonb_build_object(
 
 def _read_inventory(container: str, password: str, database: str, *, current: bool) -> dict[str, Any]:
     expected_functions = RESTORE_SMOKE.CURRENT_APP_EXPECTED_FUNCTIONS if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_FUNCTIONS
+    expected_tables = RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_PUBLIC_TABLES
+    expected_policy_names = RESTORE_SMOKE.CURRENT_APP_EXPECTED_POLICY_NAMES if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_POLICY_NAMES
     raw = _psql(
-        container, password, database, RESTORE_SMOKE._read_only_inventory_sql(expected_functions),
+        container, password, database, RESTORE_SMOKE._read_only_inventory_sql(
+            expected_functions, expected_tables, expected_policy_names,
+        ),
         stage="INVENTORY", reason="the public schema inventory could not be read safely.",
     )
     try:
@@ -1086,19 +1104,59 @@ def _read_inventory(container: str, password: str, database: str, *, current: bo
         raise UpgradeSmokeError("INVENTORY", "the public schema inventory result was invalid.") from None
     RESTORE_SMOKE.validate_structure(
         summary, database, expected_functions=expected_functions,
+        expected_tables=expected_tables,
+        expected_policy_names=expected_policy_names,
     )
     return summary
 
 
 def _check_unchanged_baseline(before: dict[str, Any], after: dict[str, Any]) -> None:
-    for key in ("tables", "rls_table_count", "policy_count", "expected_policy_count", "all_expected_tables_rls_enabled"):
-        if before.get(key) != after.get(key):
-            raise UpgradeSmokeError("RLS", "table or RLS/policy inventory changed during migration replay.")
+    before_tables = set(before.get("tables", []))
+    after_tables = set(after.get("tables", []))
+    if before_tables != RESTORE_SMOKE.ARCHIVE_EXPECTED_PUBLIC_TABLES or after_tables != RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES:
+        raise UpgradeSmokeError("RLS", "legacy or current public table inventory did not match the reviewed additive migration set.")
+    if (
+        after.get("rls_table_count") != len(RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES)
+        or after.get("policy_count") != len(RESTORE_SMOKE.CURRENT_APP_EXPECTED_POLICY_NAMES)
+        or after.get("expected_policy_count") != len(RESTORE_SMOKE.CURRENT_APP_EXPECTED_POLICY_NAMES)
+        or after.get("all_expected_tables_rls_enabled") is not True
+    ):
+        raise UpgradeSmokeError("RLS", "current RLS/policy inventory changed outside the reviewed additive migration set.")
 
 
 def validate_rls_policy_inventory(before: dict[str, Any], after: dict[str, Any]) -> None:
-    if before != after:
-        raise UpgradeSmokeError("RLS", "RLS flags or policy definitions changed during migration replay.")
+    if {item.get("name") for item in before.get("tables", [])} != RESTORE_SMOKE.ARCHIVE_EXPECTED_PUBLIC_TABLES:
+        if before != after:
+            raise UpgradeSmokeError("RLS", "RLS flags or policy definitions changed during migration replay.")
+        return
+    before_tables = {item["name"]: item for item in before.get("tables", [])}
+    after_tables = {item["name"]: item for item in after.get("tables", [])}
+    if any(after_tables.get(name) != table for name, table in before_tables.items()):
+        raise UpgradeSmokeError("RLS", "a legacy table RLS flag changed during migration replay.")
+    new_table_names = RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES - RESTORE_SMOKE.ARCHIVE_EXPECTED_PUBLIC_TABLES
+    if set(after_tables) != RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES or any(
+        after_tables.get(name) != {"name": name, "rls": True, "force_rls": False}
+        for name in new_table_names
+    ):
+        raise UpgradeSmokeError("RLS", "new Trip tables do not have the expected RLS posture.")
+    before_policies = {(item["table"], item["name"]): item for item in before.get("policies", [])}
+    after_policies = {(item["table"], item["name"]): item for item in after.get("policies", [])}
+    if any(after_policies.get(key) != policy for key, policy in before_policies.items()):
+        raise UpgradeSmokeError("RLS", "a legacy RLS policy changed during migration replay.")
+    expected_new_policies = {
+        (table, f"{table}_select_active_participant")
+        for table in ("trip_itinerary_days", "trip_itinerary_events", "trip_drafts", "trip_draft_versions", "trip_draft_alternatives")
+    }
+    additions = set(after_policies) - set(before_policies)
+    if additions != expected_new_policies or any(
+        item.get("command") != "SELECT"
+        or item.get("roles") != ["app_runtime"]
+        or item.get("using") != "is_current_active_trip_participant(trip_id)"
+        or item.get("check") is not None
+        for key in expected_new_policies
+        for item in [after_policies.get(key, {})]
+    ):
+        raise UpgradeSmokeError("RLS", "new Trip tables do not have the exact active-participant SELECT policies.")
 
 
 def _apply_runtime_grants_and_checks(
@@ -1223,7 +1281,7 @@ def run_smoke() -> int:
 
         initial_inventory = _read_inventory(container_name, postgres_password, database, current=False)
         initial_policies = _read_rls_policy_inventory(container_name, postgres_password, database)
-        initial_counts = _read_counts(container_name, postgres_password, database)
+        initial_counts = _read_counts(container_name, postgres_password, database, current=False)
         migration_url = local_database_url("postgres", postgres_password, port, database)
         verify_migration_connection(migration_url, database, postgres_password)
         _cli(migration_repair_command(migration_url, applied), stage="LEDGER_SEED", password=postgres_password)
@@ -1240,7 +1298,7 @@ def run_smoke() -> int:
 
         expected_all = [*applied, *({"version": path.stem.partition("_")[0], "name": path.stem.partition("_")[2]} for path in pending)]
         _verify_ledger(_ledger(container_name, postgres_password, database), expected_all, "LEDGER_AFTER")
-        post_counts = _read_counts(container_name, postgres_password, database)
+        post_counts = _read_counts(container_name, postgres_password, database, current=True)
         RESTORE_SMOKE.validate_migration_row_counts(initial_counts, post_counts)
         current_inventory = _read_inventory(container_name, postgres_password, database, current=True)
         current_policies = _read_rls_policy_inventory(container_name, postgres_password, database)
@@ -1276,10 +1334,10 @@ def run_smoke() -> int:
         return 1
     if success:
         print(f"Local PostgreSQL: 127.0.0.1:{port}/{database}; server {server_version}; Docker Engine {docker_version}.")
-        print(f"Supabase CLI: {version}; migration ledger: 19 → 24.")
+        print(f"Supabase CLI: {version}; migration ledger: {len(applied)} → {len(expected_all)}.")
         print("Migration order: " + " → ".join(pending_names))
         print("Archive: manifest/checksum verified; schema/data restored from read-only source archive.")
-        print("Structure, 17 public tables, data row counts, RLS/policies, runtime grants, privilege verifier, and deployment gate: PASS.")
+        print("Structure, additive Trip Draft tables, data preservation, RLS/policies, runtime grants, privilege verifier, and deployment gate: PASS.")
         print("Cleanup: task-owned container stopped; --rm removed its anonymous database volume; backup and manifest were read-only.")
         return 0
     return 1

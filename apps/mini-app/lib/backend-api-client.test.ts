@@ -501,3 +501,83 @@ test('turns a backend error response into an ApiError with the backend message',
     }
   );
 });
+
+test('uses authenticated trip itinerary and shared draft endpoints with versioned writes', async () => {
+  const calls: FetchCall[] = [];
+  const fetchStub: typeof fetch = async (input, init) => {
+    calls.push({ input, init });
+    return new Response(JSON.stringify({ trip_id: 'trip-1', days: [] }));
+  };
+  const client = createBackendApiClient(fetchStub);
+  await client.getTripItinerary('session-token', 'trip-1');
+  assertReadRequest(calls[0], '/api/backend/trips/trip-1/itinerary');
+
+  calls.length = 0;
+  await client.getTripDraft('session-token', 'trip-1');
+  assertReadRequest(calls[0], '/api/backend/trips/trip-1/draft');
+
+  calls.length = 0;
+  const content = {
+    route_stops: [], date_from: null, date_to: null, accommodations: [], transport: [],
+    budget: { min: null, max: null, currency: null, scope: null }, days: [], notes: ''
+  } as const;
+  await client.saveTripDraft('session-token', 'trip-1', { base_version: 4, content });
+  assert.equal(calls[0]?.input, '/api/backend/trips/trip-1/draft');
+  assert.deepEqual(calls[0]?.init, {
+    body: JSON.stringify({ base_version: 4, content }),
+    headers: {
+      Accept: 'application/json',
+      Authorization: 'Bearer session-token',
+      'Content-Type': 'application/json'
+    },
+    method: 'PUT'
+  });
+});
+
+test('saves named trip draft alternatives as separate snapshots', async () => {
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify({
+    id: 'alternative-1', trip_id: 'trip-1', title: 'План Б',
+    created_by_user_id: 'member-1', created_at: '2026-11-09T00:00:00Z'
+  }), { status: 201 }));
+  const client = createBackendApiClient(fetchStub);
+  const content = {
+    route_stops: [], date_from: null, date_to: null, accommodations: [], transport: [],
+    budget: { min: null, max: null, currency: null, scope: null }, days: [], notes: ''
+  } as const;
+
+  await client.saveTripDraftAlternative('session-token', 'trip-1', 'План Б', content);
+
+  assert.equal(calls[0]?.input, '/api/backend/trips/trip-1/draft/alternatives');
+  assert.deepEqual(calls[0]?.init, {
+    body: JSON.stringify({ title: 'План Б', content }),
+    headers: {
+      Accept: 'application/json',
+      Authorization: 'Bearer session-token',
+      'Content-Type': 'application/json'
+    },
+    method: 'POST'
+  });
+});
+
+test('reads one bounded saved alternative snapshot by its trip-scoped ID', async () => {
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify({ id: 'alternative-1', content: {} })));
+  const client = createBackendApiClient(fetchStub);
+
+  await client.getTripDraftAlternative('session-token', 'trip-1', 'alternative-1');
+
+  assertReadRequest(calls[0], '/api/backend/trips/trip-1/draft/alternatives/alternative-1');
+});
+
+test('preserves the explicit 409 version conflict from trip draft saves', async () => {
+  const { fetchStub } = createFetchStub(new Response(JSON.stringify({ detail: 'Trip Draft changed' }), { status: 409 }));
+  const client = createBackendApiClient(fetchStub);
+  const content = {
+    route_stops: [], date_from: null, date_to: null, accommodations: [], transport: [],
+    budget: { min: null, max: null, currency: null, scope: null }, days: [], notes: ''
+  } as const;
+
+  await assert.rejects(
+    () => client.saveTripDraft('session-token', 'trip-1', { base_version: 1, content }),
+    (error: unknown) => error instanceof ApiError && error.status === 409
+  );
+});

@@ -39,7 +39,7 @@ def database_url() -> str:
 def clean_database(database_url: str):
     truncate_disposable_test_database(
         database_url,
-        "TRUNCATE public.trip_stops, public.trip_participants, public.trips, public.chat_summaries, "
+        "TRUNCATE public.trip_draft_alternatives, public.trip_draft_versions, public.trip_drafts, public.trip_itinerary_events, public.trip_itinerary_days, public.trip_stops, public.trip_participants, public.trips, public.chat_summaries, "
         "public.messages, public.chat_participants, public.matches, public.chats, "
         "public.discover_interest_decisions, public.user_sessions, public.travel_intents, "
         "public.profile_photos, public.profiles, public.user_activity_states, public.user_settings, "
