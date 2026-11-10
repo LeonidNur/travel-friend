@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import os
@@ -13,6 +14,7 @@ import socket
 import subprocess
 import sys
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, quote, urlsplit
@@ -24,21 +26,11 @@ SCRIPT_PATH = Path(__file__).resolve()
 REPOSITORY_ROOT = SCRIPT_PATH.parents[3]
 BACKEND_ROOT = SCRIPT_PATH.parents[1]
 MIGRATIONS_DIR = REPOSITORY_ROOT / "supabase" / "migrations"
-BACKUP_DIRECTORY = Path.home() / ".local" / "share" / "travel-friend" / "backups" / "20261018T142642Z-0b41eb45"
-ARCHIVE_PATH = BACKUP_DIRECTORY / "public.dump"
-MANIFEST_PATH = BACKUP_DIRECTORY / "manifest.json"
 POSTGRES_IMAGE = "postgres:17-alpine"
 CLI_PACKAGE = "supabase@2.114.0"
 CONTAINER_LABEL_KEY = "com.travel-friend.disposable-migration-upgrade"
-EXPECTED_APPLIED_COUNT = 19
+EXPECTED_APPLIED_COUNT = 26
 EXPECTED_PENDING_NAMES = (
-    "20260924090000_completed_onboarding_active_travel_intent_invariant.sql",
-    "20260924100000_session_lifecycle_baseline.sql",
-    "20260924110000_backend_field_domain_limits.sql",
-    "20261003090000_chat_participant_public_profile.sql",
-    "20261018090000_server_side_tester_admission_session_identity.sql",
-    "20261105121901_live_chat_pagination_unread_idempotency.sql",
-    "20261106080902_group_chat_titles_and_rename.sql",
     "20261109120000_trip_itinerary_shared_draft.sql",
     "20261109130000_trip_proposals_voting_atomic_apply.sql",
 )
@@ -71,6 +63,23 @@ class ProcessTimeoutError(UpgradeSmokeError):
         self.stderr = stderr
         cleanup = "PASS" if process_group_cleanup else "FAILED"
         super().__init__(stage, f"subprocess timeout after {timeout}s; process_group_cleanup={cleanup}.")
+
+
+def unexpected_failure_reason(error: Exception) -> str:
+    """Return a useful local source location without exposing exception text."""
+    frames = traceback.extract_tb(error.__traceback__)
+    if not frames:
+        return f"unexpected local smoke failure ({type(error).__name__}); detailed output was suppressed."
+    frame = frames[-1]
+    return (
+        f"unexpected local smoke failure ({type(error).__name__}) at "
+        f"{Path(frame.filename).name}:{frame.lineno} in {frame.name}; detailed output was suppressed."
+    )
+
+
+def restore_smoke_failure(error: Exception) -> UpgradeSmokeError:
+    """Preserve the restore validator's already-redacted stage and summary."""
+    return UpgradeSmokeError(error.stage, error.reason)  # type: ignore[attr-defined]
 
 
 def _load_restore_smoke() -> Any:
@@ -254,7 +263,7 @@ def validate_repository_migration_sequence(manifest: dict[str, Any]) -> tuple[li
         expected_file_count = EXPECTED_APPLIED_COUNT + len(EXPECTED_PENDING_NAMES)
         raise UpgradeSmokeError(
             "MIGRATIONS",
-            f"expected 19 manifest migrations and {expected_file_count} repository migration files.",
+            f"expected 26 manifest migrations and {expected_file_count} repository migration files.",
         )
 
     by_version: dict[str, Path] = {}
@@ -282,7 +291,7 @@ def validate_repository_migration_sequence(manifest: dict[str, Any]) -> tuple[li
     if [path.name for path in repository_files[:EXPECTED_APPLIED_COUNT]] != [
         f"{item['version']}_{item['name']}.sql" for item in applied
     ]:
-        raise UpgradeSmokeError("MIGRATIONS", "the manifest is not the ordered 19-migration repository prefix.")
+        raise UpgradeSmokeError("MIGRATIONS", "the manifest is not the ordered 26-migration repository prefix.")
     pending = repository_files[EXPECTED_APPLIED_COUNT:]
     if tuple(path.name for path in pending) != EXPECTED_PENDING_NAMES:
         raise UpgradeSmokeError("MIGRATIONS", "the repository pending suffix differs from the approved migrations.")
@@ -1089,8 +1098,15 @@ SELECT jsonb_build_object(
     return inventory
 
 
-def _read_inventory(container: str, password: str, database: str, *, current: bool) -> dict[str, Any]:
-    expected_functions = RESTORE_SMOKE.CURRENT_APP_EXPECTED_FUNCTIONS if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_FUNCTIONS
+def _read_inventory(
+    container: str,
+    password: str,
+    database: str,
+    *,
+    current: bool,
+    archive_functions: tuple[str, ...] = RESTORE_SMOKE.ARCHIVE_EXPECTED_FUNCTIONS,
+) -> dict[str, Any]:
+    expected_functions = RESTORE_SMOKE.CURRENT_APP_EXPECTED_FUNCTIONS if current else archive_functions
     expected_tables = RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_PUBLIC_TABLES
     expected_policy_names = RESTORE_SMOKE.CURRENT_APP_EXPECTED_POLICY_NAMES if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_POLICY_NAMES
     expected_triggers = RESTORE_SMOKE.CURRENT_APP_EXPECTED_TRIGGERS if current else RESTORE_SMOKE.EXPECTED_TRIGGERS
@@ -1251,10 +1267,10 @@ def _apply_runtime_grants_and_checks(
         )
 
 
-def run_smoke() -> int:
+def run_smoke(archive_path: Path, manifest_path: Path) -> int:
     version = verify_cli_version()
     docker_version = verify_docker_and_image()
-    manifest = RESTORE_SMOKE.validate_archive(ARCHIVE_PATH, MANIFEST_PATH)
+    manifest = RESTORE_SMOKE.validate_archive(archive_path, manifest_path)
     applied, pending = validate_repository_migration_sequence(manifest)
     pending_names = [path.name for path in pending]
 
@@ -1289,11 +1305,17 @@ def run_smoke() -> int:
         if re.match(r"^17(?:\.|$)", server_version) is None:
             raise UpgradeSmokeError("POSTGRESQL", "the disposable server is not PostgreSQL major version 17.")
 
-        _validate_archive_toc(container_name, postgres_password, ARCHIVE_PATH)
+        _validate_archive_toc(container_name, postgres_password, archive_path)
         _create_database_and_roles(container_name, postgres_password, database, runtime_password)
-        _restore_archive(container_name, postgres_password, database, ARCHIVE_PATH)
+        _restore_archive(container_name, postgres_password, database, archive_path)
 
-        initial_inventory = _read_inventory(container_name, postgres_password, database, current=False)
+        initial_inventory = _read_inventory(
+            container_name,
+            postgres_password,
+            database,
+            current=False,
+            archive_functions=RESTORE_SMOKE.expected_archive_functions(manifest),
+        )
         initial_policies = _read_rls_policy_inventory(container_name, postgres_password, database)
         initial_counts = _read_counts(container_name, postgres_password, database, current=False)
         migration_url = local_database_url("postgres", postgres_password, port, database)
@@ -1330,8 +1352,10 @@ def run_smoke() -> int:
         success = True
     except UpgradeSmokeError as error:
         failure = error
-    except Exception:
-        failure = UpgradeSmokeError("SMOKE", "unexpected local smoke failure; detailed command output was suppressed.")
+    except RESTORE_SMOKE.RestoreSmokeError as error:
+        failure = restore_smoke_failure(error)
+    except Exception as error:
+        failure = UpgradeSmokeError("SMOKE", unexpected_failure_reason(error))
     finally:
         if container_creation_attempted:
             try:
@@ -1357,9 +1381,13 @@ def run_smoke() -> int:
     return 1
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--archive", required=True, type=Path)
+    parser.add_argument("--manifest", required=True, type=Path)
+    args = parser.parse_args(argv)
     try:
-        return run_smoke()
+        return run_smoke(args.archive, args.manifest)
     except UpgradeSmokeError as error:
         print(f"STOP [{error.stage}]: {error.reason}", file=sys.stderr)
         return 1

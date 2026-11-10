@@ -31,8 +31,9 @@ EXPECTED_DATABASE_PREFIX = "tf_restore_"
 EXPECTED_POSTGRES_MAJOR = 17
 EXPECTED_RUNTIME_CAPABILITY_COUNT = 30
 
-# Read-only inventories confirmed in the 2026-10-28 archive and current
-# production database. Newer repository migrations are replayed only locally.
+# Read-only inventories confirmed in the archival 2026-10-18, prior production
+# 2026-11-07, and current production migration ledgers. Newer repository
+# migrations are replayed only in the disposable local target.
 CURRENT_PRODUCTION_MIGRATIONS = (
     ("20260826084844", "core_identity"),
     ("20260826100000", "user_sessions"),
@@ -58,10 +59,14 @@ CURRENT_PRODUCTION_MIGRATIONS = (
     ("20260924110000", "backend_field_domain_limits"),
     ("20261003090000", "chat_participant_public_profile"),
     ("20261018090000", "server_side_tester_admission_session_identity"),
+    ("20261105121901", "live_chat_pagination_unread_idempotency"),
+    ("20261106080902", "group_chat_titles_and_rename"),
 )
+PREVIOUS_PRODUCTION_MIGRATIONS = CURRENT_PRODUCTION_MIGRATIONS[:24]
 LEGACY_ARCHIVE_MIGRATIONS = CURRENT_PRODUCTION_MIGRATIONS[:19]
 SUPPORTED_ARCHIVE_MIGRATION_LEDGERS = (
     LEGACY_ARCHIVE_MIGRATIONS,
+    PREVIOUS_PRODUCTION_MIGRATIONS,
     CURRENT_PRODUCTION_MIGRATIONS,
 )
 
@@ -183,6 +188,10 @@ CURRENT_APP_ADDITIONAL_FUNCTIONS = (
 )
 CURRENT_APP_EXPECTED_FUNCTIONS = (*ARCHIVE_EXPECTED_FUNCTIONS, *CURRENT_APP_ADDITIONAL_FUNCTIONS)
 PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS = (
+    *ARCHIVE_EXPECTED_FUNCTIONS,
+    *CURRENT_APP_ADDITIONAL_FUNCTIONS[:8],
+)
+PREVIOUS_PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS = (
     *ARCHIVE_EXPECTED_FUNCTIONS,
     *CURRENT_APP_ADDITIONAL_FUNCTIONS[:3],
 )
@@ -344,6 +353,8 @@ def expected_archive_functions(manifest: dict[str, Any]) -> tuple[str, ...]:
     )
     if archived_migrations == LEGACY_ARCHIVE_MIGRATIONS:
         return ARCHIVE_EXPECTED_FUNCTIONS
+    if archived_migrations == PREVIOUS_PRODUCTION_MIGRATIONS:
+        return PREVIOUS_PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS
     if archived_migrations == CURRENT_PRODUCTION_MIGRATIONS:
         return PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS
     raise RestoreSmokeError("ARCHIVE", "archive migration ledger has no reviewed function inventory.")

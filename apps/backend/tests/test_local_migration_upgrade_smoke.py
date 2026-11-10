@@ -25,7 +25,7 @@ def _archive_fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, object]]:
             "version": path.name.split("_", 1)[0],
             "name": path.stem.split("_", 1)[1],
         }
-        for path in migration_paths[:19]
+        for path in migration_paths[:26]
     ]
     manifest: dict[str, object] = {
         "archive": {
@@ -39,7 +39,7 @@ def _archive_fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, object]]:
         "client_tools": {"pg_dump": {"version": "pg_dump (PostgreSQL) 17.11"}},
         "observations": {
             "metadata": {"extension_restore_dependencies": []},
-            "migration_ledger": {"count": 19, "versions": ledger_versions},
+            "migration_ledger": {"count": 26, "versions": ledger_versions},
         },
     }
     manifest_path = tmp_path / "manifest.json"
@@ -108,16 +108,9 @@ def test_manifest_migrations_match_repository_baseline_and_pending_suffix(tmp_pa
 
     applied, pending = smoke.validate_repository_migration_sequence(manifest)
 
-    assert len(applied) == 19
-    assert len(pending) == 9
+    assert len(applied) == 26
+    assert len(pending) == 2
     assert [path.name for path in pending] == [
-        "20260924090000_completed_onboarding_active_travel_intent_invariant.sql",
-        "20260924100000_session_lifecycle_baseline.sql",
-        "20260924110000_backend_field_domain_limits.sql",
-        "20261003090000_chat_participant_public_profile.sql",
-        "20261018090000_server_side_tester_admission_session_identity.sql",
-        "20261105121901_live_chat_pagination_unread_idempotency.sql",
-        "20261106080902_group_chat_titles_and_rename.sql",
         "20261109120000_trip_itinerary_shared_draft.sql",
         "20261109130000_trip_proposals_voting_atomic_apply.sql",
     ]
@@ -136,9 +129,9 @@ def test_manifest_missing_repository_migration_fails_closed(tmp_path: Path) -> N
     _, _, manifest = _archive_fixture(tmp_path)
     ledger = manifest["observations"]["migration_ledger"]["versions"]  # type: ignore[index]
     ledger.pop()
-    manifest["observations"]["migration_ledger"]["count"] = 18  # type: ignore[index]
+    manifest["observations"]["migration_ledger"]["count"] = 25  # type: ignore[index]
 
-    with pytest.raises(smoke.UpgradeSmokeError, match="19 manifest migrations"):
+    with pytest.raises(smoke.UpgradeSmokeError, match="26 manifest migrations"):
         smoke.validate_repository_migration_sequence(manifest)
 
 
@@ -162,6 +155,71 @@ def test_cli_commands_are_pinned_and_explicitly_local() -> None:
     assert "local-test-password" not in " ".join(command)
     apply_command = smoke.db_push_command(database_url, dry_run=False)
     assert apply_command[3:6] == ["--yes", "db", "push"]
+
+
+def test_cli_requires_explicit_archive_and_manifest_paths(monkeypatch, tmp_path: Path) -> None:
+    archive = tmp_path / "current-production.dump"
+    manifest = tmp_path / "current-production-manifest.json"
+    received: list[tuple[Path, Path]] = []
+
+    monkeypatch.setattr(
+        smoke,
+        "run_smoke",
+        lambda archive_path, manifest_path: received.append((archive_path, manifest_path)) or 0,
+    )
+
+    assert smoke.main(["--archive", str(archive), "--manifest", str(manifest)]) == 0
+    assert received == [(archive, manifest)]
+
+
+@pytest.mark.parametrize("arguments", [[], ["--archive", "current.dump"], ["--manifest", "manifest.json"]])
+def test_cli_rejects_missing_archive_or_manifest(arguments: list[str]) -> None:
+    with pytest.raises(SystemExit) as result:
+        smoke.main(arguments)
+
+    assert result.value.code == 2
+
+
+def test_unexpected_failure_diagnostic_has_source_location_but_not_exception_text() -> None:
+    secret_like_detail = "sensitive-query-or-password"
+    try:
+        raise RuntimeError(secret_like_detail)
+    except RuntimeError as error:
+        reason = smoke.unexpected_failure_reason(error)
+
+    assert "RuntimeError" in reason
+    assert "test_local_migration_upgrade_smoke.py:" in reason
+    assert secret_like_detail not in reason
+    assert "detailed output was suppressed" in reason
+
+
+def test_restore_smoke_failures_keep_safe_stage_and_inventory_diagnostic() -> None:
+    error = smoke.RESTORE_SMOKE.RestoreSmokeError(
+        "STRUCTURE", "restored inventory failed checks: FUNCTIONS_COUNT. functions=25"
+    )
+
+    translated = smoke.restore_smoke_failure(error)
+
+    assert translated.stage == "STRUCTURE"
+    assert translated.reason == error.reason
+
+
+def test_archive_inventory_uses_functions_for_manifest_migration_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive_functions = ("public.current_authenticated_user_id()", "public.live_chat_capability()")
+    captured: list[tuple[str, ...]] = []
+    monkeypatch.setattr(smoke, "_psql", lambda *_args, **_kwargs: "{}")
+    monkeypatch.setattr(
+        smoke.RESTORE_SMOKE,
+        "_read_only_inventory_sql",
+        lambda functions, *_args: captured.append(functions) or "SELECT '{}'",
+    )
+    monkeypatch.setattr(smoke.RESTORE_SMOKE, "validate_structure", lambda *_args, **_kwargs: None)
+
+    smoke._read_inventory("disposable", "local-only", "tf_restore_a1b2c3d4e5f6", current=False, archive_functions=archive_functions)
+
+    assert captured == [archive_functions]
 
 
 def test_local_db_push_is_noninteractive_and_runs_only_after_verified_local_dry_run(
@@ -289,19 +347,13 @@ def test_ledger_seed_uses_only_manifest_versions(tmp_path: Path) -> None:
     command = smoke.migration_repair_command(database_url, applied)
 
     assert command[:5] == ["npx", "--yes", "supabase@2.114.0", "migration", "repair"]
-    assert command[5:24] == [item["version"] for item in applied]
+    assert command[5 : 5 + len(applied)] == [item["version"] for item in applied]
     assert command[-4:] == ["--status", "applied", "--db-url", database_url]
-    assert len([part for part in command if part.isdigit() and len(part) == 14]) == 19
+    assert len([part for part in command if part.isdigit() and len(part) == 14]) == 26
 
 
 def test_dry_run_requires_the_exact_repository_order() -> None:
-    migrations = [
-        "20260924090000_completed_onboarding_active_travel_intent_invariant.sql",
-        "20260924100000_session_lifecycle_baseline.sql",
-        "20260924110000_backend_field_domain_limits.sql",
-        "20261003090000_chat_participant_public_profile.sql",
-        "20261018090000_server_side_tester_admission_session_identity.sql",
-    ]
+    migrations = list(smoke.EXPECTED_PENDING_NAMES)
 
     output = lambda names: "\n".join(f"Would push migration {name}..." for name in names).encode()
     smoke.validate_dry_run_result(0, output(migrations), migrations, [])
