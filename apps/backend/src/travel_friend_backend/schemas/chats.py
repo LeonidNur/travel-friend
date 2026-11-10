@@ -152,6 +152,13 @@ class ChatMessageResponse(BaseModel):
     sender_user_id: UUID | None
     content_text: str | None
     created_at: datetime
+    system_event: str | None = None
+    proposal_id: UUID | None = None
+    proposal_trip_id: UUID | None = None
+    proposal_status: Literal[
+        "pending", "blocked", "accepted", "rejected", "cancelled", "expired", "stale", "needs_revision"
+    ] | None = None
+    proposal_blocked_reason: str | None = None
 
 
 class ChatMessagePageResponse(BaseModel):

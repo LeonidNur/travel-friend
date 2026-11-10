@@ -158,6 +158,14 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
         <TripDetailSection heading="Маршрут" value={route ?? 'Маршрут пока не указан'} />
         {dates !== null ? <TripDetailSection heading="Даты" value={dates} /> : null}
         {budget !== null ? <TripDetailSection heading="Бюджет" value={budget} /> : null}
+        {detail.accommodations.length > 0 ? <TripDetailSection
+          heading="Проживание"
+          value={detail.accommodations.map((item) => [item.name, item.location, item.date_from, item.date_to, item.notes].filter(Boolean).join(' · ')).join('; ')}
+        /> : null}
+        {detail.transport.length > 0 ? <TripDetailSection
+          heading="Транспорт"
+          value={detail.transport.map((item) => [item.mode, item.origin, item.destination, item.departure_at, item.arrival_at, item.notes].filter(Boolean).join(' · ')).join('; ')}
+        /> : null}
       </section>
 
       <section className="trip-confirmed-itinerary" aria-labelledby="confirmed-itinerary-title">
@@ -199,10 +207,17 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
         <TripDraftEditor
           key={draftDetail.draft.trip_id}
           token={session.accessToken}
+          userId={session.userId}
           draft={draftDetail.draft}
           alternatives={draftDetail.alternatives}
+          confirmedDays={itinerary?.days ?? []}
           api={backendApiClient}
           authorLabel={(userId) => detail.participants.find((participant) => participant.user_id === userId)?.display_name ?? 'участник поездки'}
+          onProposalAccepted={() => {
+            setIsLoading(true);
+            setReloadKey((key) => key + 1);
+            setItineraryReloadKey((key) => key + 1);
+          }}
         />
       ) : null}
     </section>

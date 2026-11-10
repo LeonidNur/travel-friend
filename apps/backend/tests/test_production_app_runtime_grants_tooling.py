@@ -45,6 +45,10 @@ REQUIRED_CAPABILITIES = {
     "public.create_current_trip_from_chat(uuid)",
     "public.save_current_trip_draft(uuid, integer, jsonb)",
     "public.save_current_trip_draft_alternative(uuid, text, jsonb)",
+    "public.create_current_trip_proposal(uuid, integer, text, uuid, text[], uuid[], timestamptz)",
+    "public.cast_current_trip_proposal_vote(uuid, text)",
+    "public.cancel_current_trip_proposal(uuid)",
+    "public.refresh_current_trip_proposals(uuid)",
 }
 
 EXPECTED_TRIGGER_FUNCTION_FINDINGS = [
@@ -99,6 +103,13 @@ def test_production_grants_cover_the_audited_runtime_matrix() -> None:
         "trip_drafts",
         "trip_draft_versions",
         "trip_draft_alternatives",
+        "trip_confirmed_accommodations",
+        "trip_confirmed_transport",
+        "trip_proposals",
+        "trip_proposal_operations",
+        "trip_proposal_voters",
+        "trip_proposal_prerequisites",
+        "trip_proposal_scope_versions",
     ):
         assert f"REVOKE ALL PRIVILEGES ON TABLE public.{table_name} FROM app_runtime;" in script
 
@@ -263,7 +274,7 @@ def test_production_runtime_grants_and_verifier_execute_against_migrated_schema(
         )
 
         baseline_table_operations = table_operation_rows(verification_results)
-        assert len(baseline_table_operations) == 22 * 7
+        assert len(baseline_table_operations) == 29 * 7
         assert all(row[3] == row[4] and row[5] is True for row in baseline_table_operations)
 
         assert_verifier_rejects_mutation(
@@ -302,6 +313,10 @@ def test_production_runtime_grants_and_verifier_execute_against_migrated_schema(
             "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
             "public.resolve_bearer_session_with_identity(text)",
             "public.send_current_chat_message(uuid,text,uuid)",
+            "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamptz)",
+            "public.cast_current_trip_proposal_vote(uuid,text)",
+            "public.cancel_current_trip_proposal(uuid)",
+            "public.refresh_current_trip_proposals(uuid)",
         ))
         for role in ("anon", "authenticated", "service_role")
     ]

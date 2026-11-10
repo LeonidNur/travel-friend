@@ -90,9 +90,30 @@ class TripParticipantResponse(BaseModel):
     city: str | None
 
 
+class TripConfirmedAccommodationResponse(BaseModel):
+    id: UUID
+    name: str
+    location: str | None
+    date_from: date | None
+    date_to: date | None
+    notes: str | None
+
+
+class TripConfirmedTransportResponse(BaseModel):
+    id: UUID
+    mode: str
+    origin: str | None
+    destination: str | None
+    departure_at: datetime | None
+    arrival_at: datetime | None
+    notes: str | None
+
+
 class TripDetailResponse(BaseModel):
     """Authenticated persisted Trip detail with route and current participants."""
 
     trip: TripSnapshotResponse
     route_stops: list[TripRouteStopResponse]
     participants: list[TripParticipantResponse]
+    accommodations: list[TripConfirmedAccommodationResponse]
+    transport: list[TripConfirmedTransportResponse]

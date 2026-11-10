@@ -19,6 +19,7 @@ import {
   mapChatMessages,
   submitChatMessage
 } from '@/lib/chat-runtime';
+import { getProposalBlockedReasonLabel, getProposalStatusLabel } from '@/lib/trip-proposal-runtime';
 import {
   createChatTrip,
   loadChatTripNavigationState,
@@ -584,6 +585,9 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
                 <div className="chat-room__system-block" key={message.messageId}>
                   <div className="chat-room__system-message">
                     <p className="chat-room__system-text">{message.text}</p>
+                    {message.proposalStatus ? <p className="surface-card__copy">Текущий статус: {getProposalStatusLabel(message.proposalStatus)}</p> : null}
+                    {message.proposalBlockedReason ? <p className="surface-card__copy">{getProposalBlockedReasonLabel(message.proposalBlockedReason)}</p> : null}
+                    {message.proposalId && message.proposalTripId ? <Link className="navigation-link" href={`/trips/${message.proposalTripId}#proposal-${message.proposalId}`}>Открыть предложение</Link> : null}
                     <span className="chat-room__message-time">{message.sentAtLabel}</span>
                   </div>
                 </div>

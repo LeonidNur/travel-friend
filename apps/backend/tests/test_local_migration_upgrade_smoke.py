@@ -109,7 +109,7 @@ def test_manifest_migrations_match_repository_baseline_and_pending_suffix(tmp_pa
     applied, pending = smoke.validate_repository_migration_sequence(manifest)
 
     assert len(applied) == 19
-    assert len(pending) == 8
+    assert len(pending) == 9
     assert [path.name for path in pending] == [
         "20260924090000_completed_onboarding_active_travel_intent_invariant.sql",
         "20260924100000_session_lifecycle_baseline.sql",
@@ -119,6 +119,7 @@ def test_manifest_migrations_match_repository_baseline_and_pending_suffix(tmp_pa
         "20261105121901_live_chat_pagination_unread_idempotency.sql",
         "20261106080902_group_chat_titles_and_rename.sql",
         "20261109120000_trip_itinerary_shared_draft.sql",
+        "20261109130000_trip_proposals_voting_atomic_apply.sql",
     ]
 
 
@@ -624,7 +625,7 @@ def test_current_sql_verifier_contract_uses_exact_eight_column_api_result() -> N
     assert "RAISE EXCEPTION 'SQL privilege verification failed" in sql
     assert "USING ERRCODE = '42501'" in sql
     assert actual_api_header in tuple(tuple(row.split(",")) for row in output.splitlines())
-    assert len(parsed["protected_api_capabilities"]) == 30
+    assert len(parsed["protected_api_capabilities"]) == 42
     assert seen == set(smoke.RESTORE_SMOKE.VERIFIER_SECTIONS.values())
     assert smoke._psql.__kwdefaults__["diagnostics"] is False
 

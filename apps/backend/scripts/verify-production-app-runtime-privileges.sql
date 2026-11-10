@@ -20,7 +20,9 @@ WITH application_tables (table_name) AS (
     ('chat_participants'), ('messages'), ('chat_summaries'), ('trips'),
     ('trip_participants'), ('trip_stops'), ('trip_itinerary_days'),
     ('trip_itinerary_events'), ('trip_drafts'), ('trip_draft_versions'),
-    ('trip_draft_alternatives')
+    ('trip_draft_alternatives'), ('trip_confirmed_accommodations'),
+    ('trip_confirmed_transport'), ('trip_proposals'), ('trip_proposal_operations'),
+    ('trip_proposal_voters'), ('trip_proposal_prerequisites'), ('trip_proposal_scope_versions')
 ), expected (table_name, privilege_type) AS (
   VALUES
     ('profiles', 'SELECT'), ('profiles', 'INSERT'), ('profiles', 'UPDATE'),
@@ -37,7 +39,10 @@ WITH application_tables (table_name) AS (
     ('trip_stops', 'SELECT'),
     ('trip_itinerary_days', 'SELECT'), ('trip_itinerary_events', 'SELECT'),
     ('trip_drafts', 'SELECT'), ('trip_draft_versions', 'SELECT'),
-    ('trip_draft_alternatives', 'SELECT')
+    ('trip_draft_alternatives', 'SELECT'), ('trip_confirmed_accommodations', 'SELECT'),
+    ('trip_confirmed_transport', 'SELECT'), ('trip_proposals', 'SELECT'),
+    ('trip_proposal_operations', 'SELECT'), ('trip_proposal_voters', 'SELECT'),
+    ('trip_proposal_prerequisites', 'SELECT'), ('trip_proposal_scope_versions', 'SELECT')
 ), operations (privilege_type, supports_column_privileges) AS (
   VALUES
     ('SELECT', true), ('INSERT', true), ('UPDATE', true), ('DELETE', false),
@@ -88,7 +93,9 @@ WITH application_tables (table_name) AS (
     ('chat_participants'), ('messages'), ('chat_summaries'), ('trips'),
     ('trip_participants'), ('trip_stops'), ('trip_itinerary_days'),
     ('trip_itinerary_events'), ('trip_drafts'), ('trip_draft_versions'),
-    ('trip_draft_alternatives')
+    ('trip_draft_alternatives'), ('trip_confirmed_accommodations'),
+    ('trip_confirmed_transport'), ('trip_proposals'), ('trip_proposal_operations'),
+    ('trip_proposal_voters'), ('trip_proposal_prerequisites'), ('trip_proposal_scope_versions')
 ), expected_column_privilege_groups (table_name, privilege_type, column_names) AS (
   VALUES
     ('profiles', 'SELECT', ARRAY['id', 'user_id', 'display_name', 'birth_date', 'gender', 'city', 'bio', 'travel_style', 'interests', 'budget_level', 'comfort_level', 'created_at', 'updated_at']),
@@ -104,7 +111,7 @@ WITH application_tables (table_name) AS (
     ('matches', 'SELECT', ARRAY['id', 'user_a_id', 'user_b_id', 'chat_id']),
     ('chats', 'SELECT', ARRAY['id', 'type', 'created_at', 'last_sequence']),
     ('chat_participants', 'SELECT', ARRAY['chat_id', 'user_id', 'left_at']),
-    ('messages', 'SELECT', ARRAY['id', 'chat_id', 'sequence_number', 'type', 'sender_user_id', 'recipient_user_id', 'content_text', 'created_at']),
+    ('messages', 'SELECT', ARRAY['id', 'chat_id', 'sequence_number', 'type', 'sender_user_id', 'recipient_user_id', 'content_text', 'created_at', 'system_event', 'proposal_id', 'proposal_trip_id']),
     ('trips', 'SELECT', ARRAY['id', 'chat_id', 'created_by_user_id', 'status', 'membership_version', 'state_version', 'destination_version', 'dates_version', 'budget_version', 'transport_version', 'destination_status', 'dates_status', 'budget_status', 'transport_status', 'date_from', 'date_to', 'budget_min', 'budget_max', 'budget_currency', 'budget_scope', 'started_at', 'completed_at', 'cancelled_at', 'created_at', 'updated_at']),
     ('trip_participants', 'SELECT', ARRAY['trip_id', 'user_id', 'left_at']),
     ('trip_stops', 'SELECT', ARRAY['id', 'trip_id', 'position', 'place_label', 'country_code', 'place_ref', 'stay_from', 'stay_to', 'notes', 'created_at', 'updated_at']),
@@ -112,7 +119,14 @@ WITH application_tables (table_name) AS (
     ('trip_itinerary_events', 'SELECT', ARRAY['id', 'trip_id', 'day_id', 'position', 'kind', 'title', 'start_time', 'duration_minutes', 'address', 'estimated_cost', 'currency', 'notes', 'created_at', 'updated_at']),
     ('trip_drafts', 'SELECT', ARRAY['trip_id', 'version', 'content', 'updated_by_user_id', 'created_at', 'updated_at']),
     ('trip_draft_versions', 'SELECT', ARRAY['trip_id', 'version', 'content', 'author_user_id', 'created_at']),
-    ('trip_draft_alternatives', 'SELECT', ARRAY['id', 'trip_id', 'title', 'content', 'created_by_user_id', 'created_at'])
+    ('trip_draft_alternatives', 'SELECT', ARRAY['id', 'trip_id', 'title', 'content', 'created_by_user_id', 'created_at']),
+    ('trip_confirmed_accommodations', 'SELECT', ARRAY['trip_id','id','name','location','date_from','date_to','notes']),
+    ('trip_confirmed_transport', 'SELECT', ARRAY['trip_id','id','mode','origin','destination','departure_at','arrival_at','notes']),
+    ('trip_proposals', 'SELECT', ARRAY['id','trip_id','creator_user_id','status','title','draft_version','deadline','blocked_reason','created_at','decided_at']),
+    ('trip_proposal_operations', 'SELECT', ARRAY['proposal_id','scope_key','expected_version','old_value','proposed_value']),
+    ('trip_proposal_voters', 'SELECT', ARRAY['proposal_id','user_id','vote','voted_at']),
+    ('trip_proposal_prerequisites', 'SELECT', ARRAY['proposal_id','prerequisite_proposal_id']),
+    ('trip_proposal_scope_versions', 'SELECT', ARRAY['trip_id','scope_key','version'])
 ), expected_column_privileges AS (
   SELECT table_name, privilege_type, unnest(column_names) AS column_name
   FROM expected_column_privilege_groups
@@ -195,6 +209,10 @@ WITH capability_signatures (function_signature) AS (
     ,('public.create_current_trip_from_chat(uuid)')
     ,('public.save_current_trip_draft(uuid,integer,jsonb)')
     ,('public.save_current_trip_draft_alternative(uuid,text,jsonb)')
+    ,('public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamptz)')
+    ,('public.cast_current_trip_proposal_vote(uuid,text)')
+    ,('public.cancel_current_trip_proposal(uuid)')
+    ,('public.refresh_current_trip_proposals(uuid)')
 ), required_capabilities AS (
   SELECT function_signature, to_regprocedure(function_signature) AS function_oid
   FROM capability_signatures
@@ -222,6 +240,10 @@ WITH protected_capabilities (function_signature) AS (
     ,('public.rename_current_group_chat(uuid,text)')
     ,('public.save_current_trip_draft(uuid,integer,jsonb)')
     ,('public.save_current_trip_draft_alternative(uuid,text,jsonb)')
+    ,('public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamptz)')
+    ,('public.cast_current_trip_proposal_vote(uuid,text)')
+    ,('public.cancel_current_trip_proposal(uuid)')
+    ,('public.refresh_current_trip_proposals(uuid)')
 ), api_roles (role_name) AS (
   VALUES ('anon'), ('authenticated'), ('service_role')
 ), resolved_capabilities AS (
@@ -306,6 +328,10 @@ WITH capability_signatures (function_signature) AS (
     ,('public.create_current_trip_from_chat(uuid)')
     ,('public.save_current_trip_draft(uuid,integer,jsonb)')
     ,('public.save_current_trip_draft_alternative(uuid,text,jsonb)')
+    ,('public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamptz)')
+    ,('public.cast_current_trip_proposal_vote(uuid,text)')
+    ,('public.cancel_current_trip_proposal(uuid)')
+    ,('public.refresh_current_trip_proposals(uuid)')
 ), required_capabilities AS (
   SELECT function_signature, to_regprocedure(function_signature) AS function_oid
   FROM capability_signatures
@@ -332,7 +358,9 @@ WITH application_tables (table_name) AS (
     ('chat_participants'), ('messages'), ('chat_summaries'), ('trips'),
     ('trip_participants'), ('trip_stops'), ('trip_itinerary_days'),
     ('trip_itinerary_events'), ('trip_drafts'), ('trip_draft_versions'),
-    ('trip_draft_alternatives')
+    ('trip_draft_alternatives'), ('trip_confirmed_accommodations'),
+    ('trip_confirmed_transport'), ('trip_proposals'), ('trip_proposal_operations'),
+    ('trip_proposal_voters'), ('trip_proposal_prerequisites'), ('trip_proposal_scope_versions')
 )
 SELECT
   tables.table_name,
@@ -357,7 +385,10 @@ WITH application_tables (table_name, expected_policy_count) AS (
     ('chat_participants', 1), ('messages', 1), ('chat_summaries', 0),
     ('trips', 1), ('trip_participants', 1), ('trip_stops', 1),
     ('trip_itinerary_days', 1), ('trip_itinerary_events', 1), ('trip_drafts', 1),
-    ('trip_draft_versions', 1), ('trip_draft_alternatives', 1)
+    ('trip_draft_versions', 1), ('trip_draft_alternatives', 1),
+    ('trip_confirmed_accommodations', 1), ('trip_confirmed_transport', 1),
+    ('trip_proposals', 1), ('trip_proposal_operations', 1), ('trip_proposal_voters', 1),
+    ('trip_proposal_prerequisites', 1), ('trip_proposal_scope_versions', 1)
 ), relations AS (
   SELECT tables.table_name, tables.expected_policy_count, class.oid, class.relrowsecurity,
     roles.rolname <> 'app_runtime' AS is_not_owned_by_app_runtime

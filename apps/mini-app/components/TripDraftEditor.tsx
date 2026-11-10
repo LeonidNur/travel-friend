@@ -2,17 +2,21 @@
 
 import { useState, type ReactNode } from 'react';
 
-import { ApiError, type BackendApiClient, type TripDraftAlternativeMetadataResponse, type TripDraftContent, type TripDraftResponse } from '@/lib/backend-api-client';
+import { ApiError, type BackendApiClient, type TripDraftAlternativeMetadataResponse, type TripDraftContent, type TripDraftResponse, type TripItineraryDayResponse } from '@/lib/backend-api-client';
+import { TripProposalPanel } from '@/components/TripProposalPanel';
 
 type TripDraftEditorProps = Readonly<{
   token: string;
+  userId: string;
   draft: TripDraftResponse;
   alternatives: readonly TripDraftAlternativeMetadataResponse[];
-  api: Pick<BackendApiClient, 'getTripDraft' | 'getTripDraftAlternative' | 'saveTripDraft' | 'saveTripDraftAlternative'>;
+  confirmedDays: readonly TripItineraryDayResponse[];
+  api: Pick<BackendApiClient, 'getTripDraft' | 'getTripDraftAlternative' | 'saveTripDraft' | 'saveTripDraftAlternative' | 'getTripProposals' | 'getTripProposal' | 'createTripProposal' | 'voteTripProposal' | 'cancelTripProposal'>;
   authorLabel: (userId: string) => string;
+  onProposalAccepted: () => void;
 }>;
 
-export function TripDraftEditor({ token, draft: initialDraft, alternatives: initialAlternatives, api, authorLabel }: TripDraftEditorProps) {
+export function TripDraftEditor({ token, userId, draft: initialDraft, alternatives: initialAlternatives, confirmedDays, api, authorLabel, onProposalAccepted }: TripDraftEditorProps) {
   const [content, setContent] = useState<TripDraftContent>(initialDraft.content);
   const [savedContent, setSavedContent] = useState<TripDraftContent>(initialDraft.content);
   const [version, setVersion] = useState(initialDraft.version);
@@ -252,6 +256,9 @@ export function TripDraftEditor({ token, draft: initialDraft, alternatives: init
         ))}
       </DraftSection>
       </fieldset>
+      <TripProposalPanel token={token} userId={userId} tripId={initialDraft.trip_id} draftVersion={version} confirmedDays={confirmedDays}
+        draftContent={content} savedContent={savedContent} api={api} participantLabel={authorLabel}
+        onAccepted={onProposalAccepted} />
     </section>
   );
 

@@ -35,6 +35,13 @@ APPLICATION_TABLES = (
     "trip_drafts",
     "trip_draft_versions",
     "trip_draft_alternatives",
+    "trip_confirmed_accommodations",
+    "trip_confirmed_transport",
+    "trip_proposals",
+    "trip_proposal_operations",
+    "trip_proposal_voters",
+    "trip_proposal_prerequisites",
+    "trip_proposal_scope_versions",
 )
 
 EXPECTED_RUNTIME_POLICIES = [
@@ -51,6 +58,13 @@ EXPECTED_RUNTIME_POLICIES = [
     ("travel_intents", "travel_intents_update_own_active", "UPDATE", "{app_runtime}"),
     ("trip_draft_alternatives", "trip_draft_alternatives_select_active_participant", "SELECT", "{app_runtime}"),
     ("trip_draft_versions", "trip_draft_versions_select_active_participant", "SELECT", "{app_runtime}"),
+    ("trip_confirmed_accommodations", "trip_confirmed_accommodations_select_member", "SELECT", "{app_runtime}"),
+    ("trip_confirmed_transport", "trip_confirmed_transport_select_member", "SELECT", "{app_runtime}"),
+    ("trip_proposals", "trip_proposals_select_member", "SELECT", "{app_runtime}"),
+    ("trip_proposal_operations", "trip_proposal_operations_select_member", "SELECT", "{app_runtime}"),
+    ("trip_proposal_voters", "trip_proposal_voters_select_member", "SELECT", "{app_runtime}"),
+    ("trip_proposal_prerequisites", "trip_proposal_prerequisites_select_member", "SELECT", "{app_runtime}"),
+    ("trip_proposal_scope_versions", "trip_proposal_scope_versions_select_member", "SELECT", "{app_runtime}"),
     ("trip_drafts", "trip_drafts_select_active_participant", "SELECT", "{app_runtime}"),
     ("trip_itinerary_days", "trip_itinerary_days_select_active_participant", "SELECT", "{app_runtime}"),
     ("trip_itinerary_events", "trip_itinerary_events_select_active_participant", "SELECT", "{app_runtime}"),
@@ -90,7 +104,7 @@ def test_all_application_tables_have_the_expected_rls_inventory(database_url: st
         ).fetchall()
 
     assert inventory == [(table_name, True, True) for table_name in sorted(APPLICATION_TABLES)]
-    assert policies == EXPECTED_RUNTIME_POLICIES
+    assert policies == sorted(EXPECTED_RUNTIME_POLICIES)
     assert [policy for policy in policies if policy[0] in {
         "users", "telegram_identities", "user_settings", "profile_photos", "chat_summaries"
     }] == []

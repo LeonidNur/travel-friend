@@ -191,6 +191,23 @@ export type TripDetailResponse = Readonly<{
     age: number | null;
     city: string | null;
   }>>;
+  accommodations: Array<Readonly<{
+    id: string;
+    name: string;
+    location: string | null;
+    date_from: string | null;
+    date_to: string | null;
+    notes: string | null;
+  }>>;
+  transport: Array<Readonly<{
+    id: string;
+    mode: string;
+    origin: string | null;
+    destination: string | null;
+    departure_at: string | null;
+    arrival_at: string | null;
+    notes: string | null;
+  }>>;
 }>;
 
 export type TripDraftEvent = Readonly<{
@@ -279,16 +296,18 @@ export type TripDraftDetailResponse = Readonly<{
   alternatives: readonly TripDraftAlternativeMetadataResponse[];
 }>;
 
-export type TripItineraryResponse = Readonly<{
-  trip_id: string;
-  days: readonly Readonly<{
+export type TripItineraryDayResponse = Readonly<{
     id: string;
     position: number;
     day_date: string | null;
     title: string | null;
     notes: string | null;
     events: readonly (TripDraftEvent & Readonly<{ day_id: string; position: number }>)[];
-  }>[];
+}>;
+
+export type TripItineraryResponse = Readonly<{
+  trip_id: string;
+  days: readonly TripItineraryDayResponse[];
 }>;
 
 export type ChatMessageResponse = Readonly<{
@@ -299,6 +318,50 @@ export type ChatMessageResponse = Readonly<{
   sender_user_id: string | null;
   content_text: string | null;
   created_at: string;
+  system_event?: string | null;
+  proposal_id?: string | null;
+  proposal_trip_id?: string | null;
+  proposal_status?: TripProposalStatus | null;
+  proposal_blocked_reason?: string | null;
+}>;
+
+export type TripProposalStatus = 'pending' | 'blocked' | 'accepted' | 'rejected' | 'cancelled' | 'expired' | 'stale' | 'needs_revision';
+
+export type TripProposalOperationResponse = Readonly<{
+  scope: string;
+  expected_version: number;
+  old_value: unknown;
+  proposed_value: unknown;
+}>;
+
+export type TripProposalResponse = Readonly<{
+  id: string;
+  trip_id: string;
+  creator_user_id: string;
+  title: string;
+  status: TripProposalStatus;
+  draft_version: number;
+  deadline: string | null;
+  blocked_reason: string | null;
+  created_at: string;
+  decided_at: string | null;
+  own_vote: 'accept' | 'reject' | null;
+  operations: TripProposalOperationResponse[];
+  voters: Array<Readonly<{ user_id: string; vote: 'accept' | 'reject' | null; voted_at: string | null }>>;
+  prerequisite_proposal_ids: string[];
+}>;
+
+export type TripProposalSummaryResponse = Readonly<Omit<TripProposalResponse, 'operations'> & {
+  scopes: string[];
+}>;
+
+export type TripProposalCreateRequest = Readonly<{
+  draft_version: number;
+  title: string;
+  idempotency_key: string;
+  scopes: string[];
+  prerequisite_proposal_ids?: string[];
+  deadline?: string | null;
 }>;
 
 export type ChatMessageCreateRequest = Readonly<{
@@ -400,6 +463,11 @@ export type BackendApiClient = Readonly<{
     title: string,
     content: TripDraftContent
   ) => Promise<TripDraftAlternativeMetadataResponse>;
+  getTripProposals: (token: string, tripId: string) => Promise<TripProposalSummaryResponse[]>;
+  getTripProposal: (token: string, tripId: string, proposalId: string) => Promise<TripProposalResponse>;
+  createTripProposal: (token: string, tripId: string, payload: TripProposalCreateRequest) => Promise<TripProposalResponse>;
+  voteTripProposal: (token: string, tripId: string, proposalId: string, vote: 'accept' | 'reject') => Promise<TripProposalResponse>;
+  cancelTripProposal: (token: string, tripId: string, proposalId: string) => Promise<TripProposalResponse>;
   getChatMessages: (token: string, chatId: string) => Promise<ChatMessageResponse[]>;
   getChatMessagePage: (
     token: string,
@@ -532,6 +600,16 @@ export function createBackendApiClient(fetchImplementation: typeof fetch = fetch
       request<TripDraftAlternativeMetadataResponse>(`/trips/${tripId}/draft/alternatives`, {
         method: 'POST', token, body: { title, content }
       }),
+    getTripProposals: (token, tripId) =>
+      request<TripProposalSummaryResponse[]>(`/trips/${tripId}/proposals?limit=50`, { method: 'GET', token }),
+    getTripProposal: (token, tripId, proposalId) =>
+      request<TripProposalResponse>(`/trips/${tripId}/proposals/${proposalId}`, { method: 'GET', token }),
+    createTripProposal: (token, tripId, payload) =>
+      request<TripProposalResponse>(`/trips/${tripId}/proposals`, { method: 'POST', token, body: payload }),
+    voteTripProposal: (token, tripId, proposalId, vote) =>
+      request<TripProposalResponse>(`/trips/${tripId}/proposals/${proposalId}/votes`, { method: 'POST', token, body: { vote } }),
+    cancelTripProposal: (token, tripId, proposalId) =>
+      request<TripProposalResponse>(`/trips/${tripId}/proposals/${proposalId}/cancel`, { method: 'POST', token }),
     getChatMessages: (token, chatId) =>
       request<ChatMessageResponse[]>(`/chats/${chatId}/messages`, { method: 'GET', token }),
     getChatMessagePage: (token, chatId, options = {}) => {

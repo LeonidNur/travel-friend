@@ -52,6 +52,14 @@ GRANT SELECT (trip_id, version, content, author_user_id, created_at)
   ON TABLE public.trip_draft_versions TO app_runtime;
 GRANT SELECT (id, trip_id, title, content, created_by_user_id, created_at)
   ON TABLE public.trip_draft_alternatives TO app_runtime;
+GRANT SELECT (system_event, proposal_id, proposal_trip_id) ON TABLE public.messages TO app_runtime;
+GRANT SELECT (trip_id,id,name,location,date_from,date_to,notes) ON TABLE public.trip_confirmed_accommodations TO app_runtime;
+GRANT SELECT (trip_id,id,mode,origin,destination,departure_at,arrival_at,notes) ON TABLE public.trip_confirmed_transport TO app_runtime;
+GRANT SELECT (id,trip_id,creator_user_id,status,title,draft_version,deadline,blocked_reason,created_at,decided_at) ON TABLE public.trip_proposals TO app_runtime;
+GRANT SELECT (proposal_id,scope_key,expected_version,old_value,proposed_value) ON TABLE public.trip_proposal_operations TO app_runtime;
+GRANT SELECT (proposal_id,user_id,vote,voted_at) ON TABLE public.trip_proposal_voters TO app_runtime;
+GRANT SELECT (proposal_id,prerequisite_proposal_id) ON TABLE public.trip_proposal_prerequisites TO app_runtime;
+GRANT SELECT (trip_id,scope_key,version) ON TABLE public.trip_proposal_scope_versions TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session(text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.resolve_bearer_session_with_identity(text) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.bootstrap_telegram_login(
@@ -81,6 +89,10 @@ GRANT EXECUTE ON FUNCTION public.is_current_active_trip_participant(uuid) TO app
 GRANT EXECUTE ON FUNCTION public.create_current_trip_from_chat(uuid) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.save_current_trip_draft(uuid, integer, jsonb) TO app_runtime;
 GRANT EXECUTE ON FUNCTION public.save_current_trip_draft_alternative(uuid, text, jsonb) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.create_current_trip_proposal(uuid, integer, text, uuid, text[], uuid[], timestamptz) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.cast_current_trip_proposal_vote(uuid, text) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.cancel_current_trip_proposal(uuid) TO app_runtime;
+GRANT EXECUTE ON FUNCTION public.refresh_current_trip_proposals(uuid) TO app_runtime;
 
 -- Future objects created by this migration/test owner receive no runtime grant.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM app_runtime;

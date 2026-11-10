@@ -4,7 +4,7 @@
 
 Этот документ содержит два разных слоя: сначала фактические HTTP contracts `develop`, затем утверждённые логические contracts целевого Pre-Beta design. Они не равны друг другу: Proposal/AI и часть read/write flows ниже обязательны к реализации до внешнего теста, но не являются API specification уже реализованного MVP.
 
-> Для утверждённых продуктовых правил AI/Trip/Proposal приоритет имеют [каноническая спецификация](../ai-trip-product-spec.md) и [план реализации](../ai-trip-implementation-plan.md). Legacy logical contracts ниже остаются design input до совместного contract review; эта ссылка не утверждает новые HTTP, schema или persistence contracts.
+> Для утверждённых продуктовых правил AI/Trip/Proposal приоритет имеют [каноническая спецификация](../ai-trip-product-spec.md) и [план реализации](../ai-trip-implementation-plan.md). Legacy logical contracts ниже — исторический design input и не определяют runtime. Реализация Loop B в feature branch описана отдельно выше и пока не входит в `develop`.
 
 API проектируется вокруг пользовательских и domain actions, а не как CRUD поверх каждой ER-сущности. Frontend не может напрямую создавать внутренние сущности `Match`, `ChatParticipant`, `TripParticipant`, `Proposal` и system `Message`. Backend/domain является доверенной точкой применения инвариантов, авторизации и атомарных domain-операций.
 
@@ -83,7 +83,7 @@ Trip itinerary и shared Draft: `GET /trips/{trip_id}/itinerary` возвращ�
 
 `GET /trips/{trip_id}/draft` возвращает текущий `{draft, alternatives}`; полный version history хранится неизменным, но не включается в этот ответ. Список содержит только компактные метаданные максимум 20 последних альтернатив. Один основной Draft на Trip содержит route stops, dates, accommodations, transport, budget, days/events и notes; элементы имеют стабильные IDs, пустые дни и частично заполненные поля допустимы. При создании Trip и обратном заполнении legacy Trips начальная пустая версия 1 атрибутируется Trip creator как технический seed; это не административная роль и не свидетельство последующего редактирования. `PUT /trips/{trip_id}/draft` принимает `{base_version, content}`; успешное сохранение создаёт следующую версию с автором из Bearer session. Несовпадающий `base_version` возвращает `409` без изменения текущего Draft. JSONB snapshot размером больше 256 KiB возвращает безопасный `422`; API распознаёт только именованную ошибку лимита, остальные SQL errors не маскируются. `POST /trips/{trip_id}/draft/alternatives` принимает `{title, content}` и сохраняет отдельную альтернативу, не меняя основной Draft; размер snapshot больше 256 KiB даёт `422`, после 20 сохранённых альтернатив новые записи отклоняются с `409`. `GET /trips/{trip_id}/draft/alternatives/{alternative_id}` возвращает ровно один snapshot, не превышающий тот же лимит. Старые версии и альтернативы не удаляются и не переписываются. Только текущий активный Trip participant может читать/сохранять; чужой, недоступный или уже неактивный участник скрывается как `404`. Невалидное содержимое или дополнительные поля дают `422`. PostgreSQL capabilities сами проверяют участника и версию; runtime не получает прямые INSERT/UPDATE/DELETE privileges на новые таблицы, а `PUBLIC`, `anon`, `authenticated` и `service_role` не получают прямые привилегии на них. Наследуемые Trip/TripStop остаются без destructive rewrite.
 
-Внутренняя pure-функция `validate_trip_draft_fragment_for_confirmation` возвращает структурированные readiness issues для неполных Draft-фрагментов (например, события без названия). Она не пишет данные, не меняет Draft/Confirmed Trip и не создаёт Proposal; это повторно используемая проверка для будущего Loop B, а не API или реализация голосования.
+Внутренняя pure-функция `validate_trip_draft_fragment_for_confirmation` возвращает структурированные readiness issues для неполных Draft-фрагментов (например, события без названия). Она не пишет данные, не меняет Draft/Confirmed Trip и не создаёт Proposal. Loop B использует её при создании Proposal; сама функция не является API или реализацией голосования.
 
 Текущие ограничения реализации:
 
@@ -99,9 +99,25 @@ Trip itinerary и shared Draft: `GET /trips/{trip_id}/itinerary` возвращ�
 - `GET /trips` и `GET /trips/{trip_id}` остаются read contracts; новые itinerary endpoints читают confirmed state, а draft endpoints меняют только отдельный Draft. Нет Trip/stop write API, start/complete/cancel/leave, invitation или Proposal endpoints. Baseline Proposal/AI — обязательный Pre-Beta slice, ещё не реализованный. Mini App при `409` создания Trip использует `GET /trips`, чтобы найти unfinished Trip того же Chat и открыть её.
 - Actual Discover не использует `DiscoverImpression`, отдельные Like records, filters или ranking: решение хранится как `discover_interest_decisions` с `interested`/`rejected`.
 
-## Логические contracts целевого Pre-Beta design (не реализованы)
+### Loop B: runtime contract feature branch (ещё не в develop)
 
-Следующие разделы задают target behavior и domain constraints для Pre-Beta implementation. Они не утверждают, что соответствующие endpoints или schema уже существуют. Где они расходятся с таблицей выше, таблица описывает current runtime, а логические contracts — целевое поведение после отдельного contract review.
+Ниже зафиксирован API-контракт реализации в `feature/trip-proposal-voting`; его не следует читать как уже развернутый или включённый в `develop`.
+
+| Method | Path | Назначение |
+| --- | --- | --- |
+| `POST` | `/trips/{trip_id}/proposals` | создать immutable Proposal из явно выбранных сохранённых Draft scopes |
+| `GET` | `/trips/{trip_id}/proposals?limit=50` | bounded список текущих Proposal с метаданными, scopes, voters и своим голосом; без snapshots операций |
+| `GET` | `/trips/{trip_id}/proposals/{proposal_id}` | bounded detail одного Proposal с immutable old/proposed snapshots |
+| `POST` | `/trips/{trip_id}/proposals/{proposal_id}/votes` | сохранить неизменяемый голос `{ "vote": "accept" | "reject" }` |
+| `POST` | `/trips/{trip_id}/proposals/{proposal_id}/cancel` | отменить незавершённый Proposal его инициатором |
+
+Создание принимает `draft_version`, `title`, UUID `idempotency_key`, от 1 до 20 непересекающихся `scopes`, optional `prerequisite_proposal_ids` (до 10) и optional `deadline`. Canonical scopes: `route`, `dates`, `budget`, `transport`, `accommodation`, `itinerary:all`, `itinerary:day:{uuid}` и `itinerary:event:{day_uuid}:{event_uuid}`. Область всего itinerary пересекается со всеми днями и событиями; день блокирует события этого дня, а события одного дня используют общий day-level lock. Event Proposal несёт только изменение или удаление одного стабильного event ID; его родительский день должен быть Confirmed, принадлежность ID проверяется внутри Trip, а изменение события с пустым названием отклоняется readiness validation. Proposal хранит снимок операций с expected version по каждой области; day versions независимы друг от друга, изменение дня также обновляет ancestor version всего itinerary. Общий payload ограничен 256 KiB. Повтор идентичного запроса идемпотентен; повтор ключа с иными параметрами конфликтует.
+
+Все endpoints требуют активное членство в Trip; посторонний, недоступный и неактивный участник получает скрытый `404`. Список ограничен максимум 50 строками и не загружает snapshots; detail возвращает не более 20 операций. Некорректный payload даёт `422`, scope/version/state conflicts — `409`. Voter cohort фиксируется при создании и включает инициатора без автоматического голоса. Первый reject завершает Proposal; только единогласное accept атомарно меняет затронутые confirmed области, scope versions, общий `state_version`, статус и добавляет Chat system event. Blocked Proposal не резервирует scope; при разблокировке зависимости, пересечения областей, версии и применимость immutable snapshot проверяются повторно. Chat отображает актуальные Proposal status и blocked reason через общий Proposal ID; голосование и статус не дублируются в messages. AI не создаёт Proposal и не входит в этот runtime flow.
+
+## Исторические logical contracts целевого Pre-Beta design
+
+Следующие разделы сохранены как исторический target design и не утверждают, что соответствующие endpoints или schema существуют. Если они расходятся с канонической спецификацией или описанным выше Loop B feature-branch contract, приоритет имеют эти актуальные источники.
 
 ## Identity, Profile и TravelIntent
 

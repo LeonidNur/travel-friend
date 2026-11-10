@@ -40,6 +40,7 @@ EXPECTED_PENDING_NAMES = (
     "20261105121901_live_chat_pagination_unread_idempotency.sql",
     "20261106080902_group_chat_titles_and_rename.sql",
     "20261109120000_trip_itinerary_shared_draft.sql",
+    "20261109130000_trip_proposals_voting_atomic_apply.sql",
 )
 EXPECTED_DATABASE_PREFIX = "tf_restore_"
 DDL_OPTIONS = "-c lock_timeout=5s -c statement_timeout=120s"
@@ -1092,9 +1093,10 @@ def _read_inventory(container: str, password: str, database: str, *, current: bo
     expected_functions = RESTORE_SMOKE.CURRENT_APP_EXPECTED_FUNCTIONS if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_FUNCTIONS
     expected_tables = RESTORE_SMOKE.EXPECTED_PUBLIC_TABLES if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_PUBLIC_TABLES
     expected_policy_names = RESTORE_SMOKE.CURRENT_APP_EXPECTED_POLICY_NAMES if current else RESTORE_SMOKE.ARCHIVE_EXPECTED_POLICY_NAMES
+    expected_triggers = RESTORE_SMOKE.CURRENT_APP_EXPECTED_TRIGGERS if current else RESTORE_SMOKE.EXPECTED_TRIGGERS
     raw = _psql(
         container, password, database, RESTORE_SMOKE._read_only_inventory_sql(
-            expected_functions, expected_tables, expected_policy_names,
+            expected_functions, expected_tables, expected_policy_names, expected_triggers,
         ),
         stage="INVENTORY", reason="the public schema inventory could not be read safely.",
     )
@@ -1106,6 +1108,7 @@ def _read_inventory(container: str, password: str, database: str, *, current: bo
         summary, database, expected_functions=expected_functions,
         expected_tables=expected_tables,
         expected_policy_names=expected_policy_names,
+        expected_triggers=expected_triggers,
     )
     return summary
 
@@ -1143,17 +1146,28 @@ def validate_rls_policy_inventory(before: dict[str, Any], after: dict[str, Any])
     after_policies = {(item["table"], item["name"]): item for item in after.get("policies", [])}
     if any(after_policies.get(key) != policy for key, policy in before_policies.items()):
         raise UpgradeSmokeError("RLS", "a legacy RLS policy changed during migration replay.")
-    expected_new_policies = {
-        (table, f"{table}_select_active_participant")
+    active_trip_policy = "is_current_active_trip_participant(trip_id)"
+    expected_new_policy_using = {
+        (table, f"{table}_select_active_participant"): active_trip_policy
         for table in ("trip_itinerary_days", "trip_itinerary_events", "trip_drafts", "trip_draft_versions", "trip_draft_alternatives")
     }
+    expected_new_policy_using.update({
+        (table, f"{table}_select_member"): active_trip_policy
+        for table in ("trip_confirmed_accommodations", "trip_confirmed_transport", "trip_proposals", "trip_proposal_scope_versions")
+    })
+    for table in ("trip_proposal_operations", "trip_proposal_voters", "trip_proposal_prerequisites"):
+        expected_new_policy_using[(table, f"{table}_select_member")] = (
+            "(EXISTS ( SELECT 1 FROM trip_proposals p WHERE ((p.id = "
+            f"{table}.proposal_id) AND is_current_active_trip_participant(p.trip_id))))"
+        )
     additions = set(after_policies) - set(before_policies)
-    if additions != expected_new_policies or any(
+    normalize_policy_expression = lambda value: " ".join(value.split()) if isinstance(value, str) else value
+    if additions != set(expected_new_policy_using) or any(
         item.get("command") != "SELECT"
         or item.get("roles") != ["app_runtime"]
-        or item.get("using") != "is_current_active_trip_participant(trip_id)"
+        or normalize_policy_expression(item.get("using")) != normalize_policy_expression(expected_new_policy_using[key])
         or item.get("check") is not None
-        for key in expected_new_policies
+        for key in expected_new_policy_using
         for item in [after_policies.get(key, {})]
     ):
         raise UpgradeSmokeError("RLS", "new Trip tables do not have the exact active-participant SELECT policies.")

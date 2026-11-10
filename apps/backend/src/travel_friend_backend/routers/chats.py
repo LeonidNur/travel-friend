@@ -224,6 +224,11 @@ def message_response(row: dict[str, object]) -> dict[str, object]:
         "sender_user_id": row["sender_user_id"],
         "content_text": row["content_text"],
         "created_at": row["created_at"],
+        "system_event": row.get("system_event"),
+        "proposal_id": row.get("proposal_id"),
+        "proposal_trip_id": row.get("proposal_trip_id"),
+        "proposal_status": row.get("proposal_status"),
+        "proposal_blocked_reason": row.get("proposal_blocked_reason"),
     }
 
 
@@ -237,10 +242,13 @@ def get_chat_messages(
         raise HTTPException(404, "Chat not found")
 
     rows = connection.execute(
-        "SELECT id AS message_id, chat_id, sequence_number, type, sender_user_id, "
-        "content_text, created_at FROM public.messages WHERE chat_id=%s "
-        "AND (recipient_user_id IS NULL OR recipient_user_id=%s) "
-        "ORDER BY sequence_number ASC",
+        "SELECT message.id AS message_id, message.chat_id, message.sequence_number, message.type, message.sender_user_id, "
+        "message.content_text, message.created_at, message.system_event, message.proposal_id, message.proposal_trip_id, "
+        "proposal.status AS proposal_status, proposal.blocked_reason AS proposal_blocked_reason "
+        "FROM public.messages AS message LEFT JOIN public.trip_proposals AS proposal "
+        "ON proposal.id=message.proposal_id AND proposal.trip_id=message.proposal_trip_id "
+        "WHERE message.chat_id=%s AND (message.recipient_user_id IS NULL OR message.recipient_user_id=%s) "
+        "ORDER BY message.sequence_number ASC",
         (chat_id, principal.user_id),
     ).fetchall()
     return [message_response(row) for row in rows]
@@ -269,10 +277,14 @@ def get_chat_message_page(
 
     if after_sequence is not None:
         rows = connection.execute(
-            "SELECT id AS message_id, chat_id, sequence_number, type, sender_user_id, "
-            "content_text, created_at FROM public.messages WHERE chat_id=%s "
-            f"AND {visibility} AND sequence_number>%s AND sequence_number<=%s "
-            "ORDER BY sequence_number ASC LIMIT %s",
+            "SELECT message.id AS message_id, message.chat_id, message.sequence_number, message.type, message.sender_user_id, "
+            "message.content_text, message.created_at, message.system_event, message.proposal_id, message.proposal_trip_id, "
+            "proposal.status AS proposal_status, proposal.blocked_reason AS proposal_blocked_reason "
+            "FROM public.messages AS message LEFT JOIN public.trip_proposals AS proposal "
+            "ON proposal.id=message.proposal_id AND proposal.trip_id=message.proposal_trip_id "
+            f"WHERE message.chat_id=%s AND {visibility.replace('recipient_user_id', 'message.recipient_user_id')} "
+            "AND message.sequence_number>%s AND message.sequence_number<=%s "
+            "ORDER BY message.sequence_number ASC LIMIT %s",
             (chat_id, principal.user_id, after_sequence, high_water_sequence, limit),
         ).fetchall()
         page_rows = rows
@@ -281,10 +293,14 @@ def get_chat_message_page(
         cursor_filter = "" if cursor is None else " AND sequence_number<%s"
         parameters: tuple[object, ...] = base_parameters + (() if cursor is None else (cursor,))
         rows = connection.execute(
-            "SELECT id AS message_id, chat_id, sequence_number, type, sender_user_id, "
-            "content_text, created_at FROM public.messages WHERE chat_id=%s "
-            f"AND {visibility} AND sequence_number<=%s{cursor_filter} "
-            "ORDER BY sequence_number DESC LIMIT %s",
+            "SELECT message.id AS message_id, message.chat_id, message.sequence_number, message.type, message.sender_user_id, "
+            "message.content_text, message.created_at, message.system_event, message.proposal_id, message.proposal_trip_id, "
+            "proposal.status AS proposal_status, proposal.blocked_reason AS proposal_blocked_reason "
+            "FROM public.messages AS message LEFT JOIN public.trip_proposals AS proposal "
+            "ON proposal.id=message.proposal_id AND proposal.trip_id=message.proposal_trip_id "
+            f"WHERE message.chat_id=%s AND {visibility.replace('recipient_user_id', 'message.recipient_user_id')} "
+            f"AND message.sequence_number<=%s{cursor_filter} "
+            "ORDER BY message.sequence_number DESC LIMIT %s",
             parameters + (limit,),
         ).fetchall()
         page_rows = list(reversed(rows))
