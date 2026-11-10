@@ -112,15 +112,35 @@ def test_validate_archive_accepts_current_production_migration_and_function_base
     validated = smoke.validate_archive(archive, manifest_path)
 
     assert smoke.expected_archive_functions(validated) == smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS
-    assert len(smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 21
+    assert len(smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 26
+    assert len(smoke.CURRENT_PRODUCTION_MIGRATIONS) == 26
+    assert smoke.CURRENT_PRODUCTION_MIGRATIONS[-2:] == (
+        ("20261105121901", "live_chat_pagination_unread_idempotency"),
+        ("20261106080902", "group_chat_titles_and_rename"),
+    )
     assert [
         path.name for path in smoke._repository_migrations_not_in_archive(validated)
     ] == [
-        "20261105121901_live_chat_pagination_unread_idempotency.sql",
-        "20261106080902_group_chat_titles_and_rename.sql",
         "20261109120000_trip_itinerary_shared_draft.sql",
         "20261109130000_trip_proposals_voting_atomic_apply.sql",
     ]
+
+
+def test_validate_archive_accepts_previous_24_migration_baseline(tmp_path: Path) -> None:
+    archive, manifest_path = _archive_files(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["observations"]["migration_ledger"] = {
+        "count": len(smoke.PREVIOUS_PRODUCTION_MIGRATIONS),
+        "versions": [
+            {"version": version, "name": name}
+            for version, name in smoke.PREVIOUS_PRODUCTION_MIGRATIONS
+        ],
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    validated = smoke.validate_archive(archive, manifest_path)
+
+    assert len(smoke.expected_archive_functions(validated)) == 21
 
 
 def test_validate_archive_rejects_unreviewed_same_count_migration_ledger(
@@ -138,7 +158,8 @@ def test_validate_archive_rejects_unreviewed_same_count_migration_ledger(
 
 def test_expected_function_inventory_matches_archived_migration_era() -> None:
     assert len(smoke.ARCHIVE_EXPECTED_FUNCTIONS) == 18
-    assert len(smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 21
+    assert len(smoke.PREVIOUS_PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 21
+    assert len(smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 26
     assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 42
     assert smoke.EXPECTED_RUNTIME_CAPABILITY_COUNT == 30
     assert smoke.CURRENT_PRODUCTION_MIGRATIONS == backup_runner.EXPECTED_PRODUCTION_MIGRATIONS

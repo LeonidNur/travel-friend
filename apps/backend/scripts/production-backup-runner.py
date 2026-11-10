@@ -48,6 +48,8 @@ EXPECTED_PRODUCTION_MIGRATIONS = (
     ("20260924110000", "backend_field_domain_limits"),
     ("20261003090000", "chat_participant_public_profile"),
     ("20261018090000", "server_side_tester_admission_session_identity"),
+    ("20261105121901", "live_chat_pagination_unread_idempotency"),
+    ("20261106080902", "group_chat_titles_and_rename"),
 )
 EXPECTED_MIGRATION_COUNT = len(EXPECTED_PRODUCTION_MIGRATIONS)
 EXPECTED_PUBLIC_TABLES = frozenset({

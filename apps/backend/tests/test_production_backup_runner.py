@@ -68,7 +68,11 @@ def test_production_migration_ledger_matches_verified_current_database() -> None
         ],
     }
 
-    assert runner.EXPECTED_MIGRATION_COUNT == 24
+    assert runner.EXPECTED_MIGRATION_COUNT == 26
+    assert runner.EXPECTED_PRODUCTION_MIGRATIONS[-2:] == (
+        ("20261105121901", "live_chat_pagination_unread_idempotency"),
+        ("20261106080902", "group_chat_titles_and_rename"),
+    )
     assert runner._check_migration_ledger(ledger) == ledger
 
 
