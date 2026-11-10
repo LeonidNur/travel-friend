@@ -23,6 +23,10 @@ BACKEND_ONLY_FUNCTIONS = (
     "public.rename_current_group_chat(uuid,text)",
     "public.save_current_trip_draft(uuid,integer,jsonb)",
     "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
+    "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamp with time zone)",
+    "public.cast_current_trip_proposal_vote(uuid,text)",
+    "public.cancel_current_trip_proposal(uuid)",
+    "public.refresh_current_trip_proposals(uuid)",
 )
 INTERNAL_DORMANT_TABLES = (
     "users",
@@ -54,6 +58,13 @@ APPLICATION_TABLES = (
     "trip_drafts",
     "trip_draft_versions",
     "trip_draft_alternatives",
+    "trip_confirmed_accommodations",
+    "trip_confirmed_transport",
+    "trip_proposals",
+    "trip_proposal_operations",
+    "trip_proposal_voters",
+    "trip_proposal_prerequisites",
+    "trip_proposal_scope_versions",
 )
 REQUIRED_FUNCTIONS = (
     "public.current_authenticated_user_id()",
@@ -82,6 +93,10 @@ REQUIRED_FUNCTIONS = (
     "public.create_current_trip_from_chat(uuid)",
     "public.save_current_trip_draft(uuid,integer,jsonb)",
     "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
+    "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamp with time zone)",
+    "public.cast_current_trip_proposal_vote(uuid,text)",
+    "public.cancel_current_trip_proposal(uuid)",
+    "public.refresh_current_trip_proposals(uuid)",
 )
 
 RUNTIME_TABLE_OPERATION_SURFACE = {
@@ -96,6 +111,13 @@ RUNTIME_TABLE_OPERATION_SURFACE = {
     "trip_drafts": {"SELECT"},
     "trip_draft_versions": {"SELECT"},
     "trip_draft_alternatives": {"SELECT"},
+    "trip_confirmed_accommodations": {"SELECT"},
+    "trip_confirmed_transport": {"SELECT"},
+    "trip_proposals": {"SELECT"},
+    "trip_proposal_operations": {"SELECT"},
+    "trip_proposal_voters": {"SELECT"},
+    "trip_proposal_prerequisites": {"SELECT"},
+    "trip_proposal_scope_versions": {"SELECT"},
 }
 
 RUNTIME_COLUMN_PRIVILEGES = {
@@ -110,6 +132,9 @@ RUNTIME_COLUMN_PRIVILEGES = {
         "recipient_user_id",
         "content_text",
         "created_at",
+        "system_event",
+        "proposal_id",
+        "proposal_trip_id",
     },
     ("trips", "SELECT"): {
         "id", "chat_id", "created_by_user_id", "status", "membership_version",
@@ -140,6 +165,13 @@ RUNTIME_COLUMN_PRIVILEGES = {
     ("trip_draft_alternatives", "SELECT"): {
         "id", "trip_id", "title", "content", "created_by_user_id", "created_at",
     },
+    ("trip_confirmed_accommodations", "SELECT"): {"trip_id", "id", "name", "location", "date_from", "date_to", "notes"},
+    ("trip_confirmed_transport", "SELECT"): {"trip_id", "id", "mode", "origin", "destination", "departure_at", "arrival_at", "notes"},
+    ("trip_proposals", "SELECT"): {"id", "trip_id", "creator_user_id", "status", "title", "draft_version", "deadline", "blocked_reason", "created_at", "decided_at"},
+    ("trip_proposal_operations", "SELECT"): {"proposal_id", "scope_key", "expected_version", "old_value", "proposed_value"},
+    ("trip_proposal_voters", "SELECT"): {"proposal_id", "user_id", "vote", "voted_at"},
+    ("trip_proposal_prerequisites", "SELECT"): {"proposal_id", "prerequisite_proposal_id"},
+    ("trip_proposal_scope_versions", "SELECT"): {"trip_id", "scope_key", "version"},
 }
 
 
@@ -232,6 +264,10 @@ def check_capability_metadata(connection: psycopg.Connection) -> None:
         "public.create_current_trip_from_chat(uuid)": True,
         "public.save_current_trip_draft(uuid,integer,jsonb)": True,
         "public.save_current_trip_draft_alternative(uuid,text,jsonb)": True,
+        "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamp with time zone)": True,
+        "public.cast_current_trip_proposal_vote(uuid,text)": True,
+        "public.cancel_current_trip_proposal(uuid)": True,
+        "public.refresh_current_trip_proposals(uuid)": True,
         "public.enforce_direct_chat_participant_count()": False,
     }
     rows = connection.execute(
@@ -291,7 +327,10 @@ def check_runtime_table_privileges(connection: psycopg.Connection) -> None:
             ('trips', 'SELECT'), ('trip_participants', 'SELECT'), ('trip_stops', 'SELECT'),
             ('trip_itinerary_days', 'SELECT'), ('trip_itinerary_events', 'SELECT'),
             ('trip_drafts', 'SELECT'), ('trip_draft_versions', 'SELECT'),
-            ('trip_draft_alternatives', 'SELECT')
+            ('trip_draft_alternatives', 'SELECT'), ('trip_confirmed_accommodations', 'SELECT'),
+            ('trip_confirmed_transport', 'SELECT'), ('trip_proposals', 'SELECT'),
+            ('trip_proposal_operations', 'SELECT'), ('trip_proposal_voters', 'SELECT'),
+            ('trip_proposal_prerequisites', 'SELECT'), ('trip_proposal_scope_versions', 'SELECT')
         ), operations(privilege_type) AS (
           VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')
         )
@@ -332,7 +371,9 @@ def check_runtime_table_privileges(connection: psycopg.Connection) -> None:
           VALUES ('chats'), ('chat_participants'), ('messages'), ('trips'),
             ('trip_participants'), ('trip_stops'), ('trip_itinerary_days'),
             ('trip_itinerary_events'), ('trip_drafts'), ('trip_draft_versions'),
-            ('trip_draft_alternatives')
+            ('trip_draft_alternatives'), ('trip_confirmed_accommodations'), ('trip_confirmed_transport'),
+            ('trip_proposals'), ('trip_proposal_operations'), ('trip_proposal_voters'),
+            ('trip_proposal_prerequisites'), ('trip_proposal_scope_versions')
         ), operations(privilege_type) AS (
           VALUES ('SELECT'), ('INSERT'), ('UPDATE')
         )
@@ -428,6 +469,13 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
             "trip_drafts": (True, True),
             "trip_draft_versions": (True, True),
             "trip_draft_alternatives": (True, True),
+            "trip_confirmed_accommodations": (True, True),
+            "trip_confirmed_transport": (True, True),
+            "trip_proposals": (True, True),
+            "trip_proposal_operations": (True, True),
+            "trip_proposal_voters": (True, True),
+            "trip_proposal_prerequisites": (True, True),
+            "trip_proposal_scope_versions": (True, True),
         },
         "RLS must be enabled and app_runtime must not own protected runtime tables",
     )
@@ -488,6 +536,20 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
             ('trip_draft_versions_select_active_participant', 'trip_draft_versions', 'r',
               'is_current_active_trip_participant(trip_id)', NULL::text),
             ('trip_draft_alternatives_select_active_participant', 'trip_draft_alternatives', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_confirmed_accommodations_select_member', 'trip_confirmed_accommodations', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_confirmed_transport_select_member', 'trip_confirmed_transport', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_proposals_select_member', 'trip_proposals', 'r',
+              'is_current_active_trip_participant(trip_id)', NULL::text),
+            ('trip_proposal_operations_select_member', 'trip_proposal_operations', 'r',
+              '(EXISTS ( SELECT 1 FROM trip_proposals p WHERE ((p.id = trip_proposal_operations.proposal_id) AND is_current_active_trip_participant(p.trip_id))))', NULL::text),
+            ('trip_proposal_voters_select_member', 'trip_proposal_voters', 'r',
+              '(EXISTS ( SELECT 1 FROM trip_proposals p WHERE ((p.id = trip_proposal_voters.proposal_id) AND is_current_active_trip_participant(p.trip_id))))', NULL::text),
+            ('trip_proposal_prerequisites_select_member', 'trip_proposal_prerequisites', 'r',
+              '(EXISTS ( SELECT 1 FROM trip_proposals p WHERE ((p.id = trip_proposal_prerequisites.proposal_id) AND is_current_active_trip_participant(p.trip_id))))', NULL::text),
+            ('trip_proposal_scope_versions_select_member', 'trip_proposal_scope_versions', 'r',
               'is_current_active_trip_participant(trip_id)', NULL::text)
         )
         SELECT expected.policy_name,
@@ -500,10 +562,10 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
           AND policy.polname = expected.policy_name
           AND policy.polcmd = expected.policy_command
           AND (SELECT oid FROM pg_roles WHERE rolname = current_user) = ANY(policy.polroles)
-          AND pg_get_expr(policy.polqual, policy.polrelid)
-            IS NOT DISTINCT FROM expected.using_expression
-          AND pg_get_expr(policy.polwithcheck, policy.polrelid)
-            IS NOT DISTINCT FROM expected.with_check_expression
+          AND pg_catalog.regexp_replace(pg_get_expr(policy.polqual, policy.polrelid), '[[:space:]]+', ' ', 'g')
+            IS NOT DISTINCT FROM pg_catalog.regexp_replace(expected.using_expression, '[[:space:]]+', ' ', 'g')
+          AND pg_catalog.regexp_replace(pg_get_expr(policy.polwithcheck, policy.polrelid), '[[:space:]]+', ' ', 'g')
+            IS NOT DISTINCT FROM pg_catalog.regexp_replace(expected.with_check_expression, '[[:space:]]+', ' ', 'g')
         ORDER BY expected.policy_name
         """
     ).fetchall()
@@ -538,6 +600,13 @@ def check_rls_catalog(connection: psycopg.Connection) -> None:
         ("trip_drafts", [("trip_drafts_select_active_participant", "SELECT")]),
         ("trip_draft_versions", [("trip_draft_versions_select_active_participant", "SELECT")]),
         ("trip_draft_alternatives", [("trip_draft_alternatives_select_active_participant", "SELECT")]),
+        ("trip_confirmed_accommodations", [("trip_confirmed_accommodations_select_member", "SELECT")]),
+        ("trip_confirmed_transport", [("trip_confirmed_transport_select_member", "SELECT")]),
+        ("trip_proposals", [("trip_proposals_select_member", "SELECT")]),
+        ("trip_proposal_operations", [("trip_proposal_operations_select_member", "SELECT")]),
+        ("trip_proposal_voters", [("trip_proposal_voters_select_member", "SELECT")]),
+        ("trip_proposal_prerequisites", [("trip_proposal_prerequisites_select_member", "SELECT")]),
+        ("trip_proposal_scope_versions", [("trip_proposal_scope_versions_select_member", "SELECT")]),
     ):
         surface = connection.execute(
             "SELECT policyname, cmd FROM pg_policies WHERE schemaname='public' "
@@ -624,6 +693,9 @@ def check_transaction_context_and_rls(connection: psycopg.Connection) -> None:
         for table_name in (
             "trip_itinerary_days", "trip_itinerary_events", "trip_drafts",
             "trip_draft_versions", "trip_draft_alternatives",
+            "trip_confirmed_accommodations", "trip_confirmed_transport", "trip_proposals",
+            "trip_proposal_operations", "trip_proposal_voters", "trip_proposal_prerequisites",
+            "trip_proposal_scope_versions",
         ):
             require(
                 scalar(connection, f"SELECT EXISTS (SELECT 1 FROM public.{table_name})") is False,
@@ -661,6 +733,12 @@ def check_mutations_are_denied_and_rolled_back(connection: psycopg.Connection) -
         "INSERT INTO public.trip_drafts (trip_id, content, updated_by_user_id) SELECT NULL, '{}'::jsonb, NULL WHERE false",
         "UPDATE public.trip_drafts SET content='{}'::jsonb WHERE false",
         "DELETE FROM public.trip_drafts WHERE false",
+        "INSERT INTO public.trip_proposals (trip_id, creator_user_id, idempotency_key, title, draft_version) SELECT NULL, NULL, '00000000-0000-0000-0000-000000000001', 'blocked', 1 WHERE false",
+        "UPDATE public.trip_proposals SET title='blocked' WHERE false",
+        "DELETE FROM public.trip_proposals WHERE false",
+        "INSERT INTO public.trip_proposal_voters (proposal_id, user_id) SELECT NULL, NULL WHERE false",
+        "UPDATE public.trip_proposal_voters SET vote='accept' WHERE false",
+        "DELETE FROM public.trip_proposal_voters WHERE false",
     ):
         try:
             with connection.transaction():

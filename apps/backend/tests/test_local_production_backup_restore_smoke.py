@@ -119,6 +119,7 @@ def test_validate_archive_accepts_current_production_migration_and_function_base
         "20261105121901_live_chat_pagination_unread_idempotency.sql",
         "20261106080902_group_chat_titles_and_rename.sql",
         "20261109120000_trip_itinerary_shared_draft.sql",
+        "20261109130000_trip_proposals_voting_atomic_apply.sql",
     ]
 
 
@@ -138,8 +139,8 @@ def test_validate_archive_rejects_unreviewed_same_count_migration_ledger(
 def test_expected_function_inventory_matches_archived_migration_era() -> None:
     assert len(smoke.ARCHIVE_EXPECTED_FUNCTIONS) == 18
     assert len(smoke.PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS) == 21
-    assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 28
-    assert smoke.EXPECTED_RUNTIME_CAPABILITY_COUNT == 26
+    assert len(smoke.CURRENT_APP_EXPECTED_FUNCTIONS) == 42
+    assert smoke.EXPECTED_RUNTIME_CAPABILITY_COUNT == 30
     assert smoke.CURRENT_PRODUCTION_MIGRATIONS == backup_runner.EXPECTED_PRODUCTION_MIGRATIONS
     assert set(smoke.CURRENT_APP_ADDITIONAL_FUNCTIONS) == {
         "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
@@ -152,6 +153,20 @@ def test_expected_function_inventory_matches_archived_migration_era() -> None:
         "public.rename_current_group_chat(uuid,text)",
         "public.save_current_trip_draft(uuid,integer,jsonb)",
         "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
+        "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamp with time zone)",
+        "public.cast_current_trip_proposal_vote(uuid,text)",
+        "public.cancel_current_trip_proposal(uuid)",
+        "public.refresh_current_trip_proposals(uuid)",
+        "public.refresh_trip_blocked_proposals(uuid)",
+        "public.trip_proposal_scopes_overlap(text,text)",
+        "public.guard_trip_proposal_immutable_fields()",
+        "public.guard_trip_proposal_operation_immutable()",
+        "public.guard_trip_proposal_vote_immutable()",
+        "public.append_trip_proposal_chat_event(uuid,uuid,uuid,text)",
+        "public.trip_proposal_scope_version(uuid,text)",
+        "public.bump_trip_proposal_itinerary_versions(uuid,text)",
+        "public.capture_trip_proposal_value(uuid,text,jsonb,boolean)",
+        "public.apply_trip_proposal(uuid)",
     }
 
 
@@ -312,7 +327,7 @@ def test_grants_verifier_rejects_api_role_execute_on_backend_resolver() -> None:
 def test_new_function_api_role_check_is_complete_and_fails_closed() -> None:
     sql = smoke._api_role_function_denials_sql()
 
-    assert "count(*) = 15" in sql
+    assert "count(*) = 27" in sql
     assert all(signature in sql for signature in smoke.NEW_BACKEND_FUNCTIONS)
     assert "has_function_privilege" in sql
     smoke.validate_api_role_function_denials("t")
@@ -373,7 +388,11 @@ def test_migration_row_count_check_compares_only_complete_aggregate_inventory() 
     before_counts = {table: 1 for table in smoke.ARCHIVE_EXPECTED_PUBLIC_TABLES}
     after_counts = {**before_counts, "trip_drafts": 1, "trip_draft_versions": 1,
                     "trip_itinerary_days": 0, "trip_itinerary_events": 0,
-                    "trip_draft_alternatives": 0}
+                    "trip_draft_alternatives": 0,
+                    "trip_confirmed_accommodations": 0, "trip_confirmed_transport": 0,
+                    "trip_proposals": 0, "trip_proposal_operations": 0,
+                    "trip_proposal_voters": 0, "trip_proposal_prerequisites": 0,
+                    "trip_proposal_scope_versions": 0}
     before = json.dumps(before_counts)
     unchanged = json.dumps(after_counts)
     changed = json.dumps({**after_counts, "messages": 2})

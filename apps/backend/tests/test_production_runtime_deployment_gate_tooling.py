@@ -109,6 +109,10 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "public.rename_current_group_chat(uuid,text)",
         "public.save_current_trip_draft(uuid,integer,jsonb)",
         "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
+        "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamp with time zone)",
+        "public.cast_current_trip_proposal_vote(uuid,text)",
+        "public.cancel_current_trip_proposal(uuid)",
+        "public.refresh_current_trip_proposals(uuid)",
     )
 
     for policy_name in (
@@ -134,6 +138,13 @@ def test_deployment_gate_checks_runtime_identity_catalog_and_transactional_rls_b
         "trip_drafts_select_active_participant",
         "trip_draft_versions_select_active_participant",
         "trip_draft_alternatives_select_active_participant",
+        "trip_confirmed_accommodations_select_member",
+        "trip_confirmed_transport_select_member",
+        "trip_proposals_select_member",
+        "trip_proposal_operations_select_member",
+        "trip_proposal_voters_select_member",
+        "trip_proposal_prerequisites_select_member",
+        "trip_proposal_scope_versions_select_member",
     ):
         assert policy_name in script
 

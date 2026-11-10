@@ -14,7 +14,10 @@ import type {
   TripDraftContent,
   TripDraftDetailResponse,
   TripDraftResponse,
-  TripDraftSaveRequest
+  TripDraftSaveRequest,
+  TripProposalResponse,
+  TripProposalSummaryResponse,
+  TripItineraryDayResponse
 } from './backend-api-client';
 
 const content: TripDraftContent = {
@@ -29,15 +32,37 @@ const alternativeMetadata: TripDraftAlternativeMetadataResponse = {
 };
 const alternative: TripDraftAlternativeResponse = { ...alternativeMetadata, content: { ...content, notes: 'Море' } };
 const detail: TripDraftDetailResponse = { draft, alternatives: [alternativeMetadata] };
+const proposal: TripProposalResponse = {
+  id: 'proposal-1', trip_id: 'trip-1', creator_user_id: 'member-1', title: 'Согласовать бюджет',
+  status: 'pending', draft_version: 1, deadline: null, blocked_reason: null,
+  created_at: '2026-11-09T00:00:00Z', decided_at: null, own_vote: null,
+  operations: [{ scope: 'budget', expected_version: 0, old_value: { min: null }, proposed_value: { min: '100' } }],
+  voters: [
+    { user_id: 'member-1', vote: null, voted_at: null },
+    { user_id: 'member-2', vote: null, voted_at: null }
+  ],
+  prerequisite_proposal_ids: []
+};
+const proposalSummary: TripProposalSummaryResponse = {
+  id: proposal.id, trip_id: proposal.trip_id, creator_user_id: proposal.creator_user_id,
+  title: proposal.title, status: proposal.status, draft_version: proposal.draft_version,
+  deadline: proposal.deadline, blocked_reason: proposal.blocked_reason, created_at: proposal.created_at,
+  decided_at: proposal.decided_at, own_vote: proposal.own_vote,
+  scopes: proposal.operations.map((operation) => operation.scope), voters: proposal.voters,
+  prerequisite_proposal_ids: proposal.prerequisite_proposal_ids
+};
 
 function renderStatic(alternatives = detail.alternatives): string {
   const api = createApi();
   return renderToStaticMarkup(createElement(TripDraftEditor, {
-    token: 'session-token', draft, alternatives, api, authorLabel: () => 'Участник'
+    token: 'session-token', userId: 'member-1', draft, alternatives, confirmedDays: [], api,
+    authorLabel: () => 'Участник', onProposalAccepted: () => undefined
   }));
 }
 
-function createApi(overrides: Partial<Pick<BackendApiClient, 'getTripDraft' | 'getTripDraftAlternative' | 'saveTripDraft' | 'saveTripDraftAlternative'>> = {}) {
+function createApi(overrides: Partial<Pick<BackendApiClient,
+  'getTripDraft' | 'getTripDraftAlternative' | 'saveTripDraft' | 'saveTripDraftAlternative' |
+  'getTripProposals' | 'getTripProposal' | 'createTripProposal' | 'voteTripProposal' | 'cancelTripProposal'>> = {}) {
   return {
     getTripDraft: async (): Promise<TripDraftDetailResponse> => detail,
     getTripDraftAlternative: async (): Promise<TripDraftAlternativeResponse> => alternative,
@@ -45,11 +70,18 @@ function createApi(overrides: Partial<Pick<BackendApiClient, 'getTripDraft' | 'g
       ...draft, version: 2, content: request.content
     }),
     saveTripDraftAlternative: async (): Promise<TripDraftAlternativeMetadataResponse> => alternativeMetadata,
+    getTripProposals: async (): Promise<TripProposalSummaryResponse[]> => [],
+    getTripProposal: async (): Promise<TripProposalResponse> => proposal,
+    createTripProposal: async (): Promise<TripProposalResponse> => proposal,
+    voteTripProposal: async (): Promise<TripProposalResponse> => ({ ...proposal, status: 'accepted', own_vote: 'accept' }),
+    cancelTripProposal: async (): Promise<TripProposalResponse> => ({ ...proposal, status: 'cancelled' }),
     ...overrides
   };
 }
 
-async function mountEditor(api = createApi()) {
+async function mountEditor(api = createApi(), onProposalAccepted: () => void = () => undefined,
+                           draftOverride: TripDraftResponse = draft,
+                           confirmedDays: readonly TripItineraryDayResponse[] = []) {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'http://localhost' });
   const globals = ['window', 'document', 'navigator', 'HTMLElement', 'Node', 'Event', 'MouseEvent'] as const;
   const previous = new Map<string, PropertyDescriptor | undefined>();
@@ -64,7 +96,8 @@ async function mountEditor(api = createApi()) {
   assert.ok(container);
   const root: Root = createRoot(container);
   await act(async () => root.render(createElement(TripDraftEditor, {
-    token: 'session-token', draft, alternatives: detail.alternatives, api, authorLabel: () => 'Участник'
+    token: 'session-token', userId: 'member-1', draft: draftOverride, alternatives: detail.alternatives, confirmedDays,
+    api, authorLabel: () => 'Участник', onProposalAccepted
   })));
   return {
     api,
@@ -203,6 +236,186 @@ test('opening an alternative fetches one snapshot and confirms before replacing 
     assert.match(ui.container.textContent ?? '', /Сохраните черновик/);
   } finally {
     window.confirm = originalConfirm;
+    await ui.cleanup();
+  }
+});
+
+test('creates a Proposal only for explicitly selected saved Draft scope and does not change Confirmed Trip', async () => {
+  let submittedScopes: readonly string[] = [];
+  const api = createApi({
+    createTripProposal: async (_token, _tripId, request) => {
+      submittedScopes = request.scopes;
+      return proposal;
+    }
+  });
+  const ui = await mountEditor(api);
+  try {
+    const scopeLabel = [...ui.container.querySelectorAll('label.trip-draft-proposal-scope')]
+      .find((item) => item.textContent?.includes('Бюджет'));
+    assert.ok(scopeLabel);
+    await act(async () => (scopeLabel.querySelector('input') as HTMLInputElement).click());
+    const titleInput = [...ui.container.querySelectorAll('label')]
+      .find((item) => item.textContent?.includes('Краткое название'))?.querySelector('input');
+    assert.ok(titleInput);
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(titleInput), 'value')?.set;
+      setter?.call(titleInput, 'Согласовать бюджет');
+      titleInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+      titleInput.dispatchEvent(new window.Event('change', { bubbles: true }));
+    });
+    await act(async () => button(ui.container, 'Предложить участникам').click());
+    assert.deepEqual(submittedScopes, ['budget']);
+    assert.match(ui.container.textContent ?? '', /отдельный снимок/);
+    assert.equal(notesValue(ui.container), '');
+    assert.equal('updateTrip' in api, false);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('vote selection remains available after a recoverable failure and refreshes Confirmed Trip only on acceptance', async () => {
+  let attempts = 0;
+  let acceptedRefreshes = 0;
+  const api = createApi({
+    getTripProposals: async () => [proposalSummary],
+    voteTripProposal: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new ApiError(503, { detail: 'unavailable' });
+      return { ...proposal, status: 'accepted', own_vote: 'accept' };
+    }
+  });
+  const dom = await mountEditor(api, () => { acceptedRefreshes += 1; });
+  try {
+    const acceptRadio = [...dom.container.querySelectorAll('label')]
+      .find((item) => item.textContent?.includes('Принять'))?.querySelector('input');
+    assert.ok(acceptRadio);
+    await act(async () => acceptRadio.click());
+    await act(async () => button(dom.container, 'Проголосовать').click());
+    assert.equal((acceptRadio as HTMLInputElement).checked, true);
+    assert.match(dom.container.textContent ?? '', /можно повторить/);
+    await act(async () => button(dom.container, 'Проголосовать').click());
+    assert.equal(attempts, 2);
+    assert.match(dom.container.textContent ?? '', /Подтверждённая поездка обновлена/);
+    assert.equal(acceptedRefreshes, 1);
+    assert.equal('updateTrip' in api, false);
+  } finally {
+    await dom.cleanup();
+  }
+});
+
+test('loads immutable old-to-proposed values only when opening proposal details', async () => {
+  let detailReads = 0;
+  const api = createApi({
+    getTripProposals: async () => [proposalSummary],
+    getTripProposal: async () => { detailReads += 1; return proposal; }
+  });
+  const ui = await mountEditor(api);
+  try {
+    assert.equal(detailReads, 0);
+    assert.equal(ui.container.querySelector('.trip-proposal-diff'), null);
+    await act(async () => button(ui.container, 'Показать изменения').click());
+    assert.equal(detailReads, 1);
+    assert.ok(ui.container.querySelector('.trip-proposal-diff'));
+    assert.match(ui.container.textContent ?? '', /было → предлагается/);
+    assert.match(ui.container.textContent ?? '', /100/);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('409 vote conflict keeps the selected vote and explains that current state must be reloaded', async () => {
+  let acceptedRefreshes = 0;
+  let listReads = 0;
+  const api = createApi({
+    getTripProposals: async () => {
+      listReads += 1;
+      return [listReads === 1 ? proposalSummary : { ...proposalSummary, status: 'accepted' }];
+    },
+    voteTripProposal: async () => { throw new ApiError(409, { detail: 'conflict' }); }
+  });
+  const ui = await mountEditor(api, () => { acceptedRefreshes += 1; });
+  try {
+    const acceptRadio = [...ui.container.querySelectorAll('label')]
+      .find((item) => item.textContent?.includes('Принять'))?.querySelector('input');
+    assert.ok(acceptRadio);
+    await act(async () => acceptRadio.click());
+    await act(async () => button(ui.container, 'Проголосовать').click());
+    assert.equal((acceptRadio as HTMLInputElement).checked, true);
+    assert.match(ui.container.textContent ?? '', /Состояние предложения изменилось/);
+    assert.equal(acceptedRefreshes, 0);
+    await act(async () => button(ui.container, 'Обновить').click());
+    assert.equal(listReads, 2);
+    assert.match(ui.container.textContent ?? '', /Принято/);
+    assert.equal(ui.container.querySelector('input[type="radio"]'), null);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('creates an event-level Proposal for only the selected event from the Draft', async () => {
+  const dayId = '10000000-0000-4000-8000-000000000001';
+  const eventId = '20000000-0000-4000-8000-000000000001';
+  const siblingId = '20000000-0000-4000-8000-000000000002';
+  const eventContent: TripDraftContent = {
+    ...content,
+    days: [{
+      id: dayId, date: null, title: 'Первый день', notes: null,
+      events: [
+        { id: eventId, kind: 'activity', title: 'Музей', start_time: null, duration_minutes: null, address: null, estimated_cost: null, currency: null, notes: null },
+        { id: siblingId, kind: 'meal', title: 'Обед', start_time: null, duration_minutes: null, address: null, estimated_cost: null, currency: null, notes: null }
+      ]
+    }]
+  };
+  let submittedScopes: readonly string[] = [];
+  const api = createApi({ createTripProposal: async (_token, _tripId, request) => {
+    submittedScopes = request.scopes;
+    return { ...proposal, operations: [{ scope: request.scopes[0], expected_version: 0,
+      old_value: { id: eventId, title: 'Музей' }, proposed_value: { id: eventId, title: 'Музей' } }] };
+  } });
+  const ui = await mountEditor(api, () => undefined, { ...draft, content: eventContent }, [
+    { id: dayId, position: 1, day_date: null, title: 'Первый день', notes: null, events: [] }
+  ]);
+  try {
+    const eventLabel = [...ui.container.querySelectorAll('label.trip-draft-proposal-scope')]
+      .find((item) => item.textContent?.includes('Музей'));
+    assert.ok(eventLabel);
+    await act(async () => (eventLabel.querySelector('input') as HTMLInputElement).click());
+    await act(async () => {
+      const titleInput = [...ui.container.querySelectorAll('label')]
+        .find((item) => item.textContent?.includes('Краткое название'))?.querySelector('input');
+      assert.ok(titleInput);
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(titleInput), 'value')?.set;
+      setter?.call(titleInput, 'Изменить музей');
+      titleInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+      titleInput.dispatchEvent(new window.Event('change', { bubbles: true }));
+    });
+    await act(async () => button(ui.container, 'Предложить участникам').click());
+    assert.deepEqual(submittedScopes, [`itinerary:event:${dayId}:${eventId}`]);
+    assert.match(ui.container.textContent ?? '', /Событие: Музей: было → предлагается/);
+    assert.match(ui.container.textContent ?? '', /Музей/);
+    assert.match(ui.container.textContent ?? '', /Обед/);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('event-level Proposal is disabled until its parent day is confirmed', async () => {
+  const dayId = '10000000-0000-4000-8000-000000000001';
+  const eventId = '20000000-0000-4000-8000-000000000001';
+  const eventContent: TripDraftContent = {
+    ...content,
+    days: [{ id: dayId, date: null, title: 'Новый день', notes: null,
+      events: [{ id: eventId, kind: 'activity', title: 'Новое событие', start_time: null,
+        duration_minutes: null, address: null, estimated_cost: null, currency: null, notes: null }] }]
+  };
+  const ui = await mountEditor(createApi(), () => undefined, { ...draft, content: eventContent });
+  try {
+    const eventLabel = [...ui.container.querySelectorAll('label.trip-draft-proposal-scope')]
+      .find((item) => item.textContent?.includes('Новое событие'));
+    assert.ok(eventLabel);
+    assert.equal((eventLabel.querySelector('input') as HTMLInputElement).disabled, true);
+    assert.match(ui.container.textContent ?? '', /Сначала согласуйте день/);
+  } finally {
     await ui.cleanup();
   }
 });

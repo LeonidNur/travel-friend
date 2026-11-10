@@ -65,6 +65,8 @@ AI-разработчик **не** владеет SQL migrations, RLS, голо�
 
 ### Loop B — Proposal engine + голосования + атомарный apply
 
+**Статус на 10.11.2026:** реализация и hardening выполнены в `feature/trip-proposal-voting`; полный backend suite — 657 passed (94.8% coverage), frontend check — 206 passed, migration-upgrade и изолированный PostgreSQL 17 restore/grants/runtime gate smoke — PASS. Изменения ещё не merged; production migration/deployment не выполнялись.
+
 **Цель:** весь ручной flow, не требующий AI. Единый immutable Proposal с 1..N операциями/областями, зависимостями и существованием в Chat/Trip.
 
 Создание из редактора, human approval of AI candidate позже; два шага выбора и подачи голоса; фиксация voters; accept unanimous, reject first, cancel initiator, optional expiry; stale/blocked/review states; conservative per-area locking и serialisation на backend. Atomic commit изменений + versions + status + system chat message; idempotency и race tests; impact warnings without auto rewriting related confirmed data.

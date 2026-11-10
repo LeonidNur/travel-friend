@@ -534,6 +534,24 @@ test('uses authenticated trip itinerary and shared draft endpoints with versione
   });
 });
 
+test('lists compact Proposal summaries and reads one bounded Proposal detail on demand', async () => {
+  const summary = { id: 'proposal-1', scopes: ['budget'], status: 'pending' };
+  const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify([summary])));
+  const client = createBackendApiClient(fetchStub);
+  const listed = await client.getTripProposals('session-token', 'trip-1');
+  assert.deepEqual(listed, [summary]);
+  assertReadRequest(calls[0], '/api/backend/trips/trip-1/proposals?limit=50');
+
+  calls.length = 0;
+  const detail = { id: 'proposal-1', operations: [{ scope: 'budget', old_value: {}, proposed_value: {} }] };
+  const detailClient = createBackendApiClient(async (input, init) => {
+    calls.push({ input, init });
+    return new Response(JSON.stringify(detail));
+  });
+  assert.deepEqual(await detailClient.getTripProposal('session-token', 'trip-1', 'proposal-1'), detail);
+  assertReadRequest(calls[0], '/api/backend/trips/trip-1/proposals/proposal-1');
+});
+
 test('saves named trip draft alternatives as separate snapshots', async () => {
   const { calls, fetchStub } = createFetchStub(new Response(JSON.stringify({
     id: 'alternative-1', trip_id: 'trip-1', title: 'План Б',

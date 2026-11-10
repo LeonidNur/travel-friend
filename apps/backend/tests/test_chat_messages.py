@@ -271,6 +271,11 @@ def test_participant_reads_history_in_ascending_sequence_order(
         "type": "system",
         "sender_user_id": None,
         "content_text": "system notice",
+        "system_event": None,
+        "proposal_id": None,
+        "proposal_trip_id": None,
+        "proposal_status": None,
+        "proposal_blocked_reason": None,
         "created_at": payload[0]["created_at"],
     }
 
@@ -368,6 +373,11 @@ def test_participant_sends_user_message_from_principal_and_updates_sequence(
         "type": "user",
         "sender_user_id": first["user"]["id"],
         "content_text": "Hello",
+        "system_event": None,
+        "proposal_id": None,
+        "proposal_trip_id": None,
+        "proposal_status": None,
+        "proposal_blocked_reason": None,
         "created_at": response.json()["created_at"],
     }
     with psycopg.connect(database_url) as connection:

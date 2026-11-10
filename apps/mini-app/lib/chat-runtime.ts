@@ -1,4 +1,5 @@
-import type { ChatMessageResponse, ChatResponse } from './backend-api-client';
+import type { ChatMessageResponse, ChatResponse, TripProposalStatus } from './backend-api-client';
+import { getProposalEventLabel } from './trip-proposal-runtime';
 
 export type ChatsScreenState = 'empty' | 'error' | 'loading' | 'success';
 export type ChatMessageHistoryState = 'empty' | 'success';
@@ -16,6 +17,10 @@ export type RuntimeChatMessage = Readonly<{
   isOwn: boolean;
   text: string;
   sentAtLabel: string;
+  proposalId: string | null;
+  proposalTripId: string | null;
+  proposalStatus: TripProposalStatus | null;
+  proposalBlockedReason: string | null;
 }>;
 
 type SubmitChatMessageInput = Readonly<{
@@ -119,8 +124,14 @@ export function mapChatMessages(
       sequenceNumber: message.sequence_number,
       kind: message.type === 'system' ? 'system' : 'participant',
       isOwn: message.type === 'user' && message.sender_user_id === currentUserId,
-      text: message.content_text ?? 'Системное сообщение',
-      sentAtLabel: formatMessageTime(message.created_at)
+      text: message.type === 'system' && message.system_event?.startsWith('proposal_')
+        ? getProposalEventLabel(message.system_event)
+        : message.content_text ?? 'Системное сообщение',
+      sentAtLabel: formatMessageTime(message.created_at),
+      proposalId: message.proposal_id ?? null,
+      proposalTripId: message.proposal_trip_id ?? null,
+      proposalStatus: message.proposal_status ?? null,
+      proposalBlockedReason: message.proposal_blocked_reason ?? null
     }));
 }
 

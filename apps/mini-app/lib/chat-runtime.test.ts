@@ -12,6 +12,7 @@ import {
   mapChatMessages,
   submitChatMessage
 } from './chat-runtime';
+import { getProposalEventLabel, getProposalStatusLabel } from './trip-proposal-runtime';
 
 const ownUserId = 'own-user-uuid';
 
@@ -92,6 +93,22 @@ test('maps ordered message history as own, companion, and system messages', () =
       ['third', 'participant', true]
     ]
   );
+});
+
+test('maps current Proposal status from the server without inferring it from proposal_created', () => {
+  const proposalMessage: ChatMessageResponse = {
+    message_id: 'proposal-message', chat_id: 'chat-uuid', sequence_number: 4, type: 'system',
+    sender_user_id: null, content_text: null, created_at: '2026-11-10T10:00:00Z',
+    system_event: 'proposal_created', proposal_id: 'proposal-1', proposal_trip_id: 'trip-1',
+    proposal_status: 'blocked', proposal_blocked_reason: 'prerequisite_pending'
+  };
+  const [mapped] = mapChatMessages([proposalMessage], ownUserId);
+  assert.equal(mapped.text, 'Создано предложение по поездке.');
+  assert.equal(mapped.proposalId, 'proposal-1');
+  assert.equal(mapped.proposalStatus, 'blocked');
+  assert.equal(mapped.proposalBlockedReason, 'prerequisite_pending');
+  assert.equal(getProposalStatusLabel(mapped.proposalStatus!), 'Ожидает условия');
+  assert.equal(getProposalEventLabel('proposal_needs_revision'), 'Предложение требует пересмотра.');
 });
 
 test('distinguishes a successfully loaded empty message history', () => {

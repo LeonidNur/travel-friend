@@ -29,7 +29,7 @@ POSTGRES_IMAGE = "postgres:17-alpine"
 CONTAINER_LABEL_KEY = "com.travel-friend.disposable-backup-restore"
 EXPECTED_DATABASE_PREFIX = "tf_restore_"
 EXPECTED_POSTGRES_MAJOR = 17
-EXPECTED_RUNTIME_CAPABILITY_COUNT = 26
+EXPECTED_RUNTIME_CAPABILITY_COUNT = 30
 
 # Read-only inventories confirmed in the 2026-10-28 archive and current
 # production database. Newer repository migrations are replayed only locally.
@@ -90,11 +90,23 @@ EXPECTED_PUBLIC_TABLES = ARCHIVE_EXPECTED_PUBLIC_TABLES | frozenset({
     "trip_drafts",
     "trip_draft_versions",
     "trip_draft_alternatives",
+    "trip_confirmed_accommodations",
+    "trip_confirmed_transport",
+    "trip_proposals",
+    "trip_proposal_operations",
+    "trip_proposal_voters",
+    "trip_proposal_prerequisites",
+    "trip_proposal_scope_versions",
 })
 EXPECTED_TRIGGERS = frozenset({
     "chats_direct_participant_count",
     "chat_participants_direct_participant_count",
     "chat_participants_read_sequences_only_move_forward",
+})
+CURRENT_APP_EXPECTED_TRIGGERS = EXPECTED_TRIGGERS | frozenset({
+    "trip_proposals_immutable_fields",
+    "trip_proposal_operations_immutable",
+    "trip_proposal_votes_immutable",
 })
 ARCHIVE_EXPECTED_POLICY_NAMES = frozenset({
     "profiles_select_own", "profiles_insert_own", "profiles_update_own",
@@ -112,6 +124,13 @@ CURRENT_APP_EXPECTED_POLICY_NAMES = ARCHIVE_EXPECTED_POLICY_NAMES | frozenset({
     "trip_drafts_select_active_participant",
     "trip_draft_versions_select_active_participant",
     "trip_draft_alternatives_select_active_participant",
+    "trip_confirmed_accommodations_select_member",
+    "trip_confirmed_transport_select_member",
+    "trip_proposals_select_member",
+    "trip_proposal_operations_select_member",
+    "trip_proposal_voters_select_member",
+    "trip_proposal_prerequisites_select_member",
+    "trip_proposal_scope_versions_select_member",
 })
 # These are the function signatures for the 19 migrations recorded by the
 # supplied 2026-10-28 archive. The restore phase checks this inventory before
@@ -147,6 +166,20 @@ CURRENT_APP_ADDITIONAL_FUNCTIONS = (
     "public.rename_current_group_chat(uuid,text)",
     "public.save_current_trip_draft(uuid,integer,jsonb)",
     "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
+    "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamp with time zone)",
+    "public.cast_current_trip_proposal_vote(uuid,text)",
+    "public.cancel_current_trip_proposal(uuid)",
+    "public.refresh_current_trip_proposals(uuid)",
+    "public.refresh_trip_blocked_proposals(uuid)",
+    "public.trip_proposal_scopes_overlap(text,text)",
+    "public.guard_trip_proposal_immutable_fields()",
+    "public.guard_trip_proposal_operation_immutable()",
+    "public.guard_trip_proposal_vote_immutable()",
+    "public.append_trip_proposal_chat_event(uuid,uuid,uuid,text)",
+    "public.trip_proposal_scope_version(uuid,text)",
+    "public.bump_trip_proposal_itinerary_versions(uuid,text)",
+    "public.capture_trip_proposal_value(uuid,text,jsonb,boolean)",
+    "public.apply_trip_proposal(uuid)",
 )
 CURRENT_APP_EXPECTED_FUNCTIONS = (*ARCHIVE_EXPECTED_FUNCTIONS, *CURRENT_APP_ADDITIONAL_FUNCTIONS)
 PRODUCTION_ARCHIVE_EXPECTED_FUNCTIONS = (
@@ -165,6 +198,10 @@ PROTECTED_API_FUNCTIONS = (
     "public.rename_current_group_chat(uuid,text)",
     "public.save_current_trip_draft(uuid,integer,jsonb)",
     "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
+    "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamptz)",
+    "public.cast_current_trip_proposal_vote(uuid,text)",
+    "public.cancel_current_trip_proposal(uuid)",
+    "public.refresh_current_trip_proposals(uuid)",
 )
 NEW_BACKEND_FUNCTIONS = (
     "public.bootstrap_telegram_login(bigint,text,text,text,text,text)",
@@ -172,6 +209,10 @@ NEW_BACKEND_FUNCTIONS = (
     "public.resolve_bearer_session_with_identity(text)",
     "public.save_current_trip_draft(uuid,integer,jsonb)",
     "public.save_current_trip_draft_alternative(uuid,text,jsonb)",
+    "public.create_current_trip_proposal(uuid,integer,text,uuid,text[],uuid[],timestamptz)",
+    "public.cast_current_trip_proposal_vote(uuid,text)",
+    "public.cancel_current_trip_proposal(uuid)",
+    "public.refresh_current_trip_proposals(uuid)",
 )
 SUPABASE_API_ROLE_STUB_SETUP_SQL = """\
 DO $do$
@@ -417,11 +458,12 @@ def _read_only_inventory_sql(
     expected_functions: tuple[str, ...] = ARCHIVE_EXPECTED_FUNCTIONS,
     expected_tables: frozenset[str] = ARCHIVE_EXPECTED_PUBLIC_TABLES,
     expected_policy_names: frozenset[str] = ARCHIVE_EXPECTED_POLICY_NAMES,
+    expected_triggers: frozenset[str] = EXPECTED_TRIGGERS,
 ) -> str:
     sql_literal = lambda value: "'" + value.replace("'", "''") + "'"
     table_values = ", ".join("(" + sql_literal(name) + ")" for name in sorted(expected_tables))
     function_values = ", ".join("(" + sql_literal(signature) + ")" for signature in expected_functions)
-    trigger_values = ", ".join("(" + sql_literal(name) + ")" for name in sorted(EXPECTED_TRIGGERS))
+    trigger_values = ", ".join("(" + sql_literal(name) + ")" for name in sorted(expected_triggers))
     policy_values = ", ".join(sql_literal(name) for name in sorted(expected_policy_names))
     return f"""
 WITH expected_tables(table_name) AS (VALUES {table_values}),
@@ -592,6 +634,7 @@ def validate_structure(
     expected_functions: tuple[str, ...] = ARCHIVE_EXPECTED_FUNCTIONS,
     expected_tables: frozenset[str] = ARCHIVE_EXPECTED_PUBLIC_TABLES,
     expected_policy_names: frozenset[str] = ARCHIVE_EXPECTED_POLICY_NAMES,
+    expected_triggers: frozenset[str] = EXPECTED_TRIGGERS,
 ) -> None:
     tables = summary.get("tables")
     triggers = summary.get("trigger_names")
@@ -608,7 +651,7 @@ def validate_structure(
         failures.append("CONSTRAINTS")
     if not isinstance(summary.get("index_count"), int) or summary["index_count"] <= 0:
         failures.append("INDEXES")
-    if not isinstance(triggers, list) or set(triggers) != EXPECTED_TRIGGERS or summary.get("expected_triggers_present") is not True:
+    if not isinstance(triggers, list) or set(triggers) != expected_triggers or summary.get("expected_triggers_present") is not True:
         failures.append("TRIGGERS")
     missing_functions = summary.get("missing_functions", [])
     if summary.get("expected_functions_present") is not True:
@@ -627,7 +670,7 @@ def validate_structure(
         trigger_count = len(triggers) if isinstance(triggers, list) else 0
         counts = (
             f"aggregates tables={table_count}/{len(expected_tables)} constraints={summary.get('constraint_count', 0)} "
-            f"indexes={summary.get('index_count', 0)} triggers={trigger_count}/3 "
+            f"indexes={summary.get('index_count', 0)} triggers={trigger_count}/{len(expected_triggers)} "
             f"functions={summary.get('function_count', 0)} RLS={summary.get('rls_table_count', 0)}/{len(expected_tables)} "
             f"policies={summary.get('policy_count', 0)}"
         )
@@ -1149,6 +1192,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
                 CURRENT_APP_EXPECTED_FUNCTIONS,
                 EXPECTED_PUBLIC_TABLES,
                 CURRENT_APP_EXPECTED_POLICY_NAMES,
+                CURRENT_APP_EXPECTED_TRIGGERS,
             ),
             stage="MIGRATIONS",
             reason="the post-migration application inventory could not be checked safely.",
@@ -1160,6 +1204,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
             expected_functions=CURRENT_APP_EXPECTED_FUNCTIONS,
             expected_tables=EXPECTED_PUBLIC_TABLES,
             expected_policy_names=CURRENT_APP_EXPECTED_POLICY_NAMES,
+            expected_triggers=CURRENT_APP_EXPECTED_TRIGGERS,
         )
         migration_summary = (
             f"Current application migrations: PASS ({len(repository_migrations)} repository migrations "
@@ -1207,7 +1252,7 @@ def run_smoke(archive_path: Path, manifest_path: Path) -> int:
         success_summary = [
             *partial_summary,
             "app_runtime grants: PASS (existing grants script and read-only verifier).",
-            "API role capabilities: PASS (no effective EXECUTE on eight protected backend-only functions in the local target; production default ACL remains unknown).",
+            f"API role capabilities: PASS (no effective EXECUTE on {len(NEW_BACKEND_FUNCTIONS)} newly protected backend-only functions in the local target; production default ACL remains unknown).",
             "Production Supabase ACL restoration: NOT VERIFIED; --no-acl excluded source ACLs.",
         ]
     except RestoreSmokeError as error:
