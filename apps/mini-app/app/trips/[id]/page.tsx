@@ -155,9 +155,9 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
 
       <section className="trip-details" aria-label="План поездки">
         <TripDetailSection heading="Статус" value={getPersistedTripStatusLabel(detail.trip.status)} />
-        <TripDetailSection heading="Маршрут" value={route ?? 'Маршрут пока не указан'} />
-        {dates !== null ? <TripDetailSection heading="Даты" value={dates} /> : null}
-        {budget !== null ? <TripDetailSection heading="Бюджет" value={budget} /> : null}
+        <TripDetailSection heading="Маршрут" value={route ?? 'Маршрут пока не указан'} status={detail.trip.destination_status} />
+        <TripDetailSection heading="Даты" value={dates ?? 'Даты пока не указаны'} status={detail.trip.dates_status} />
+        <TripDetailSection heading="Бюджет" value={budget ?? 'Бюджет пока не указан'} status={detail.trip.budget_status} />
         {detail.accommodations.length > 0 ? <TripDetailSection
           heading="Проживание"
           value={detail.accommodations.map((item) => [item.name, item.location, item.date_from, item.date_to, item.notes].filter(Boolean).join(' · ')).join('; ')}
@@ -165,6 +165,7 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
         {detail.transport.length > 0 ? <TripDetailSection
           heading="Транспорт"
           value={detail.transport.map((item) => [item.mode, item.origin, item.destination, item.departure_at, item.arrival_at, item.notes].filter(Boolean).join(' · ')).join('; ')}
+          status={detail.trip.transport_status}
         /> : null}
       </section>
 
@@ -205,7 +206,7 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
       ) : null}
       {draftDetail !== null && session !== null ? (
         <TripDraftEditor
-          key={draftDetail.draft.trip_id}
+          key={`${draftDetail.draft.trip_id}:${draftDetail.draft.version}`}
           token={session.accessToken}
           userId={session.userId}
           draft={draftDetail.draft}
@@ -217,6 +218,7 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
             setIsLoading(true);
             setReloadKey((key) => key + 1);
             setItineraryReloadKey((key) => key + 1);
+            setDraftReloadKey((key) => key + 1);
           }}
         />
       ) : null}
@@ -237,11 +239,26 @@ function TripState({ title, message, onRetry }: Readonly<{ title: string; messag
   );
 }
 
-function TripDetailSection({ heading, value }: Readonly<{ heading: string; value: string }>) {
+type TripDetailStatus = 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
+
+function TripDetailSection({ heading, value, status }: Readonly<{ heading: string; value: string; status?: TripDetailStatus }>) {
   return (
-    <article className="trip-details__section">
+    <article className="trip-details__section" data-status={status ? getDetailStatusClass(status) : undefined}>
       <h3 className="trip-details__heading">{heading}</h3>
       <p className="trip-details__summary">{value}</p>
+      {status ? <span className="trip-details__status">{getDetailStatusLabel(status)}</span> : null}
     </article>
   );
+}
+
+function getDetailStatusClass(status: TripDetailStatus): string {
+  if (status === 'review_required' || status === 'pending_analysis') return 'needs_decision';
+  return status;
+}
+
+function getDetailStatusLabel(status: TripDetailStatus): string {
+  if (status === 'confirmed') return 'Согласовано';
+  if (status === 'review_required') return 'Нужно пересмотреть';
+  if (status === 'pending_analysis') return 'Проверяем';
+  return 'Не заполнено';
 }

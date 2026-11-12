@@ -18,6 +18,7 @@ from integration_database import (
     get_disposable_test_database_url,
     truncate_disposable_test_database,
 )
+from test_trips import create_group_chat_with_three_participants, create_trip
 
 pytestmark = pytest.mark.usefixtures("clean_database")
 
@@ -245,6 +246,32 @@ def test_concurrent_overlapping_itinerary_proposals_serialize_and_preserve_winne
     assert loser["detail"]["proposal_id"] == winner
     with psycopg.connect(database_url) as connection:
         assert connection.execute("SELECT count(*) FROM public.trip_proposals WHERE trip_id=%s", (UUID(trip["trip_id"]),)).fetchone()[0] == 1
+
+
+def test_group_proposal_requires_all_three_current_trip_participants_to_accept(client, database_url: str) -> None:
+    creator, second, third, group_chat = create_group_chat_with_three_participants(client)
+    trip = create_trip(client, creator["access_token"], UUID(group_chat["chat_id"])).json()
+    created = prepare_budget_proposal(client, creator, trip["trip_id"], database_url)
+    assert created.status_code == 201, created.text
+    proposal = created.json()
+    assert {voter["user_id"] for voter in proposal["voters"]} == {
+        creator["user"]["id"], second["user"]["id"], third["user"]["id"]
+    }
+
+    for participant in (creator, second):
+        result = client.post(
+            f"/trips/{trip['trip_id']}/proposals/{proposal['id']}/votes",
+            headers=auth_headers(participant["access_token"]), json={"vote": "accept"},
+        )
+        assert result.status_code == 200
+        assert result.json()["status"] == "pending"
+
+    accepted = client.post(
+        f"/trips/{trip['trip_id']}/proposals/{proposal['id']}/votes",
+        headers=auth_headers(third["access_token"]), json={"vote": "accept"},
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "accepted"
 
 
 def test_concurrent_final_votes_apply_once_and_preserve_unanimous_state(client, database_url: str) -> None:

@@ -16,6 +16,9 @@ type Props = Readonly<{
   participantLabel: (userId: string) => string;
   api: Pick<BackendApiClient, 'getTripProposals' | 'getTripProposal' | 'createTripProposal' | 'voteTripProposal' | 'cancelTripProposal'>;
   onAccepted: () => void;
+  onProposalsChange?: (proposals: TripProposalSummaryResponse[]) => void;
+  enableCreate?: boolean;
+  reloadSignal?: number;
 }>;
 
 const scopeLabels: Readonly<Record<string, string>> = {
@@ -23,7 +26,7 @@ const scopeLabels: Readonly<Record<string, string>> = {
   accommodation: 'Проживание', 'itinerary:all': 'Вся программа'
 };
 
-export function TripProposalPanel({ token, userId, tripId, draftVersion, draftContent, savedContent, confirmedDays, api, participantLabel, onAccepted }: Props) {
+export function TripProposalPanel({ token, userId, tripId, draftVersion, draftContent, savedContent, confirmedDays, api, participantLabel, onAccepted, onProposalsChange, enableCreate = true, reloadSignal = 0 }: Props) {
   const [proposals, setProposals] = useState<TripProposalSummaryResponse[]>([]);
   const [details, setDetails] = useState<Record<string, TripProposalResponse>>({});
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
@@ -47,7 +50,8 @@ export function TripProposalPanel({ token, userId, tripId, draftVersion, draftCo
     }
   }, [api, token, tripId]);
 
-  useEffect(() => { void Promise.resolve().then(reload); }, [reload]);
+  useEffect(() => { void Promise.resolve().then(reload); }, [reload, reloadSignal]);
+  useEffect(() => { onProposalsChange?.(proposals); }, [onProposalsChange, proposals]);
 
   const toggleScope = (scope: string) => {
     setSelectedScopes((current) => {
@@ -128,7 +132,7 @@ export function TripProposalPanel({ token, userId, tripId, draftVersion, draftCo
       </div><button className="profile-button profile-button--secondary" type="button" onClick={() => void reload()}>Обновить</button></header>
       {error ? <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">{error}</p> : null}
       {notice ? <p role="status" className="trip-draft-editor__message">{notice}</p> : null}
-      <fieldset className="trip-draft-editor__fields" disabled={saving}>
+      {enableCreate ? <fieldset className="trip-draft-editor__fields" disabled={saving}>
         <DraftCheckbox label={scopeLabels.route} checked={selectedScopes.includes('route')} onChange={() => toggleScope('route')} />
         <DraftCheckbox label={scopeLabels.dates} checked={selectedScopes.includes('dates')} onChange={() => toggleScope('dates')} />
         <DraftCheckbox label={scopeLabels.budget} checked={selectedScopes.includes('budget')} onChange={() => toggleScope('budget')} />
@@ -146,7 +150,7 @@ export function TripProposalPanel({ token, userId, tripId, draftVersion, draftCo
         <label className="trip-draft-editor__field"><span>Краткое название</span><input className="profile-input" maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
         {!isDraftSaved ? <p className="trip-draft-editor__message">Сначала сохраните черновик. Proposal снимет только выбранные области сохранённой версии.</p> : null}
         <button className="profile-button profile-button--primary" type="button" disabled={!isDraftSaved || !title.trim() || selectedScopes.length === 0} onClick={() => void create()}>{saving ? 'Сохраняем…' : 'Предложить участникам'}</button>
-      </fieldset>
+      </fieldset> : null}
       {isLoading ? <p className="surface-card__copy">Загружаем предложения…</p> : null}
       {!isLoading && proposals.length === 0 ? <p className="surface-card__copy">Предложений пока нет.</p> : null}
       {proposals.map((proposal) => (

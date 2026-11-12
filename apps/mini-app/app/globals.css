@@ -1134,6 +1134,19 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   color: var(--text) !important;
 }
 
+.trip-inline-proposals {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+  color: var(--color-accent, #326b63);
+  font-size: 0.9rem;
+}
+
+.trip-inline-proposals a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 @media (min-width: 640px) {
   .trip-draft-editor__header {
     grid-template-columns: minmax(0, 1fr) auto;

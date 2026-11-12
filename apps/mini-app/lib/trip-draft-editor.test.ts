@@ -143,7 +143,7 @@ function notesValue(container: HTMLElement): string {
 
 test('renders shared Draft sections and a bounded alternatives metadata list in Russian', () => {
   const markup = renderStatic();
-  assert.match(markup, /Общий рабочий черновик/);
+  assert.match(markup, /Рабочая версия поездки/);
   assert.match(markup, /Маршрут и даты/);
   assert.match(markup, /Проживание/);
   assert.match(markup, /Транспорт/);
@@ -240,34 +240,176 @@ test('opening an alternative fetches one snapshot and confirms before replacing 
   }
 });
 
-test('creates a Proposal only for explicitly selected saved Draft scope and does not change Confirmed Trip', async () => {
+test('proposal action saves Draft first and creates an automatically scoped, named Proposal without changing Confirmed Trip', async () => {
+  const calls: string[] = [];
   let submittedScopes: readonly string[] = [];
+  let submittedTitle = '';
   const api = createApi({
+    saveTripDraft: async (_token, _tripId, request) => {
+      calls.push('save');
+      assert.equal(request.content.notes, 'Параллельная заметка');
+      return { ...draft, version: 2, content: request.content };
+    },
     createTripProposal: async (_token, _tripId, request) => {
+      calls.push('create');
       submittedScopes = request.scopes;
-      return proposal;
+      submittedTitle = request.title;
+      return { ...proposal, title: request.title, operations: [{ ...proposal.operations[0], scope: request.scopes[0] }] };
     }
   });
   const ui = await mountEditor(api);
   try {
-    const scopeLabel = [...ui.container.querySelectorAll('label.trip-draft-proposal-scope')]
-      .find((item) => item.textContent?.includes('Бюджет'));
-    assert.ok(scopeLabel);
-    await act(async () => (scopeLabel.querySelector('input') as HTMLInputElement).click());
-    const titleInput = [...ui.container.querySelectorAll('label')]
-      .find((item) => item.textContent?.includes('Краткое название'))?.querySelector('input');
-    assert.ok(titleInput);
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(titleInput), 'value')?.set;
-      setter?.call(titleInput, 'Согласовать бюджет');
-      titleInput.dispatchEvent(new window.Event('input', { bubbles: true }));
-      titleInput.dispatchEvent(new window.Event('change', { bubbles: true }));
-    });
-    await act(async () => button(ui.container, 'Предложить участникам').click());
+    await changeNotes(ui.container, 'Параллельная заметка');
+    await act(async () => button(ui.container, 'Предложить бюджет').click());
+    assert.deepEqual(calls, ['save', 'create']);
     assert.deepEqual(submittedScopes, ['budget']);
-    assert.match(ui.container.textContent ?? '', /отдельный снимок/);
-    assert.equal(notesValue(ui.container), '');
+    assert.equal(submittedTitle, 'Изменение бюджета');
+    assert.match(ui.container.textContent ?? '', /Предложение отправлено участникам/);
+    assert.equal(notesValue(ui.container), 'Параллельная заметка');
     assert.equal('updateTrip' in api, false);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('shows an active Proposal link beside its matching Trip section', async () => {
+  const api = createApi({ getTripProposals: async () => [proposalSummary] });
+  const ui = await mountEditor(api);
+  try {
+    const link = ui.container.querySelector('a[href="#proposal-proposal-1"]');
+    assert.ok(link);
+    assert.match(link.textContent ?? '', /На голосовании/);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('retries uncertain Proposal creation with the same idempotency key without saving Draft or opening another vote', async () => {
+  let saveCalls = 0;
+  const keys: string[] = [];
+  let createCalls = 0;
+  const api = createApi({
+    saveTripDraft: async (_token, _tripId, request) => {
+      saveCalls += 1;
+      return { ...draft, version: 2, content: request.content };
+    },
+    createTripProposal: async (_token, _tripId, request) => {
+      createCalls += 1;
+      keys.push(request.idempotency_key);
+      if (createCalls === 1) throw new Error('connection lost after request');
+      return { ...proposal, title: request.title, draft_version: request.draft_version };
+    }
+  });
+  const ui = await mountEditor(api);
+  try {
+    await act(async () => button(ui.container, 'Предложить бюджет').click());
+    assert.match(ui.container.textContent ?? '', /ответ на создание предложения не получен/);
+    await act(async () => button(ui.container, 'Предложить бюджет').click());
+    assert.equal(saveCalls, 1);
+    assert.equal(createCalls, 2);
+    assert.equal(keys[0], keys[1]);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('422 prevents Draft save and proposal creation when local draft validation fails', async () => {
+  const incomplete: TripDraftContent = {
+    ...content,
+    days: [{ id: 'day-1', date: null, title: null, notes: null, events: [
+      { id: 'event-1', kind: 'activity', title: '', start_time: null, duration_minutes: null, address: null, estimated_cost: null, currency: null, notes: null }
+    ] }]
+  };
+  let saves = 0;
+  let creates = 0;
+  const api = createApi({
+    saveTripDraft: async () => { saves += 1; return draft; },
+    createTripProposal: async () => { creates += 1; return proposal; }
+  });
+  const ui = await mountEditor(api, () => undefined, { ...draft, content: incomplete });
+  try {
+    await act(async () => button(ui.container, 'Предложить изменение дня').click());
+    assert.match(ui.container.textContent ?? '', /У каждого события должно быть название/);
+    assert.equal(saves, 0);
+    assert.equal(creates, 0);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('a competing Draft edit prevents Proposal creation and keeps the local value for recovery', async () => {
+  let creates = 0;
+  const api = createApi({
+    saveTripDraft: async () => { throw new ApiError(409, { detail: 'version conflict' }); },
+    getTripDraft: async () => ({
+      draft: { ...draft, version: 2, content: { ...content, notes: 'Правка другого участника' } },
+      alternatives: []
+    }),
+    createTripProposal: async () => { creates += 1; return proposal; }
+  });
+  const ui = await mountEditor(api);
+  try {
+    await changeNotes(ui.container, 'Моя правка');
+    await act(async () => button(ui.container, 'Предложить бюджет').click());
+    assert.match(ui.container.textContent ?? '', /изменился у другого участника/);
+    assert.equal(notesValue(ui.container), 'Моя правка');
+    assert.equal(creates, 0);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('scope-busy 409 displays the existing vote and disables duplicate creation', async () => {
+  let listReads = 0;
+  const api = createApi({
+    getTripProposals: async () => { listReads += 1; return listReads === 1 ? [] : [proposalSummary]; },
+    createTripProposal: async () => { throw new ApiError(409, { detail: { code: 'proposal_scope_busy' } }); }
+  });
+  const ui = await mountEditor(api);
+  try {
+    await act(async () => button(ui.container, 'Предложить бюджет').click());
+    assert.match(ui.container.textContent ?? '', /уже идёт голосование/);
+    assert.ok(ui.container.querySelector('a[href="#proposal-proposal-1"]'));
+    assert.equal((button(ui.container, 'Предложить бюджет') as HTMLButtonElement).disabled, true);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('an active whole-day Proposal is shown beside and disables event-level proposals for that day', async () => {
+  const dayId = '10000000-0000-4000-8000-000000000001';
+  const eventId = '20000000-0000-4000-8000-000000000001';
+  const dayContent: TripDraftContent = {
+    ...content,
+    days: [{ id: dayId, date: null, title: 'Первый день', notes: null, events: [
+      { id: eventId, kind: 'activity', title: 'Музей', start_time: null, duration_minutes: null, address: null, estimated_cost: null, currency: null, notes: null }
+    ] }]
+  };
+  const dayProposal = { ...proposalSummary, scopes: [`itinerary:day:${dayId}`] };
+  const confirmedDay: TripItineraryDayResponse = {
+    id: dayId, position: 1, day_date: null, title: 'Первый день', notes: null,
+    events: [{ id: eventId, day_id: dayId, position: 1, kind: 'activity', title: 'Музей', start_time: null, duration_minutes: null, address: null, estimated_cost: null, currency: null, notes: null }]
+  };
+  const ui = await mountEditor(createApi({ getTripProposals: async () => [dayProposal] }), () => undefined,
+    { ...draft, content: dayContent }, [confirmedDay]);
+  try {
+    assert.equal((button(ui.container, 'Предложить событие') as HTMLButtonElement).disabled, true);
+    assert.ok(ui.container.querySelector('a[href="#proposal-proposal-1"]'));
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('stale scope 409 offers current Draft reload instead of retrying an invalid idempotent request', async () => {
+  const api = createApi({
+    getTripProposals: async () => [],
+    createTripProposal: async () => { throw new ApiError(409, { detail: 'scope version changed' }); }
+  });
+  const ui = await mountEditor(api);
+  try {
+    await act(async () => button(ui.container, 'Предложить бюджет').click());
+    assert.match(ui.container.textContent ?? '', /Версия поездки или согласованные данные изменились/);
+    assert.ok(button(ui.container, 'Загрузить актуальную версию'));
   } finally {
     await ui.cleanup();
   }
@@ -352,7 +494,7 @@ test('409 vote conflict keeps the selected vote and explains that current state 
   }
 });
 
-test('creates an event-level Proposal for only the selected event from the Draft', async () => {
+test('creates an event-level Proposal for only the event where the action was invoked', async () => {
   const dayId = '10000000-0000-4000-8000-000000000001';
   const eventId = '20000000-0000-4000-8000-000000000001';
   const siblingId = '20000000-0000-4000-8000-000000000002';
@@ -376,24 +518,9 @@ test('creates an event-level Proposal for only the selected event from the Draft
     { id: dayId, position: 1, day_date: null, title: 'Первый день', notes: null, events: [] }
   ]);
   try {
-    const eventLabel = [...ui.container.querySelectorAll('label.trip-draft-proposal-scope')]
-      .find((item) => item.textContent?.includes('Музей'));
-    assert.ok(eventLabel);
-    await act(async () => (eventLabel.querySelector('input') as HTMLInputElement).click());
-    await act(async () => {
-      const titleInput = [...ui.container.querySelectorAll('label')]
-        .find((item) => item.textContent?.includes('Краткое название'))?.querySelector('input');
-      assert.ok(titleInput);
-      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(titleInput), 'value')?.set;
-      setter?.call(titleInput, 'Изменить музей');
-      titleInput.dispatchEvent(new window.Event('input', { bubbles: true }));
-      titleInput.dispatchEvent(new window.Event('change', { bubbles: true }));
-    });
-    await act(async () => button(ui.container, 'Предложить участникам').click());
+    await act(async () => button(ui.container, 'Предложить событие').click());
     assert.deepEqual(submittedScopes, [`itinerary:event:${dayId}:${eventId}`]);
-    assert.match(ui.container.textContent ?? '', /Событие: Музей: было → предлагается/);
-    assert.match(ui.container.textContent ?? '', /Музей/);
-    assert.match(ui.container.textContent ?? '', /Обед/);
+    assert.equal(ui.container.querySelector('a[href="#proposal-proposal-1"]')?.textContent, 'Согласовать бюджет · На голосовании');
   } finally {
     await ui.cleanup();
   }
@@ -410,10 +537,7 @@ test('event-level Proposal is disabled until its parent day is confirmed', async
   };
   const ui = await mountEditor(createApi(), () => undefined, { ...draft, content: eventContent });
   try {
-    const eventLabel = [...ui.container.querySelectorAll('label.trip-draft-proposal-scope')]
-      .find((item) => item.textContent?.includes('Новое событие'));
-    assert.ok(eventLabel);
-    assert.equal((eventLabel.querySelector('input') as HTMLInputElement).disabled, true);
+    assert.equal((button(ui.container, 'Предложить событие') as HTMLButtonElement).disabled, true);
     assert.match(ui.container.textContent ?? '', /Сначала согласуйте день/);
   } finally {
     await ui.cleanup();
