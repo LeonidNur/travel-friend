@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ApiError, type BackendApiClient, type TripProposalResponse, type TripProposalSummaryResponse } from '@/lib/backend-api-client';
 import { formatProposalValue } from '@/lib/trip-inline-editing';
 import { getProposalBlockedReasonLabel, getProposalStatusLabel } from '@/lib/trip-proposal-runtime';
+import { shouldRenderProposalAtScope } from '@/lib/trip-proposal-placement';
 
 type Props = Readonly<{
   token: string;
@@ -94,9 +95,9 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
   };
 
   const renderProposalAtScope = (scope: string) => visibleProposals
-    .filter((proposal) => !completedStatuses.has(proposal.status) && proposal.scopes.some((item) => scopesOverlap(item, scope)))
+    .filter((proposal) => !completedStatuses.has(proposal.status) && shouldRenderProposalAtScope(proposal.scopes, scope))
     .map((proposal) => <ProposalCard key={proposal.id} proposal={proposal} detail={details[proposal.id]}
-      scope={scope} participantLabel={participantLabel} voteChoice={voteChoices[proposal.id]}
+      participantLabel={participantLabel} voteChoice={voteChoices[proposal.id]}
       onVoteChoice={(choice) => setVoteChoices((current) => ({ ...current, [proposal.id]: choice }))}
       onVote={() => void vote(proposal)} onCancel={() => void cancel(proposal)} saving={saving} userId={userId} />);
 
@@ -116,10 +117,9 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
   </>;
 }
 
-function ProposalCard({ proposal, detail, scope, participantLabel, voteChoice, onVoteChoice, onVote, onCancel, saving, userId }: Readonly<{
+function ProposalCard({ proposal, detail, participantLabel, voteChoice, onVoteChoice, onVote, onCancel, saving, userId }: Readonly<{
   proposal: TripProposalSummaryResponse;
   detail?: TripProposalResponse;
-  scope?: string;
   participantLabel: (userId: string) => string;
   voteChoice?: 'accept' | 'reject';
   onVoteChoice?: (choice: 'accept' | 'reject') => void;
@@ -128,7 +128,7 @@ function ProposalCard({ proposal, detail, scope, participantLabel, voteChoice, o
   saving: boolean;
   userId: string;
 }>) {
-  const operations = detail?.operations.filter((operation) => scope === undefined || operation.scope === scope || scopesOverlap(operation.scope, scope)) ?? [];
+  const operations = detail?.operations ?? [];
   return <article className="trip-proposal-card" id={`proposal-${proposal.id}`}>
     <h5>{proposal.title} · {getProposalStatusLabel(proposal.status)}</h5>
     <p className="surface-card__copy">Автор: {participantLabel(proposal.creator_user_id)}</p>
@@ -153,15 +153,4 @@ function ProposalCard({ proposal, detail, scope, participantLabel, voteChoice, o
 function toSummary(proposal: TripProposalResponse): TripProposalSummaryResponse {
   const { operations, ...summary } = proposal;
   return { ...summary, scopes: operations.map((operation) => operation.scope) };
-}
-
-function scopesOverlap(left: string, right: string): boolean {
-  if (left === right) return true;
-  if (left === 'itinerary:all') return right.startsWith('itinerary:day:') || right.startsWith('itinerary:event:');
-  if (right === 'itinerary:all') return left.startsWith('itinerary:day:') || left.startsWith('itinerary:event:');
-  const dayOf = (scope: string) => scope.startsWith('itinerary:day:') ? scope.slice('itinerary:day:'.length)
-    : scope.startsWith('itinerary:event:') ? scope.split(':')[2] : null;
-  const leftDay = dayOf(left);
-  const rightDay = dayOf(right);
-  return leftDay !== null && leftDay === rightDay && (left.startsWith('itinerary:event:') || right.startsWith('itinerary:event:'));
 }

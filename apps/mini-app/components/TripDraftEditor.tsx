@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ApiError, type BackendApiClient, type TripDetailResponse, type TripDraftAlternativeMetadataResponse, type TripDraftContent, type TripDraftResponse, type TripItineraryDayResponse, type TripProposalResponse, type TripProposalSummaryResponse } from '@/lib/backend-api-client';
 import { buildDraftContentForScope, formatProposalValue, getDraftScopeSnapshot, getInlineProposalTitle, validateTripDraftForProposal } from '@/lib/trip-inline-editing';
 import { TripProposalPanel } from '@/components/TripProposalPanel';
+import { proposalScopesOverlap } from '@/lib/trip-proposal-placement';
 
 type TripDraftEditorProps = Readonly<{
   token: string;
@@ -43,7 +44,7 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, trip, alte
       ...current.filter((proposalItem) => !incoming.some((item) => item.id === proposalItem.id))
     ]), []);
   const hasActiveProposal = (scope: string) => proposals.some((proposal) =>
-    (proposal.status === 'pending' || proposal.status === 'blocked') && proposal.scopes.some((proposalScope) => scopesOverlap(proposalScope, scope)));
+    (proposal.status === 'pending' || proposal.status === 'blocked') && proposal.scopes.some((proposalScope) => proposalScopesOverlap(proposalScope, scope)));
 
   const reload = async () => {
     setError(null);
@@ -505,18 +506,4 @@ function isProposalScopeBusy(error: ApiError): boolean {
   if (typeof error.body !== 'object' || error.body === null || !('detail' in error.body)) return false;
   const detail = error.body.detail;
   return typeof detail === 'object' && detail !== null && 'code' in detail && detail.code === 'proposal_scope_busy';
-}
-
-function scopesOverlap(left: string, right: string): boolean {
-  if (left === right) return true;
-  if (left === 'itinerary:all') return right.startsWith('itinerary:day:') || right.startsWith('itinerary:event:');
-  if (right === 'itinerary:all') return left.startsWith('itinerary:day:') || left.startsWith('itinerary:event:');
-  const getDayId = (scope: string) => scope.startsWith('itinerary:day:')
-    ? scope.slice('itinerary:day:'.length)
-    : scope.startsWith('itinerary:event:') ? scope.split(':')[2] : null;
-  const leftDayId = getDayId(left);
-  const rightDayId = getDayId(right);
-  return leftDayId !== null && leftDayId === rightDayId && (
-    left.startsWith('itinerary:event:') || right.startsWith('itinerary:event:')
-  );
 }
