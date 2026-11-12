@@ -1,16 +1,16 @@
 'use client';
 
-import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { ApiError, type BackendApiClient, type TripDraftAlternativeMetadataResponse, type TripDraftContent, type TripDraftResponse, type TripItineraryDayResponse, type TripProposalResponse, type TripProposalSummaryResponse } from '@/lib/backend-api-client';
-import { getInlineProposalTitle, validateTripDraftForProposal } from '@/lib/trip-inline-editing';
-import { getProposalStatusLabel } from '@/lib/trip-proposal-runtime';
+import { ApiError, type BackendApiClient, type TripDetailResponse, type TripDraftAlternativeMetadataResponse, type TripDraftContent, type TripDraftResponse, type TripItineraryDayResponse, type TripProposalResponse, type TripProposalSummaryResponse } from '@/lib/backend-api-client';
+import { buildDraftContentForScope, formatProposalValue, getDraftScopeSnapshot, getInlineProposalTitle, validateTripDraftForProposal } from '@/lib/trip-inline-editing';
 import { TripProposalPanel } from '@/components/TripProposalPanel';
 
 type TripDraftEditorProps = Readonly<{
   token: string;
   userId: string;
   draft: TripDraftResponse;
+  trip: TripDetailResponse;
   alternatives: readonly TripDraftAlternativeMetadataResponse[];
   confirmedDays: readonly TripItineraryDayResponse[];
   api: Pick<BackendApiClient, 'getTripDraft' | 'getTripDraftAlternative' | 'saveTripDraft' | 'saveTripDraftAlternative' | 'getTripProposals' | 'getTripProposal' | 'createTripProposal' | 'voteTripProposal' | 'cancelTripProposal'>;
@@ -18,9 +18,11 @@ type TripDraftEditorProps = Readonly<{
   onProposalAccepted: () => void;
 }>;
 
-export function TripDraftEditor({ token, userId, draft: initialDraft, alternatives: initialAlternatives, confirmedDays, api, authorLabel, onProposalAccepted }: TripDraftEditorProps) {
-  const [content, setContent] = useState<TripDraftContent>(initialDraft.content);
-  const [savedContent, setSavedContent] = useState<TripDraftContent>(initialDraft.content);
+export function TripDraftEditor({ token, userId, draft: initialDraft, trip, alternatives: initialAlternatives, confirmedDays, api, authorLabel, onProposalAccepted }: TripDraftEditorProps) {
+  const confirmedContent = useMemo(() => createConfirmedContent(trip, confirmedDays), [confirmedDays, trip]);
+  const initialContent = useMemo(() => mergeConfirmedContent(initialDraft.content, confirmedContent, initialDraft.version === 1), [confirmedContent, initialDraft.content, initialDraft.version]);
+  const [content, setContent] = useState<TripDraftContent>(initialContent);
+  const [savedContent, setSavedContent] = useState<TripDraftContent>(initialContent);
   const [version, setVersion] = useState(initialDraft.version);
   const [updatedBy, setUpdatedBy] = useState(initialDraft.updated_by_user_id);
   const [alternatives, setAlternatives] = useState<readonly TripDraftAlternativeMetadataResponse[]>(initialAlternatives);
@@ -33,7 +35,8 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
   const [openingAlternativeId, setOpeningAlternativeId] = useState<string | null>(null);
   const [proposals, setProposals] = useState<TripProposalSummaryResponse[]>([]);
   const [proposalReloadSignal, setProposalReloadSignal] = useState(0);
-  const pendingProposalRef = useRef<Readonly<{ scope: string; content: string; draftVersion: number; idempotencyKey: string }> | null>(null);
+  const pendingProposalRef = useRef<Readonly<{ scope: string; snapshot: string; draftVersion: number; idempotencyKey: string }> | null>(null);
+  const proposalInFlightRef = useRef(false);
   const hasUnsavedChanges = JSON.stringify(content) !== JSON.stringify(savedContent);
   const mergeProposalList = useCallback((incoming: TripProposalSummaryResponse[]) => setProposals((current) => [
       ...incoming,
@@ -42,35 +45,14 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
   const hasActiveProposal = (scope: string) => proposals.some((proposal) =>
     (proposal.status === 'pending' || proposal.status === 'blocked') && proposal.scopes.some((proposalScope) => scopesOverlap(proposalScope, scope)));
 
-  const save = async () => {
-    setIsSaving(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const saved = await api.saveTripDraft(token, initialDraft.trip_id, { base_version: version, content });
-      setContent(saved.content);
-      setSavedContent(saved.content);
-      setVersion(saved.version);
-      setUpdatedBy(saved.updated_by_user_id);
-      setHasConflict(false);
-      setSuccess('Черновик сохранён. Подтверждённая поездка не изменилась.');
-    } catch (saveError) {
-      setHasConflict(saveError instanceof ApiError && saveError.status === 409);
-      setError(saveError instanceof ApiError && saveError.status === 409
-        ? 'Черновик изменился у другого участника. Ваши правки сохранены на экране; загрузите актуальную версию, чтобы продолжить.'
-        : 'Не удалось сохранить черновик. Ваши правки сохранены на экране; попробуйте ещё раз.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const reload = async () => {
     setError(null);
     setSuccess(null);
     try {
       const latest = await api.getTripDraft(token, initialDraft.trip_id);
-      setContent(latest.draft.content);
-      setSavedContent(latest.draft.content);
+      const latestContent = mergeConfirmedContent(latest.draft.content, confirmedContent, latest.draft.version === 1);
+      setContent(latestContent);
+      setSavedContent(latestContent);
       setVersion(latest.draft.version);
       setUpdatedBy(latest.draft.updated_by_user_id);
       setAlternatives(latest.alternatives);
@@ -104,7 +86,7 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
     try {
       const snapshot = await api.getTripDraftAlternative(token, initialDraft.trip_id, alternative.id);
       setContent(snapshot.content);
-      setSuccess('Вариант загружен в редактор. Сохраните черновик, чтобы сделать его новой основной версией.');
+      setSuccess('Вариант загружен в план. Выберите раздел и предложите его участникам для согласования.');
     } catch {
       setError('Не удалось загрузить вариант. Текущие правки остались на экране.');
     } finally {
@@ -114,47 +96,68 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
 
   const updateContent = (patch: Partial<TripDraftContent>) => setContent((current) => ({ ...current, ...patch }));
 
+  useEffect(() => {
+    if (initialDraft.version <= version) return;
+    let isCurrent = true;
+    void Promise.resolve().then(() => {
+      if (!isCurrent) return;
+      if (hasUnsavedChanges) {
+        setHasConflict(true);
+        setError('Общий черновик обновился. Ваши локальные правки сохранены; загрузите актуальную версию после проверки.');
+        return;
+      }
+      const refreshedContent = mergeConfirmedContent(initialDraft.content, confirmedContent, initialDraft.version === 1);
+      setContent(refreshedContent);
+      setSavedContent(refreshedContent);
+      setVersion(initialDraft.version);
+      setUpdatedBy(initialDraft.updated_by_user_id);
+    });
+    return () => { isCurrent = false; };
+  }, [confirmedContent, hasUnsavedChanges, initialDraft, version]);
+
   const propose = async (scope: string, label?: string) => {
-    if (isSaving || isSavingAlternative || openingAlternativeId !== null) return;
+    if (proposalInFlightRef.current || isSaving || isSavingAlternative || openingAlternativeId !== null) return;
     if (hasActiveProposal(scope)) {
       setError('По этой области уже идёт голосование. Откройте предложение рядом с пунктом поездки.');
       return;
     }
+    proposalInFlightRef.current = true;
     setIsSaving(true);
     setError(null);
     setSuccess(null);
-    const validationIssues = validateTripDraftForProposal(content, scope);
+    const scopeSnapshot = JSON.stringify(getDraftScopeSnapshot(content, scope));
+    const proposalContent = buildDraftContentForScope(content, savedContent, scope);
+    const validationIssues = validateTripDraftForProposal(proposalContent, scope);
     if (validationIssues.length > 0) {
       setError(validationIssues.join(' '));
       setIsSaving(false);
+      proposalInFlightRef.current = false;
       return;
     }
 
-    const contentSnapshot = JSON.stringify(content);
     let retry = pendingProposalRef.current;
     let savedVersion = version;
-    if (retry?.scope === scope && retry.content === contentSnapshot) {
+    if (retry?.scope === scope && retry.snapshot === scopeSnapshot) {
       savedVersion = retry.draftVersion;
     } else {
       try {
-        const saved = await api.saveTripDraft(token, initialDraft.trip_id, { base_version: version, content });
+        const saved = await api.saveTripDraft(token, initialDraft.trip_id, { base_version: version, content: proposalContent });
         savedVersion = saved.version;
-        setContent(saved.content);
         setSavedContent(saved.content);
         setVersion(saved.version);
         setUpdatedBy(saved.updated_by_user_id);
         setHasConflict(false);
-        retry = { scope, content: JSON.stringify(saved.content), draftVersion: saved.version, idempotencyKey: crypto.randomUUID() };
+        retry = { scope, snapshot: scopeSnapshot, draftVersion: saved.version, idempotencyKey: crypto.randomUUID() };
         pendingProposalRef.current = retry;
       } catch (saveError) {
         let currentDraft: TripDraftResponse | null = null;
         try { currentDraft = (await api.getTripDraft(token, initialDraft.trip_id)).draft; } catch { /* Preserve the edit and report the original save failure. */ }
-        if (currentDraft !== null && JSON.stringify(currentDraft.content) === contentSnapshot) {
+        if (currentDraft !== null && JSON.stringify(currentDraft.content) === JSON.stringify(proposalContent)) {
           savedVersion = currentDraft.version;
           setSavedContent(currentDraft.content);
           setVersion(currentDraft.version);
           setUpdatedBy(currentDraft.updated_by_user_id);
-          retry = { scope, content: contentSnapshot, draftVersion: currentDraft.version, idempotencyKey: crypto.randomUUID() };
+          retry = { scope, snapshot: scopeSnapshot, draftVersion: currentDraft.version, idempotencyKey: crypto.randomUUID() };
           pendingProposalRef.current = retry;
         } else {
           setHasConflict(saveError instanceof ApiError && saveError.status === 409);
@@ -164,6 +167,7 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
               ? 'Черновик изменился у другого участника. Ваши правки сохранены на экране. Загрузите актуальную версию и повторите.'
               : 'Не удалось сохранить черновик. Проверьте сеть и повторите; предложение ещё не создано.');
           setIsSaving(false);
+          proposalInFlightRef.current = false;
           return;
         }
       }
@@ -172,6 +176,7 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
     if (retry === null) {
       setError('Не удалось подготовить предложение. Повторите действие.');
       setIsSaving(false);
+      proposalInFlightRef.current = false;
       return;
     }
     try {
@@ -212,6 +217,7 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
       }
     } finally {
       setIsSaving(false);
+      proposalInFlightRef.current = false;
     }
   };
 
@@ -231,17 +237,18 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
   }] });
 
   return (
+    <TripProposalPanel token={token} userId={userId} tripId={initialDraft.trip_id}
+      api={api} participantLabel={authorLabel} onAccepted={onProposalAccepted}
+      onProposalsChange={mergeProposalList} externallyKnownProposals={proposals} reloadSignal={proposalReloadSignal}>
+    {(renderProposalAtScope) => (
     <section className="trip-draft-editor" aria-labelledby="trip-draft-title">
       <header className="trip-draft-editor__header">
         <div>
           <p className="section-kicker">Рабочая версия поездки · версия {version}</p>
           <h3 id="trip-draft-title" className="trip-details__heading">План поездки</h3>
-          <p className="surface-card__copy">Правки сохраняются в рабочей версии. Участники увидят предложение и проголосуют перед обновлением согласованной поездки.</p>
+          <p className="surface-card__copy">Изменение сначала сохраняется в черновике и отправляется на голосование. Согласованная поездка обновится после единогласного принятия.</p>
           <p className="trip-draft-editor__byline">Последняя правка: {authorLabel(updatedBy)}</p>
         </div>
-        <button className="profile-button profile-button--primary" type="button" disabled={isSaving} onClick={() => void save()}>
-          {isSaving ? 'Сохраняем…' : 'Сохранить черновик'}
-        </button>
       </header>
 
       {error ? <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">{error}</p> : null}
@@ -249,7 +256,7 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
       {hasConflict ? <button className="profile-button profile-button--secondary" type="button" onClick={() => void reload()}>Загрузить актуальную версию</button> : null}
 
       <fieldset className="trip-draft-editor__fields" disabled={isSaving || isSavingAlternative || openingAlternativeId !== null}>
-      <DraftSection title="Маршрут и даты">
+      <DraftSection title="Маршрут и даты" open={hasActiveProposal('route') || hasActiveProposal('dates')} summary={`${sectionState('Маршрут', content.route_stops, confirmedContent.route_stops, trip.trip.destination_status)} · ${sectionState('Даты', [content.date_from, content.date_to], [confirmedContent.date_from, confirmedContent.date_to], trip.trip.dates_status)}`}>
         <div className="trip-draft-editor__grid">
           <DraftField label="Начало поездки" type="date" value={content.date_from ?? ''} onChange={(value) => updateContent({ date_from: value || null })} />
           <DraftField label="Окончание поездки" type="date" value={content.date_to ?? ''} onChange={(value) => updateContent({ date_to: value || null })} />
@@ -264,13 +271,13 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
           </div>
         ))}
         <button className="profile-button profile-button--secondary" type="button" onClick={addRouteStop}>Добавить место</button>
-        <ProposalLinks proposals={proposals} scope="route" />
+        {renderProposalAtScope('route')}
         <button className="profile-button profile-button--secondary" type="button" disabled={isSaving || hasActiveProposal('route')} onClick={() => void propose('route')}>{isSaving ? 'Отправляем…' : 'Предложить маршрут'}</button>
-        <ProposalLinks proposals={proposals} scope="dates" />
+        {renderProposalAtScope('dates')}
         <button className="profile-button profile-button--secondary" type="button" disabled={isSaving || hasActiveProposal('dates')} onClick={() => void propose('dates')}>Предложить даты</button>
       </DraftSection>
 
-      <DraftSection title="Бюджет">
+      <DraftSection title="Бюджет" open={hasActiveProposal('budget')} summary={sectionState('Бюджет', content.budget, confirmedContent.budget, trip.trip.budget_status)}>
         <div className="trip-draft-editor__grid">
           <DraftField label="От" type="number" value={content.budget.min ?? ''} onChange={(value) => updateContent({ budget: { ...content.budget, min: value || null } })} />
           <DraftField label="До" type="number" value={content.budget.max ?? ''} onChange={(value) => updateContent({ budget: { ...content.budget, max: value || null } })} />
@@ -282,11 +289,11 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
             </select>
           </label>
         </div>
-        <ProposalLinks proposals={proposals} scope="budget" />
+        {renderProposalAtScope('budget')}
         <button className="profile-button profile-button--secondary" type="button" disabled={isSaving || hasActiveProposal('budget')} onClick={() => void propose('budget')}>Предложить бюджет</button>
       </DraftSection>
 
-      <DraftSection title="Проживание">
+      <DraftSection title="Проживание" open={hasActiveProposal('accommodation')} summary={sectionState('Проживание', content.accommodations, confirmedContent.accommodations)}>
         {content.accommodations.map((stay, index) => (
           <div className="trip-draft-editor__item" key={stay.id}>
             <DraftField label={`Вариант ${index + 1}`} value={stay.name} onChange={(name) => updateContent({ accommodations: content.accommodations.map((item) => item.id === stay.id ? { ...item, name } : item) })} />
@@ -298,11 +305,11 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
           </div>
         ))}
         <button className="profile-button profile-button--secondary" type="button" onClick={addAccommodation}>Добавить проживание</button>
-        <ProposalLinks proposals={proposals} scope="accommodation" />
+        {renderProposalAtScope('accommodation')}
         <button className="profile-button profile-button--secondary" type="button" disabled={isSaving || hasActiveProposal('accommodation')} onClick={() => void propose('accommodation')}>Предложить проживание</button>
       </DraftSection>
 
-      <DraftSection title="Транспорт">
+      <DraftSection title="Транспорт" open={hasActiveProposal('transport')} summary={sectionState('Транспорт', content.transport, confirmedContent.transport, trip.trip.transport_status)}>
         {content.transport.map((leg, index) => (
           <div className="trip-draft-editor__item" key={leg.id}>
             <DraftField label={`Способ · перемещение ${index + 1}`} value={leg.mode} onChange={(mode) => updateContent({ transport: content.transport.map((item) => item.id === leg.id ? { ...item, mode } : item) })} />
@@ -315,22 +322,28 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
           </div>
         ))}
         <button className="profile-button profile-button--secondary" type="button" onClick={addTransport}>Добавить перемещение</button>
-        <ProposalLinks proposals={proposals} scope="transport" />
+        {renderProposalAtScope('transport')}
         <button className="profile-button profile-button--secondary" type="button" disabled={isSaving || hasActiveProposal('transport')} onClick={() => void propose('transport')}>Предложить транспорт</button>
       </DraftSection>
 
-      <DraftSection title="Программа по дням">
+      <DraftSection title="Программа по дням" open={hasActiveProposal('itinerary:all') || content.days.some((day) => hasActiveProposal(`itinerary:day:${day.id}`) || day.events.some((event) => hasActiveProposal(`itinerary:event:${day.id}:${event.id}`)))} summary={sectionState('Программа', content.days, confirmedContent.days)}>
+        {renderProposalAtScope('itinerary:all')}
+        <button className="profile-button profile-button--secondary" type="button" disabled={isSaving || hasActiveProposal('itinerary:all')} onClick={() => void propose('itinerary:all')}>Предложить программу целиком</button>
         {content.days.map((day, dayIndex) => (
-          <article className="trip-draft-editor__day" key={day.id}>
+          <details className="trip-draft-editor__day" key={day.id} open={hasActiveProposal(`itinerary:day:${day.id}`) || day.events.some((event) => hasActiveProposal(`itinerary:event:${day.id}:${event.id}`))}>
+            <summary>{day.date ?? `День ${dayIndex + 1}`}{day.title ? ` · ${day.title}` : ''} · {day.events.length} событий</summary>
+            <div className="trip-draft-editor__section-content">
             <div className="trip-draft-editor__grid">
               <DraftField label={`День ${dayIndex + 1}`} type="date" value={day.date ?? ''} onChange={(date) => updateContent({ days: content.days.map((item) => item.id === day.id ? { ...item, date: date || null } : item) })} />
               <DraftField label="Название дня" value={day.title ?? ''} onChange={(title) => updateContent({ days: content.days.map((item) => item.id === day.id ? { ...item, title: title || null } : item) })} />
             </div>
             <DraftField label="Заметка о дне" value={day.notes ?? ''} onChange={(notes) => updateContent({ days: content.days.map((item) => item.id === day.id ? { ...item, notes: notes || null } : item) })} />
-            <ProposalLinks proposals={proposals} scope={`itinerary:day:${day.id}`} />
+            {renderProposalAtScope(`itinerary:day:${day.id}`)}
             <button className="profile-button profile-button--secondary" type="button" disabled={isSaving || hasActiveProposal(`itinerary:day:${day.id}`)} onClick={() => void propose(`itinerary:day:${day.id}`, day.title ?? `дня ${dayIndex + 1}`)}>Предложить изменение дня</button>
             {day.events.map((event, eventIndex) => (
-              <div className="trip-draft-editor__item" key={event.id}>
+              <details className="trip-draft-editor__item" key={event.id} open={hasActiveProposal(`itinerary:event:${day.id}:${event.id}`)}>
+                <summary>{event.start_time ? `${event.start_time} · ` : ''}{event.title || `Событие ${eventIndex + 1}`}</summary>
+                <div className="trip-draft-editor__section-content">
                 <DraftField label={`Событие ${eventIndex + 1}`} value={event.title} onChange={(title) => updateDayEvent(day.id, event.id, { title })} />
                 <label className="trip-draft-editor__field">
                   <span>Тип</span>
@@ -344,28 +357,29 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
                 <DraftField label="Расход" type="number" value={event.estimated_cost ?? ''} onChange={(estimated_cost) => updateDayEvent(day.id, event.id, { estimated_cost: estimated_cost || null })} />
                 <DraftField label="Валюта расхода" value={event.currency ?? ''} onChange={(currency) => updateDayEvent(day.id, event.id, { currency: currency || null })} />
                 <DraftField label="Заметка к событию" value={event.notes ?? ''} onChange={(notes) => updateDayEvent(day.id, event.id, { notes: notes || null })} />
-                <ProposalLinks proposals={proposals} scope={`itinerary:event:${day.id}:${event.id}`} />
+                {renderProposalAtScope(`itinerary:event:${day.id}:${event.id}`)}
                 <button className="profile-button profile-button--secondary" type="button" disabled={isSaving || hasActiveProposal(`itinerary:event:${day.id}:${event.id}`) || !confirmedDays.some((confirmedDay) => confirmedDay.id === day.id)} onClick={() => void propose(`itinerary:event:${day.id}:${event.id}`, event.title || `события в дне ${dayIndex + 1}`)}>Предложить событие</button>
                 {!confirmedDays.some((confirmedDay) => confirmedDay.id === day.id) ? <p className="surface-card__copy">Сначала согласуйте день, чтобы предлагать изменение отдельного события.</p> : null}
                 <button className="navigation-link" type="button" onClick={() => updateContent({ days: content.days.map((item) => item.id === day.id ? { ...item, events: item.events.filter((part) => part.id !== event.id) } : item) })}>Удалить событие</button>
-              </div>
+                </div>
+              </details>
             ))}
             <div className="trip-draft-editor__actions">
               <button className="profile-button profile-button--secondary" type="button" onClick={() => updateContent({ days: content.days.map((item) => item.id === day.id ? { ...item, events: [...item.events, createEvent()] } : item) })}>Добавить событие</button>
               <button className="navigation-link" type="button" onClick={() => updateContent({ days: content.days.filter((item) => item.id !== day.id) })}>Удалить день</button>
             </div>
-          </article>
+            </div>
+          </details>
         ))}
         <button className="profile-button profile-button--secondary" type="button" onClick={addDay}>Добавить день</button>
       </DraftSection>
 
-      <DraftSection title="Общие заметки">
-        <label className="trip-draft-editor__field"><span>Заметки</span>
-          <textarea className="profile-input trip-draft-editor__textarea" value={content.notes} onChange={(event) => updateContent({ notes: event.target.value })} />
-        </label>
+      <DraftSection title="Общие заметки" summary={content.notes ? 'Черновые заметки' : 'Не указаны'}>
+        <p>{content.notes || 'Заметки пока не указаны.'}</p>
+        <p className="surface-card__copy">Общие заметки не входят в доступные области согласования.</p>
       </DraftSection>
 
-      <DraftSection title="Сохранённые альтернативы">
+      <DraftSection title="Сохранённые альтернативы" summary={`${alternatives.length} сохранено`}>
         <div className="trip-draft-editor__grid">
           <DraftField label="Название варианта" value={alternativeTitle} onChange={setAlternativeTitle} />
           <button className="profile-button profile-button--secondary" type="button" disabled={isSavingAlternative || !alternativeTitle.trim()} onClick={() => void saveAlternative()}>
@@ -383,10 +397,9 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, alternativ
         ))}
       </DraftSection>
       </fieldset>
-      <TripProposalPanel token={token} userId={userId} tripId={initialDraft.trip_id} draftVersion={version} confirmedDays={confirmedDays}
-        draftContent={content} savedContent={savedContent} api={api} participantLabel={authorLabel}
-        onAccepted={onProposalAccepted} enableCreate={false} onProposalsChange={mergeProposalList} reloadSignal={proposalReloadSignal} />
     </section>
+    )}
+    </TripProposalPanel>
   );
 
   function updateDayEvent(dayId: string, eventId: string, patch: Partial<TripDraftContent['days'][number]['events'][number]>) {
@@ -403,8 +416,69 @@ function createEvent(): TripDraftContent['days'][number]['events'][number] {
   };
 }
 
-function DraftSection({ title, children }: Readonly<{ title: string; children: ReactNode }>) {
-  return <section className="trip-draft-editor__section"><h4>{title}</h4>{children}</section>;
+function DraftSection({ title, summary, open = false, children }: Readonly<{ title: string; summary: string; open?: boolean; children: ReactNode }>) {
+  return <details className="trip-draft-editor__section" open={open}><summary><strong>{title}</strong><span>{summary}</span></summary><div className="trip-draft-editor__section-content">{children}</div></details>;
+}
+
+function sectionState(label: string, current: unknown, confirmed: unknown, status?: TripDetailResponse['trip']['destination_status']): string {
+  const currentValue = formatSectionValue(current);
+  const confirmedValue = formatSectionValue(confirmed);
+  const confirmation = status ? getConfirmationLabel(status) : JSON.stringify(current) === JSON.stringify(confirmed) ? 'Согласовано' : 'Не согласовано';
+  return JSON.stringify(current) === JSON.stringify(confirmed)
+    ? `${label}: ${confirmation} · ${confirmedValue}`
+    : `${label}: ${confirmation}: ${confirmedValue} · В черновике: ${currentValue}`;
+}
+
+function getConfirmationLabel(status: TripDetailResponse['trip']['destination_status']): string {
+  if (status === 'confirmed') return 'Согласовано';
+  if (status === 'pending_analysis') return 'Проверяется';
+  if (status === 'review_required') return 'Нужно пересмотреть';
+  return 'Не заполнено';
+}
+
+function formatSectionValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? formatProposalValue(value) : 'не указано';
+  }
+  if (typeof value === 'object' && value !== null) return formatProposalValue(value);
+  return value === null || value === '' ? 'не указано' : String(value);
+}
+
+function createConfirmedContent(trip: TripDetailResponse, days: readonly TripItineraryDayResponse[]): TripDraftContent {
+  return {
+    route_stops: trip.route_stops.map(({ id, place_label, country_code, place_ref, stay_from, stay_to, notes }) => ({ id, place_label, country_code, place_ref, stay_from, stay_to, notes })),
+    date_from: trip.trip.date_from,
+    date_to: trip.trip.date_to,
+    accommodations: trip.accommodations,
+    transport: trip.transport,
+    budget: { min: trip.trip.budget_min, max: trip.trip.budget_max, currency: trip.trip.budget_currency, scope: trip.trip.budget_scope },
+    days: days.map((day) => ({
+      id: day.id, date: day.day_date, title: day.title, notes: day.notes,
+      events: day.events.map(({ id, kind, title, start_time, duration_minutes, address, estimated_cost, currency, notes }) => ({
+        id, kind, title, start_time, duration_minutes, address, estimated_cost, currency, notes
+      }))
+    })),
+    notes: ''
+  };
+}
+
+function mergeConfirmedContent(draft: TripDraftContent, confirmed: TripDraftContent, allowInitialFallback: boolean): TripDraftContent {
+  if (!allowInitialFallback) return draft;
+  const hasDraftDates = draft.date_from !== null || draft.date_to !== null;
+  const days = [...draft.days];
+  for (const day of confirmed.days) {
+    if (!days.some((item) => item.id === day.id)) days.push(day);
+  }
+  return {
+    ...draft,
+    route_stops: draft.route_stops.length > 0 ? draft.route_stops : confirmed.route_stops,
+    date_from: hasDraftDates ? draft.date_from : confirmed.date_from,
+    date_to: hasDraftDates ? draft.date_to : confirmed.date_to,
+    accommodations: draft.accommodations.length > 0 ? draft.accommodations : confirmed.accommodations,
+    transport: draft.transport.length > 0 ? draft.transport : confirmed.transport,
+    budget: Object.values(draft.budget).some((value) => value !== null) ? draft.budget : confirmed.budget,
+    days
+  };
 }
 
 function DraftField({
@@ -431,17 +505,6 @@ function isProposalScopeBusy(error: ApiError): boolean {
   if (typeof error.body !== 'object' || error.body === null || !('detail' in error.body)) return false;
   const detail = error.body.detail;
   return typeof detail === 'object' && detail !== null && 'code' in detail && detail.code === 'proposal_scope_busy';
-}
-
-function ProposalLinks({ proposals, scope }: Readonly<{ proposals: readonly TripProposalSummaryResponse[]; scope: string }>) {
-  const matching = proposals.filter((proposal) =>
-    (proposal.status === 'pending' || proposal.status === 'blocked') && proposal.scopes.some((proposalScope) => scopesOverlap(proposalScope, scope)));
-  if (matching.length === 0) return null;
-  return <ul className="trip-inline-proposals" aria-label="Предложения по этому пункту">
-    {matching.map((proposal) => <li key={proposal.id}>
-      <a href={`#proposal-${proposal.id}`}>{proposal.title} · {getProposalStatusLabel(proposal.status)}</a>
-    </li>)}
-  </ul>;
 }
 
 function scopesOverlap(left: string, right: string): boolean {

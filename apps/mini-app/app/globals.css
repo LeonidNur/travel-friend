@@ -1065,7 +1065,6 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   margin: 0;
 }
 
-.trip-confirmed-itinerary__day,
 .trip-draft-editor__section,
 .trip-draft-editor__day {
   display: grid;
@@ -1074,6 +1073,53 @@ body[data-profile-edit-mode='true'] .app-content__frame {
   border: 1px solid rgba(165, 196, 255, 0.14);
   border-radius: 18px;
   background: rgba(11, 20, 34, 0.48);
+}
+
+.trip-draft-editor__section > summary,
+.trip-draft-editor__day > summary,
+.trip-draft-editor__item > summary,
+.trip-proposal-history > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  cursor: pointer;
+}
+
+.trip-draft-editor__section-content {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.trip-proposal-card,
+.trip-proposal-history {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(125, 211, 252, 0.26);
+  border-radius: 14px;
+  background: rgba(11, 20, 34, 0.72);
+}
+
+.trip-proposal-card h5,
+.trip-proposal-card p {
+  margin: 0;
+}
+
+.trip-proposal-card__diff {
+  display: grid;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(125, 211, 252, 0.5);
+}
+
+.trip-proposal-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
 }
 
 .trip-draft-editor {

@@ -6,15 +6,7 @@ import { use, useEffect, useState } from 'react';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import { ApiError, createBackendApiClient, type TripDetailResponse, type TripDraftDetailResponse, type TripItineraryResponse } from '@/lib/backend-api-client';
 import { TripDraftEditor } from '@/components/TripDraftEditor';
-import { formatRussianDate } from '@/lib/russian-date-format';
-import {
-  formatTripBudget,
-  formatTripDetailDates,
-  formatTripParticipants,
-  formatTripRouteStops,
-  getPersistedTripStatusLabel,
-  getTripDetailScreenState
-} from '@/lib/trip-detail-runtime';
+import { formatTripParticipants, getPersistedTripStatusLabel, getTripDetailScreenState } from '@/lib/trip-detail-runtime';
 
 interface TripDetailsPageProps {
   params: Promise<{
@@ -127,15 +119,7 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
     return <TripState title="Не удалось загрузить поездку" message={error} onRetry={handleRetry} />;
   }
 
-  const route = formatTripRouteStops(detail.route_stops);
   const participants = formatTripParticipants(detail.participants);
-  const dates = formatTripDetailDates(detail.trip.date_from, detail.trip.date_to);
-  const budget = formatTripBudget({
-    min: detail.trip.budget_min,
-    max: detail.trip.budget_max,
-    currency: detail.trip.budget_currency,
-    scope: detail.trip.budget_scope
-  });
 
   return (
     <section className="page">
@@ -144,7 +128,7 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
           ← Назад
         </Link>
         <p className="section-kicker">Поездка</p>
-        <h2 className="trip-details-header__title">{route ?? 'Маршрут пока не указан'}</h2>
+        <h2 className="trip-details-header__title">{getPersistedTripStatusLabel(detail.trip.status)}</h2>
         <div className="trip-details-header__meta">
           <p className="trip-details-header__participants">
             Участники: {participants.length > 0 ? participants.join(', ') : 'не указаны'}
@@ -153,45 +137,10 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
         </div>
       </article>
 
-      <section className="trip-details" aria-label="План поездки">
-        <TripDetailSection heading="Статус" value={getPersistedTripStatusLabel(detail.trip.status)} />
-        <TripDetailSection heading="Маршрут" value={route ?? 'Маршрут пока не указан'} status={detail.trip.destination_status} />
-        <TripDetailSection heading="Даты" value={dates ?? 'Даты пока не указаны'} status={detail.trip.dates_status} />
-        <TripDetailSection heading="Бюджет" value={budget ?? 'Бюджет пока не указан'} status={detail.trip.budget_status} />
-        {detail.accommodations.length > 0 ? <TripDetailSection
-          heading="Проживание"
-          value={detail.accommodations.map((item) => [item.name, item.location, item.date_from, item.date_to, item.notes].filter(Boolean).join(' · ')).join('; ')}
-        /> : null}
-        {detail.transport.length > 0 ? <TripDetailSection
-          heading="Транспорт"
-          value={detail.transport.map((item) => [item.mode, item.origin, item.destination, item.departure_at, item.arrival_at, item.notes].filter(Boolean).join(' · ')).join('; ')}
-          status={detail.trip.transport_status}
-        /> : null}
-      </section>
-
-      <section className="trip-confirmed-itinerary" aria-labelledby="confirmed-itinerary-title">
-        <h3 id="confirmed-itinerary-title">Согласованная программа по дням</h3>
-        {itineraryError ? <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">{itineraryError}</p> : null}
-        {itinerary === null && itineraryError === null ? <p className="surface-card__copy">Загружаем программу…</p> : null}
-        {itineraryError ? <button className="profile-button profile-button--secondary" type="button" onClick={() => setItineraryReloadKey((key) => key + 1)}>Повторить</button> : null}
-        {itinerary !== null && itinerary.days.length === 0 ? <p className="surface-card__copy">Подтверждённых дней пока нет. Их можно подготовить в рабочем черновике.</p> : null}
-        {itinerary?.days.map((day) => (
-          <article className="trip-confirmed-itinerary__day" key={day.id}>
-            <h4>{formatRussianDate(day.day_date)}{day.title ? ` · ${day.title}` : ''}</h4>
-            {day.notes ? <p>{day.notes}</p> : null}
-            {day.events.length === 0 ? <p className="surface-card__copy">Свободный день</p> : null}
-            {day.events.map((event) => (
-              <p className="trip-confirmed-itinerary__event" key={event.id}>
-                {event.start_time ? `${event.start_time.slice(0, 5)} · ` : ''}{event.title}
-                {event.duration_minutes ? ` · ${event.duration_minutes} мин.` : ''}
-                {event.address ? ` · ${event.address}` : ''}
-                {event.estimated_cost !== null ? ` · ${event.estimated_cost}${event.currency ? ` ${event.currency}` : ''}` : ''}
-                {event.notes ? ` — ${event.notes}` : ''}
-              </p>
-            ))}
-          </article>
-        ))}
-      </section>
+      {itineraryError ? <section className="trip-draft-editor" aria-label="Согласованная программа">
+        <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">{itineraryError}</p>
+        <button className="profile-button profile-button--secondary" type="button" onClick={() => setItineraryReloadKey((key) => key + 1)}>Повторить</button>
+      </section> : null}
 
       {draftError ? (
         <section className="trip-draft-editor" aria-label="Рабочий черновик">
@@ -206,10 +155,11 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
       ) : null}
       {draftDetail !== null && session !== null ? (
         <TripDraftEditor
-          key={`${draftDetail.draft.trip_id}:${draftDetail.draft.version}`}
+          key={draftDetail.draft.trip_id}
           token={session.accessToken}
           userId={session.userId}
           draft={draftDetail.draft}
+          trip={detail}
           alternatives={draftDetail.alternatives}
           confirmedDays={itinerary?.days ?? []}
           api={backendApiClient}
@@ -237,28 +187,4 @@ function TripState({ title, message, onRetry }: Readonly<{ title: string; messag
       </article>
     </section>
   );
-}
-
-type TripDetailStatus = 'empty' | 'confirmed' | 'review_required' | 'pending_analysis';
-
-function TripDetailSection({ heading, value, status }: Readonly<{ heading: string; value: string; status?: TripDetailStatus }>) {
-  return (
-    <article className="trip-details__section" data-status={status ? getDetailStatusClass(status) : undefined}>
-      <h3 className="trip-details__heading">{heading}</h3>
-      <p className="trip-details__summary">{value}</p>
-      {status ? <span className="trip-details__status">{getDetailStatusLabel(status)}</span> : null}
-    </article>
-  );
-}
-
-function getDetailStatusClass(status: TripDetailStatus): string {
-  if (status === 'review_required' || status === 'pending_analysis') return 'needs_decision';
-  return status;
-}
-
-function getDetailStatusLabel(status: TripDetailStatus): string {
-  if (status === 'confirmed') return 'Согласовано';
-  if (status === 'review_required') return 'Нужно пересмотреть';
-  if (status === 'pending_analysis') return 'Проверяем';
-  return 'Не заполнено';
 }
