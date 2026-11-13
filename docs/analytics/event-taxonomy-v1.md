@@ -1,6 +1,6 @@
 # Event taxonomy v1 (Pre-Beta)
 
-**Status:** review-fixed contract against develop at SHA beb29ef6fba32a2eee0ca69637fa00da40e44ed7 (2026-11-13). Exactly the approved 17 event names are MVP. Current code has no analytics capture. This document changes no code, API, schema, migration, or provider setting.
+**Status:** review-fixed contract against develop at SHA beb29ef6fba32a2eee0ca69637fa00da40e44ed7 (2026-11-13). Exactly the approved 17 event names are MVP. A disabled typed adapter/staging foundation exists, with no business-flow capture call sites or provider SDK.
 
 ## Shared contract
 
@@ -12,8 +12,8 @@
 | Event ID | Stable valid PostHog event UUID per fact/view/action. BE UUIDv5 from event name + immutable fact ID (registration uses created user ID); FE creates one UUID per navigation/action lifecycle and retains it for delivery retries. Never place it in ordinary properties. |
 | Repeat/dedupe | Source guards first: one per visible lifecycle, inserted fact, Draft version, immutable vote, or real transition. Same retry reuses UUID and timestamp. First chat message intentionally emits both first-message and all-message events with distinct names/UUIDs. PostHog deduplication is eventual, not strict ([event docs](https://posthog.com/docs/data/events), [JS UUID](https://posthog.com/docs/libraries/js/reference)). |
 | Properties/privacy | Strict allowlist only; reject unknown properties. P0 = closed enum/boolean/bucket. P1 = restricted pseudonymous person/entity reference. Never serialize models, rows, props, error bodies, URLs, or DOM. |
-| Consent | Same user-scoped, versioned, server-verifiable consent state gates FE and BE. Granted permits the allowlisted event; denied/unknown/missing/expired/revoked means no capture. Consent never gates the product flow. Current shared capability is missing; until approved and implemented, collection is disabled. |
-| Commit | Stage BE facts and enqueue only after the outer database transaction commits. No event on rollback, commit failure, validation failure, or 409/422, except FE-owned trip_proposal_conflict after receiving the specific structured scope conflict. |
+| Consent | Same user-scoped, versioned, server-verifiable consent state must gate FE and BE. Granted permits the allowlisted event; denied/unknown/missing/expired/revoked means no capture. Consent never gates the product flow. The policy and shared capability are separate rollout gates; current collection is disabled and no consent UI/state was added. |
+| Commit | BE staging is request-local and enqueue is attempted only after the outer database transaction commits. No event on rollback, commit failure, validation failure, or 409/422, except FE-owned trip_proposal_conflict after receiving the specific structured scope conflict. No event call sites are connected yet. |
 
 Common safe properties, only when applicable: app_surface=telegram_mini_app; environment=development|staging|production; release_channel=prebeta|beta; non-user-specific app version; chat_type=direct|group. Entity refs trip_ref, proposal_ref, chat_ref, match_ref, candidate_ref are SHA-256 of canonical UUID with a fixed domain prefix. They remain linkable pseudonyms (P1); never send raw entity IDs or counterpart IDs.
 
@@ -56,7 +56,7 @@ Never send message text, destinations/routes/dates/budgets, Draft JSON, accommod
 | Shared consent and revocation | **Temporarily unavailable** | Current code has no shared server-verifiable consent state. Until approved capability/receipt exists, disable all capture. Missing consent never blocks the flow. |
 | Live PostHog calculation validation | **Temporarily unavailable** | No project is provisioned. HogQL below is a documented specification only, not live-tested. |
 
-No gaps are implemented in this docs-only change. No API, DB, migration, runtime, business-flow, or PostHog setting changes are authorized here.
+Capability gaps remain as listed above. Current foundation adds no API, DB, migration, consent state/UI, business-flow call sites, provider SDK/configuration, or PostHog setting.
 
 ## Future-only catalog
 

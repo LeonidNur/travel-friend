@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
+from travel_friend_backend.analytics import AnalyticsDeliveryQueue
 from travel_friend_backend.auth.telegram import TelegramInitDataVerifier
 from travel_friend_backend.config import BackendSettings, get_backend_settings
 from travel_friend_backend.auth.service import (
@@ -39,6 +40,7 @@ def create_app(settings: BackendSettings | None = None) -> FastAPI:
     app.add_middleware(RequestBodyLimitMiddleware)
     app.add_middleware(RequestCorrelationMiddleware)
     app.state.backend_settings = backend_settings
+    app.state.analytics_delivery_queue = AnalyticsDeliveryQueue()
     app.state.rate_limiter = FixedWindowRateLimiter()
     app.state.telegram_init_data_verifier = TelegramInitDataVerifier(
         bot_token=backend_settings.telegram_bot_token,
