@@ -1,0 +1,14 @@
+[server]
+address = "127.0.0.1"
+port = 8501
+headless = true
+showEmailPrompt = false
+maxUploadSize = 1
+maxMessageSize = 2
+enableCORS = true
+enableXsrfProtection = true
+enableStaticServing = false
+
+[browser]
+serverAddress = "127.0.0.1"
+gatherUsageStats = false
