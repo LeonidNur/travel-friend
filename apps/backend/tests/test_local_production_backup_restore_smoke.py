@@ -123,6 +123,7 @@ def test_validate_archive_accepts_current_production_migration_and_function_base
     ] == [
         "20261109120000_trip_itinerary_shared_draft.sql",
         "20261109130000_trip_proposals_voting_atomic_apply.sql",
+        "20261113171636_analytics_reporting_views.sql",
     ]
 
 

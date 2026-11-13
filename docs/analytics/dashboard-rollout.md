@@ -2,6 +2,8 @@
 
 **Status:** planning only. No PostHog project, collection, dashboard, credentials, or production setting was created or changed in the reporting audit.
 
+The proposed aggregate-only PostgreSQL live-query source, output contract, local verification, and manual setup gates are documented in [dashboard-source.md](dashboard-source.md). Its migration is not applied to production and no PostHog source is connected.
+
 ## Proposed team-only dashboards
 
 | Dashboard | Intended metrics | Source and caveats |

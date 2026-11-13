@@ -109,10 +109,11 @@ def test_manifest_migrations_match_repository_baseline_and_pending_suffix(tmp_pa
     applied, pending = smoke.validate_repository_migration_sequence(manifest)
 
     assert len(applied) == 26
-    assert len(pending) == 2
+    assert len(pending) == 3
     assert [path.name for path in pending] == [
         "20261109120000_trip_itinerary_shared_draft.sql",
         "20261109130000_trip_proposals_voting_atomic_apply.sql",
+        "20261113171636_analytics_reporting_views.sql",
     ]
 
 
