@@ -1,6 +1,6 @@
 # Product metrics v1 (Pre-Beta)
 
-**Status:** review-fixed contract based on `develop` at `beb29ef6fba32a2eee0ca69637fa00da40e44ed7` (2026-11-13). Design only: no SDK, events, PostHog project, runtime setting, schema, migration, or dashboard is created here.
+**Status:** review-fixed event and metric contract based on `develop` at `beb29ef6fba32a2eee0ca69637fa00da40e44ed7` (2026-11-13). A disabled typed adapter/staging foundation exists; no SDK, credentials, live event call sites, PostHog project, schema, migration, or dashboard is enabled.
 
 Event ownership, properties, consent gating and source gaps are specified in [event-taxonomy-v1.md](event-taxonomy-v1.md); future rollout and test sequence are in [implementation-plan.md](implementation-plan.md).
 
@@ -9,16 +9,16 @@ Event ownership, properties, consent gating and source gaps are specified in [ev
 - PostHog is the product analytics UI/query surface. FastAPI/Supabase remain the source of business facts. FE emits explicit UX events only; BE emits committed business facts only.
 - Manual capture only. Autocapture, automatic pageviews, exception autocapture, feature-flag polling and session replay are off. There is no event warehouse and no application DB sync.
 - Analytics is best-effort and non-blocking. SDK absence/failure, denied or unknown consent, queue saturation, network failure, or disabled configuration cannot change screens, API results, business transactions, or user-facing errors.
-- `ANALYTICS_ENABLED` is absent/false by default. No project, plan, credentials, or runtime setting is created in this stage.
+- Collection is disabled in the application. There is no provider SDK, provider configuration, credential, or runtime enable switch in this slice.
 - Product metrics are calculated on the consented/observable population only. Do not extrapolate to users who declined consent.
 
 ## Identity, consent, privacy, and time
 
 **Identity.** For authenticated events, use the backend `users.id` UUID as `distinct_id` on FE and BE; it is a restricted pseudonymous identifier. Do not send Telegram IDs, names, usernames, contact details, auth/session tokens, or person properties. `app_opened` may use the SDK's anonymous distinct ID if the person has consented before authentication; link it after login to the same stable backend ID. Never identify or merge a session before consent.
 
-**One FE/BE consent rule.** The same versioned user choice governs both SDK capture and backend publication: `granted` permits the allowlisted events, `denied` and `unknown` suppress all events. Consent is never required to use the Mini App: decline, skip, or missing consent state continues the normal product flow with analytics off. No capture before approval of the policy and its wording. The FE must not initialize PostHog or queue events before grant. The BE must fail closed and stage no event unless the same active grant is present for the authenticated actor (and for every recipient when a fact is attributed to multiple participants). Revocation prevents new captures; queued events must be discarded when revocation becomes known.
+**Consent is a separate rollout gate.** The same versioned user choice must govern FE capture and BE publication: only `granted` can permit the allowlist; denied, unknown, absent, expired or revoked suppresses all events. Consent is never required to use the Mini App: missing consent continues the normal flow with analytics off. The policy, shared server-verifiable state, and revocation handling are not implemented; until approved and implemented, both sides remain disabled. The FE adapter requires an explicit granted state; the BE staging foundation has no provider sender configured.
 
-To observe `user_registered`, the consent choice must be available before `/auth/telegram` creates the account. Decline/skip still proceeds with authentication and registration; that user's registration event is suppressed. Do not backfill it if consent is granted later.
+Registration-time consent is a separate gate: to observe `user_registered`, a future approved consent choice must be available before `/auth/telegram` creates the account. Decline/skip still proceeds with authentication and registration; that user's registration event is suppressed. Do not backfill it if consent is granted later. No consent UI or auth behavior is added in this slice.
 
 Current code has no shared consent capability. Before any PostHog collection, approve and implement a server-verifiable, revocable consent receipt/state usable by both FE and BE. A client-only local flag is insufficient for BE publication and participant fan-out. Missing/invalid/expired consent means no capture, never an API error. This is a release gate, not a blocker to the user's flow.
 
@@ -67,7 +67,7 @@ The PostHog project timezone must be UTC. Event source guarantees “accepted + 
 
 | Metric | Definition and window | PostHog calculation / denominator |
 |---|---|---|
-| DAU | Unique people with at least one action above on one UTC calendar date `[00:00, next 00:00)`. | Trends: combine the listed events with OR and select Unique users; UTC timezone. Denominator: none; this is a count. |
+| DAU | Unique people with at least one action above on one UTC calendar date `[00:00, next 00:00)`. Attribute the event to the person who performed the action; a multi-party fact counts only for each independently consenting actor/recipient explicitly attributed by its source rule. | Trends: combine the listed events with OR and select Unique users; UTC timezone. Denominator: none; this is a count. |
 | WAU | Unique people with at least one action in the rolling 7×24-hour interval `[as_of − 7 days, as_of)`. | HogQL unique `distinct_id` across the action set with `timestamp >= now() - INTERVAL 7 DAY AND timestamp < now()`. Not a Monday–Sunday week. Denominator: none. |
 | MAU | Unique people with at least one action in the rolling 30×24-hour interval `[as_of − 30 days, as_of)`. | Same query shape with `INTERVAL 30 DAY`. Not a calendar month. Denominator: none. |
 
@@ -133,8 +133,8 @@ Future dashboards: **AI** and **Financials / LTV** only after separate event, so
 
 - FE uses manual `capture()` without awaiting network delivery. Disable interaction autocapture and automatic pageview/pageleave separately, and disable session replay. PostHog documents that these are separate controls ([autocapture](https://posthog.com/docs/product-analytics/autocapture), [JS reference](https://posthog.com/docs/libraries/js/reference), [session replay](https://posthog.com/docs/session-replay/installation)).
 - BE stages allowlisted facts inside the request but publishes to a bounded in-process queue only after the outer authenticated transaction commits. No network call, flush, or retry is awaited by a business handler or transaction. PostHog's Python SDK queues `capture()` asynchronously, but process exit can lose buffered events ([Python SDK](https://posthog.com/docs/libraries/python)).
-- Proposed bounds: queue ≤1,000 events per process; one retry with bounded jitter; ≤500 ms network timeout per attempt; drop when full or retry exhausted. No outbox or DB write. Queue failure and shutdown loss are accepted analytics loss, never business failure.
-- Acceptance targets for future implementation: 0 ms intentional PostHog wait on user/API paths, capture/enqueue p95 <1 ms, FE event payload p95 ≤1 KiB, and no measurable API latency regression. These are target limits, not measured claims. Track only payload-free counters for queued/dropped/disabled/failed/retried.
+- The backend foundation has a bounded in-process queue (default capacity 1,000), nonblocking enqueue, and no worker unless a sender is explicitly provided. The app provides no sender. There is no retry or network timeout configured in this slice. No outbox or DB write; queue/process loss is acceptable analytics loss, never business failure.
+- Before any enablement, run real staging performance checks: 0 ms intentional analytics wait on user/API paths, enqueue p95 <1 ms, FE event payload p95 ≤1 KiB, and no measurable API latency regression. These are acceptance targets, not measured results. No performance claim is made by unit tests.
 - Use app project ingestion tokens only through approved provider configuration; no PostHog credentials or settings in Git. The FE token is a public write-only project token; BE token is server-side. No personal API key in the app.
 
 ## Review gates and references
