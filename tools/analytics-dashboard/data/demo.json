@@ -1,0 +1,2953 @@
+{
+  "schema_version": 1,
+  "source_label": "DEMO",
+  "generated_at_utc": "2026-11-13T17:52:06Z",
+  "metrics": [
+    {
+      "period_type": "day",
+      "period_start": "2026-09-15",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-15",
+      "metric": "messages_all",
+      "value": 35
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-15",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-15",
+      "metric": "messages_user",
+      "value": 29
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-15",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-15",
+      "metric": "proposals_accepted_applied",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-15",
+      "metric": "proposals_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-15",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-16",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-16",
+      "metric": "messages_all",
+      "value": 15
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-16",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-16",
+      "metric": "messages_user",
+      "value": 12
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-16",
+      "metric": "new_users",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-16",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-16",
+      "metric": "proposals_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-16",
+      "metric": "trips_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-17",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-17",
+      "metric": "messages_all",
+      "value": 31
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-17",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-17",
+      "metric": "messages_user",
+      "value": 25
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-17",
+      "metric": "new_users",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-17",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-17",
+      "metric": "proposals_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-17",
+      "metric": "trips_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-18",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-18",
+      "metric": "messages_all",
+      "value": 31
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-18",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-18",
+      "metric": "messages_user",
+      "value": 25
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-18",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-18",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-18",
+      "metric": "proposals_created",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-18",
+      "metric": "trips_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-19",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-19",
+      "metric": "messages_all",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-19",
+      "metric": "messages_system",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-19",
+      "metric": "messages_user",
+      "value": 30
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-19",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-19",
+      "metric": "proposals_accepted_applied",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-19",
+      "metric": "proposals_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-19",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-20",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-20",
+      "metric": "messages_all",
+      "value": 16
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-20",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-20",
+      "metric": "messages_user",
+      "value": 13
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-20",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-20",
+      "metric": "proposals_accepted_applied",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-20",
+      "metric": "proposals_created",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-20",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-21",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-21",
+      "metric": "messages_all",
+      "value": 45
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-21",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-21",
+      "metric": "messages_user",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-21",
+      "metric": "new_users",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-21",
+      "metric": "proposals_accepted_applied",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-21",
+      "metric": "proposals_created",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-21",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-22",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-22",
+      "metric": "messages_all",
+      "value": 46
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-22",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-22",
+      "metric": "messages_user",
+      "value": 38
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-22",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-22",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-22",
+      "metric": "proposals_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-22",
+      "metric": "trips_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-23",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-23",
+      "metric": "messages_all",
+      "value": 22
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-23",
+      "metric": "messages_system",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-23",
+      "metric": "messages_user",
+      "value": 18
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-23",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-23",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-23",
+      "metric": "proposals_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-23",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-24",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-24",
+      "metric": "messages_all",
+      "value": 16
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-24",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-24",
+      "metric": "messages_user",
+      "value": 13
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-24",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-24",
+      "metric": "proposals_accepted_applied",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-24",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-24",
+      "metric": "trips_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-25",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-25",
+      "metric": "messages_all",
+      "value": 27
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-25",
+      "metric": "messages_system",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-25",
+      "metric": "messages_user",
+      "value": 22
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-25",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-25",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-25",
+      "metric": "proposals_created",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-25",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-26",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-26",
+      "metric": "messages_all",
+      "value": 17
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-26",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-26",
+      "metric": "messages_user",
+      "value": 14
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-26",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-26",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-26",
+      "metric": "proposals_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-26",
+      "metric": "trips_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-27",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-27",
+      "metric": "messages_all",
+      "value": 16
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-27",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-27",
+      "metric": "messages_user",
+      "value": 13
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-27",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-27",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-27",
+      "metric": "proposals_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-27",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-28",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-28",
+      "metric": "messages_all",
+      "value": 12
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-28",
+      "metric": "messages_system",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-28",
+      "metric": "messages_user",
+      "value": 10
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-28",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-28",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-28",
+      "metric": "proposals_created",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-28",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-29",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-29",
+      "metric": "messages_all",
+      "value": 45
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-29",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-29",
+      "metric": "messages_user",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-29",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-29",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-29",
+      "metric": "proposals_created",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-29",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-30",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-30",
+      "metric": "messages_all",
+      "value": 46
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-30",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-30",
+      "metric": "messages_user",
+      "value": 38
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-30",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-30",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-30",
+      "metric": "proposals_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-09-30",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-01",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-01",
+      "metric": "messages_all",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-01",
+      "metric": "messages_system",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-01",
+      "metric": "messages_user",
+      "value": 30
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-01",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-01",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-01",
+      "metric": "proposals_created",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-01",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-02",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-02",
+      "metric": "messages_all",
+      "value": 31
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-02",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-02",
+      "metric": "messages_user",
+      "value": 25
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-02",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-02",
+      "metric": "proposals_accepted_applied",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-02",
+      "metric": "proposals_created",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-02",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-03",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-03",
+      "metric": "messages_all",
+      "value": 45
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-03",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-03",
+      "metric": "messages_user",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-03",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-03",
+      "metric": "proposals_accepted_applied",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-03",
+      "metric": "proposals_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-03",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-04",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-04",
+      "metric": "messages_all",
+      "value": 16
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-04",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-04",
+      "metric": "messages_user",
+      "value": 13
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-04",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-04",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-04",
+      "metric": "proposals_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-04",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-05",
+      "metric": "matches_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-05",
+      "metric": "messages_all",
+      "value": 38
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-05",
+      "metric": "messages_system",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-05",
+      "metric": "messages_user",
+      "value": 31
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-05",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-05",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-05",
+      "metric": "proposals_created",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-05",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-06",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-06",
+      "metric": "messages_all",
+      "value": 27
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-06",
+      "metric": "messages_system",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-06",
+      "metric": "messages_user",
+      "value": 22
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-06",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-06",
+      "metric": "proposals_accepted_applied",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-06",
+      "metric": "proposals_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-06",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-07",
+      "metric": "matches_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-07",
+      "metric": "messages_all",
+      "value": 30
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-07",
+      "metric": "messages_system",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-07",
+      "metric": "messages_user",
+      "value": 25
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-07",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-07",
+      "metric": "proposals_accepted_applied",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-07",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-07",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-08",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-08",
+      "metric": "messages_all",
+      "value": 45
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-08",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-08",
+      "metric": "messages_user",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-08",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-08",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-08",
+      "metric": "proposals_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-08",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-09",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-09",
+      "metric": "messages_all",
+      "value": 47
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-09",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-09",
+      "metric": "messages_user",
+      "value": 39
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-09",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-09",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-09",
+      "metric": "proposals_created",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-09",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-10",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-10",
+      "metric": "messages_all",
+      "value": 18
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-10",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-10",
+      "metric": "messages_user",
+      "value": 15
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-10",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-10",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-10",
+      "metric": "proposals_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-10",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-11",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-11",
+      "metric": "messages_all",
+      "value": 19
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-11",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-11",
+      "metric": "messages_user",
+      "value": 16
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-11",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-11",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-11",
+      "metric": "proposals_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-11",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-12",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-12",
+      "metric": "messages_all",
+      "value": 43
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-12",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-12",
+      "metric": "messages_user",
+      "value": 35
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-12",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-12",
+      "metric": "proposals_accepted_applied",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-12",
+      "metric": "proposals_created",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-12",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-13",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-13",
+      "metric": "messages_all",
+      "value": 21
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-13",
+      "metric": "messages_system",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-13",
+      "metric": "messages_user",
+      "value": 17
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-13",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-13",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-13",
+      "metric": "proposals_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-13",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-14",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-14",
+      "metric": "messages_all",
+      "value": 47
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-14",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-14",
+      "metric": "messages_user",
+      "value": 39
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-14",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-14",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-14",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-14",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-15",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-15",
+      "metric": "messages_all",
+      "value": 12
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-15",
+      "metric": "messages_system",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-15",
+      "metric": "messages_user",
+      "value": 10
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-15",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-15",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-15",
+      "metric": "proposals_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-15",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-16",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-16",
+      "metric": "messages_all",
+      "value": 26
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-16",
+      "metric": "messages_system",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-16",
+      "metric": "messages_user",
+      "value": 21
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-16",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-16",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-16",
+      "metric": "proposals_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-16",
+      "metric": "trips_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-17",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-17",
+      "metric": "messages_all",
+      "value": 28
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-17",
+      "metric": "messages_system",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-17",
+      "metric": "messages_user",
+      "value": 23
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-17",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-17",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-17",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-17",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-18",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-18",
+      "metric": "messages_all",
+      "value": 43
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-18",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-18",
+      "metric": "messages_user",
+      "value": 35
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-18",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-18",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-18",
+      "metric": "proposals_created",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-18",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-19",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-19",
+      "metric": "messages_all",
+      "value": 30
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-19",
+      "metric": "messages_system",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-19",
+      "metric": "messages_user",
+      "value": 25
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-19",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-19",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-19",
+      "metric": "proposals_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-19",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-20",
+      "metric": "matches_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-20",
+      "metric": "messages_all",
+      "value": 18
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-20",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-20",
+      "metric": "messages_user",
+      "value": 15
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-20",
+      "metric": "new_users",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-20",
+      "metric": "proposals_accepted_applied",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-20",
+      "metric": "proposals_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-20",
+      "metric": "trips_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-21",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-21",
+      "metric": "messages_all",
+      "value": 13
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-21",
+      "metric": "messages_system",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-21",
+      "metric": "messages_user",
+      "value": 11
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-21",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-21",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-21",
+      "metric": "proposals_created",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-21",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-22",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-22",
+      "metric": "messages_all",
+      "value": 23
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-22",
+      "metric": "messages_system",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-22",
+      "metric": "messages_user",
+      "value": 19
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-22",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-22",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-22",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-22",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-23",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-23",
+      "metric": "messages_all",
+      "value": 20
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-23",
+      "metric": "messages_system",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-23",
+      "metric": "messages_user",
+      "value": 16
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-23",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-23",
+      "metric": "proposals_accepted_applied",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-23",
+      "metric": "proposals_created",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-23",
+      "metric": "trips_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-24",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-24",
+      "metric": "messages_all",
+      "value": 12
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-24",
+      "metric": "messages_system",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-24",
+      "metric": "messages_user",
+      "value": 10
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-24",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-24",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-24",
+      "metric": "proposals_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-24",
+      "metric": "trips_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-25",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-25",
+      "metric": "messages_all",
+      "value": 15
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-25",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-25",
+      "metric": "messages_user",
+      "value": 12
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-25",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-25",
+      "metric": "proposals_accepted_applied",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-25",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-25",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-26",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-26",
+      "metric": "messages_all",
+      "value": 48
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-26",
+      "metric": "messages_system",
+      "value": 9
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-26",
+      "metric": "messages_user",
+      "value": 39
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-26",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-26",
+      "metric": "proposals_accepted_applied",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-26",
+      "metric": "proposals_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-26",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-27",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-27",
+      "metric": "messages_all",
+      "value": 34
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-27",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-27",
+      "metric": "messages_user",
+      "value": 28
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-27",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-27",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-27",
+      "metric": "proposals_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-27",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-28",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-28",
+      "metric": "messages_all",
+      "value": 32
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-28",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-28",
+      "metric": "messages_user",
+      "value": 26
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-28",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-28",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-28",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-28",
+      "metric": "trips_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-29",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-29",
+      "metric": "messages_all",
+      "value": 18
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-29",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-29",
+      "metric": "messages_user",
+      "value": 15
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-29",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-29",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-29",
+      "metric": "proposals_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-29",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-30",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-30",
+      "metric": "messages_all",
+      "value": 39
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-30",
+      "metric": "messages_system",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-30",
+      "metric": "messages_user",
+      "value": 32
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-30",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-30",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-30",
+      "metric": "proposals_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-30",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-31",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-31",
+      "metric": "messages_all",
+      "value": 46
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-31",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-31",
+      "metric": "messages_user",
+      "value": 38
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-31",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-31",
+      "metric": "proposals_accepted_applied",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-31",
+      "metric": "proposals_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-10-31",
+      "metric": "trips_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-01",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-01",
+      "metric": "messages_all",
+      "value": 45
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-01",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-01",
+      "metric": "messages_user",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-01",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-01",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-01",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-01",
+      "metric": "trips_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-02",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-02",
+      "metric": "messages_all",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-02",
+      "metric": "messages_system",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-02",
+      "metric": "messages_user",
+      "value": 30
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-02",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-02",
+      "metric": "proposals_accepted_applied",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-02",
+      "metric": "proposals_created",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-02",
+      "metric": "trips_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-03",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-03",
+      "metric": "messages_all",
+      "value": 46
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-03",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-03",
+      "metric": "messages_user",
+      "value": 38
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-03",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-03",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-03",
+      "metric": "proposals_created",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-03",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-04",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-04",
+      "metric": "messages_all",
+      "value": 34
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-04",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-04",
+      "metric": "messages_user",
+      "value": 28
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-04",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-04",
+      "metric": "proposals_accepted_applied",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-04",
+      "metric": "proposals_created",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-04",
+      "metric": "trips_created",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-05",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-05",
+      "metric": "messages_all",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-05",
+      "metric": "messages_system",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-05",
+      "metric": "messages_user",
+      "value": 30
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-05",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-05",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-05",
+      "metric": "proposals_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-05",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-06",
+      "metric": "matches_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-06",
+      "metric": "messages_all",
+      "value": 48
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-06",
+      "metric": "messages_system",
+      "value": 9
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-06",
+      "metric": "messages_user",
+      "value": 39
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-06",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-06",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-06",
+      "metric": "proposals_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-06",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-07",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-07",
+      "metric": "messages_all",
+      "value": 24
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-07",
+      "metric": "messages_system",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-07",
+      "metric": "messages_user",
+      "value": 20
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-07",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-07",
+      "metric": "proposals_accepted_applied",
+      "value": 0
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-07",
+      "metric": "proposals_created",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-07",
+      "metric": "trips_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-08",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-08",
+      "metric": "messages_all",
+      "value": 31
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-08",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-08",
+      "metric": "messages_user",
+      "value": 25
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-08",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-08",
+      "metric": "proposals_accepted_applied",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-08",
+      "metric": "proposals_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-08",
+      "metric": "trips_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-09",
+      "metric": "matches_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-09",
+      "metric": "messages_all",
+      "value": 41
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-09",
+      "metric": "messages_system",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-09",
+      "metric": "messages_user",
+      "value": 34
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-09",
+      "metric": "new_users",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-09",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-09",
+      "metric": "proposals_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-09",
+      "metric": "trips_created",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-10",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-10",
+      "metric": "messages_all",
+      "value": 17
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-10",
+      "metric": "messages_system",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-10",
+      "metric": "messages_user",
+      "value": 14
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-10",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-10",
+      "metric": "proposals_accepted_applied",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-10",
+      "metric": "proposals_created",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-10",
+      "metric": "trips_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-11",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-11",
+      "metric": "messages_all",
+      "value": 33
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-11",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-11",
+      "metric": "messages_user",
+      "value": 27
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-11",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-11",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-11",
+      "metric": "proposals_created",
+      "value": 5
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-11",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-12",
+      "metric": "matches_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-12",
+      "metric": "messages_all",
+      "value": 34
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-12",
+      "metric": "messages_system",
+      "value": 6
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-12",
+      "metric": "messages_user",
+      "value": 28
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-12",
+      "metric": "new_users",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-12",
+      "metric": "proposals_accepted_applied",
+      "value": 4
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-12",
+      "metric": "proposals_created",
+      "value": 3
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-12",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-13",
+      "metric": "matches_created",
+      "value": 1
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-13",
+      "metric": "messages_all",
+      "value": 45
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-13",
+      "metric": "messages_system",
+      "value": 8
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-13",
+      "metric": "messages_user",
+      "value": 37
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-13",
+      "metric": "new_users",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-13",
+      "metric": "proposals_accepted_applied",
+      "value": 2
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-13",
+      "metric": "proposals_created",
+      "value": 7
+    },
+    {
+      "period_type": "day",
+      "period_start": "2026-11-13",
+      "metric": "trips_created",
+      "value": 2
+    },
+    {
+      "period_type": "snapshot",
+      "period_start": "2026-11-13",
+      "metric": "registered_accounts_ever",
+      "value": 1409
+    },
+    {
+      "period_type": "snapshot",
+      "period_start": "2026-11-13",
+      "metric": "registered_accounts_not_deleted",
+      "value": 1386
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-09-14",
+      "metric": "wcat",
+      "value": 3
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-09-21",
+      "metric": "wcat",
+      "value": 0
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-09-28",
+      "metric": "wcat",
+      "value": 1
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-10-05",
+      "metric": "wcat",
+      "value": 0
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-10-12",
+      "metric": "wcat",
+      "value": 1
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-10-19",
+      "metric": "wcat",
+      "value": 1
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-10-26",
+      "metric": "wcat",
+      "value": 1
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-11-02",
+      "metric": "wcat",
+      "value": 1
+    },
+    {
+      "period_type": "week",
+      "period_start": "2026-11-09",
+      "metric": "wcat",
+      "value": 3
+    }
+  ]
+}

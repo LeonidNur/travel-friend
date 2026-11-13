@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.env
+*.py[cod]
+data/exports/
+travel-friend-report-*.csv
+travel-friend-report-*.json

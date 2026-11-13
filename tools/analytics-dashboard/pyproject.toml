@@ -1,0 +1,17 @@
+[project]
+name = "travel-friend-analytics-dashboard"
+version = "0.1.0"
+description = "Local aggregate-only Travel Friend analytics dashboard"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit==1.66.0",
+    "plotly==7.1.0",
+    "psycopg[binary]==3.3.9",
+]
+
+[dependency-groups]
+dev = ["pytest==8.4.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
