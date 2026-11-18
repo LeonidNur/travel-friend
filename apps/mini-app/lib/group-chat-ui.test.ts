@@ -16,7 +16,7 @@ test('group selection validates, preserves selection on error and retries', asyn
   function Harness() {
     const [selected, setSelected] = useState<string[]>([]); const [error, setError] = useState<string | null>(null); const [retry, setRetry] = useState(false);
     const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const validation = validateGroupChatCompanionIds(selected); if (validation) { setError(validation); return; } attempts += 1; setError('Ошибка сети'); setRetry(true); };
-    return createElement(GroupChatForm, { companions: [{ user_id: '1', display_name: 'Анна' }, { user_id: '2', display_name: 'Иван' }], selectedIds: selected, title: '', error, isCreating: false, canRetry: retry, onTitleChange: () => undefined, onToggle: (id: string) => setSelected((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]), onSubmit: submit, onBack: () => undefined });
+    return createElement(GroupChatForm, { companions: [{ user_id: '1', display_name: 'Анна', age: 24, city: 'Казань' }, { user_id: '2', display_name: 'Иван', age: null, city: null }], selectedIds: selected, title: '', error, isCreating: false, canRetry: retry, onTitleChange: () => undefined, onToggle: (id: string) => setSelected((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]), onSubmit: submit, onBack: () => undefined });
   }
   try {
     await act(async () => root.render(createElement(Harness)));

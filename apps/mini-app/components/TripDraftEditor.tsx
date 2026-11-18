@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { ApiError, type BackendApiClient, type TripDetailResponse, type TripDraftAlternativeMetadataResponse, type TripDraftContent, type TripDraftResponse, type TripItineraryDayResponse, type TripProposalResponse, type TripProposalSummaryResponse } from '@/lib/backend-api-client';
 import { buildDraftContentForScope, formatProposalValue, getDraftScopeSnapshot, getInlineProposalTitle, validateTripDraftForProposal } from '@/lib/trip-inline-editing';
@@ -64,6 +64,12 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, trip, alte
   const pendingProposals = useRef(new Map<string, Readonly<{ snapshot: string; draftVersion: number; idempotencyKey: string }>>());
   const proposalInFlightRef = useRef(false);
   const hasUnsavedChanges = JSON.stringify(content) !== JSON.stringify(savedContent);
+  const budgetIssue = scope === 'budget' ? validateTripDraftForProposal(content, 'budget')[0] : undefined;
+  const budgetConflict = scope === 'budget' && hasConflict && !confirmedItineraryNotice;
+  const requestDraftReload = () => {
+    if (hasUnsavedChanges) setConfirmReload(true);
+    else void reload();
+  };
   const mergeProposalList = useCallback((incoming: TripProposalSummaryResponse[]) => setProposals((current) => [
       ...incoming,
       ...current.filter((proposalItem) => !incoming.some((item) => item.id === proposalItem.id))
@@ -295,7 +301,8 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, trip, alte
       <section className="trip-draft-editor trip-workspace-editor">
         <h1>История предложений</h1>
         {proposalHistory}
-        <button className="profile-button profile-button--secondary" type="button" onClick={navigation.back}>Назад</button>
+        <button className="profile-button profile-button--secondary" type="button" onClick={navigation.back}>Свернуть историю</button>
+        <button className="profile-button profile-button--secondary" type="button" onClick={() => navigation.navigate({ screen: 'program' })}>К программе</button>
       </section>
     ) : sentProposal && navigation?.view.screen === 'edit' ? (
       <section className="trip-draft-editor trip-workspace-editor">
@@ -351,7 +358,7 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, trip, alte
         </div>
       </header>}
 
-      {error ? <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">{error}</p> : null}
+      {error && scope !== 'budget' ? <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">{error}</p> : null}
       {success ? <p role="status" className="trip-draft-editor__message">{success}</p> : null}
       {confirmedItineraryNotice ? <article className="trip-draft-editor__section">
         <p role={confirmedItineraryNotice.failed ? 'alert' : 'status'}>{confirmedItineraryNotice.failed ?
@@ -359,17 +366,14 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, trip, alte
         {confirmedItineraryNotice.failed && confirmedItineraryNotice.onRetry ?
           <button className="profile-button profile-button--secondary" type="button" onClick={confirmedItineraryNotice.onRetry}>Повторить загрузку программы</button> : null}
       </article> : null}
-      {hasConflict && confirmReload && !confirmedItineraryNotice ? <article className="trip-draft-editor__section">
+      {hasConflict && confirmReload && !confirmedItineraryNotice && !budgetConflict ? <article className="trip-draft-editor__section">
         <h2>Заменить локальные правки?</h2>
         <p>При успешной загрузке актуальная версия заменит несохранённые поля.</p>
         <button className="profile-button profile-button--primary" type="button" onClick={() => void reload()}>Загрузить и заменить</button>
         <button className="profile-button profile-button--secondary" type="button" onClick={() => setConfirmReload(false)}>Оставить текущие правки</button>
       </article> : null}
-      {hasConflict && !confirmReload && !confirmedItineraryNotice ? <button className="profile-button profile-button--secondary" type="button" disabled={isReloading} onClick={() => {
-        if (hasUnsavedChanges) setConfirmReload(true);
-        else void reload();
-      }}>{isReloading ? 'Загружаем актуальную версию…' : 'Загрузить актуальную версию'}</button> : null}
-      {isSaving ? <p role="status" className="trip-draft-editor__byline">Отправляем предложение…</p> : null}
+      {hasConflict && !confirmReload && !confirmedItineraryNotice && !budgetConflict ? <button className="profile-button profile-button--secondary" type="button" disabled={isReloading} onClick={requestDraftReload}>{isReloading ? 'Загружаем актуальную версию…' : 'Загрузить актуальную версию'}</button> : null}
+      {isSaving && scope !== 'budget' ? <p role="status" className="trip-draft-editor__byline">Отправляем предложение…</p> : null}
 
       {alternativeError === 'open' && (!navigation || navigation.view.screen === 'alternatives') ?
         <p role="alert" className="trip-draft-editor__message trip-draft-editor__message--error">Не удалось загрузить вариант. Текущие правки остались на экране.</p> : null}
@@ -407,20 +411,35 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, trip, alte
         </> : null}
       </DraftSection>
 
-      <DraftSection title="Бюджет" navigation={navigation} scope="budget" open={hasActiveProposal('budget')} summary={sectionState('Бюджет', content.budget, confirmedContent.budget, trip.trip.budget_status)}>
+      <DraftSection title="Бюджет"
+        editHeading={budgetConflict ? 'Черновик обновился' : budgetIssue ? 'Проверьте бюджет' : undefined}
+        navigation={navigation} scope="budget" open={hasActiveProposal('budget')} summary={sectionState('Бюджет', content.budget, confirmedContent.budget, trip.trip.budget_status)}>
         <div className="trip-workspace-editor__rows">
-          <DraftField label="От" type="number" value={content.budget.min ?? ''} onChange={(value) => updateContent({ budget: { ...content.budget, min: value || null } })} />
-          <DraftField label="До" type="number" value={content.budget.max ?? ''} onChange={(value) => updateContent({ budget: { ...content.budget, max: value || null } })} />
-          <DraftField label="Валюта" value={content.budget.currency ?? ''} onChange={(value) => updateContent({ budget: { ...content.budget, currency: value || null } })} />
+          <DraftField label="От" error={budgetIssue ? 'Проверьте значение.' : undefined} type="number" value={content.budget.min ?? ''} onChange={(value) => updateContent({ budget: { ...content.budget, min: value || null } })} />
+          <DraftField label="До" error={budgetIssue ? 'Проверьте значение.' : undefined} type="number" value={content.budget.max ?? ''} onChange={(value) => updateContent({ budget: { ...content.budget, max: value || null } })} />
+          <DraftField label="Валюта" placeholder="Не указана" value={content.budget.currency ?? ''} onChange={(value) => updateContent({ budget: { ...content.budget, currency: value || null } })} />
           <label className="trip-draft-editor__field">
             <span>Бюджет</span>
             <select className="profile-input" value={content.budget.scope ?? ''} onChange={(event) => updateContent({ budget: { ...content.budget, scope: event.target.value === '' ? null : event.target.value as 'per_person' | 'group_total' } })}>
-              <option value="">Не указано</option><option value="per_person">На человека</option><option value="group_total">На группу</option>
+              <option value="">Не указан</option><option value="per_person">На человека</option><option value="group_total">На группу</option>
             </select>
           </label>
         </div>
         {renderProposalAtScope('budget')}
-        <button className="profile-button profile-button--primary" type="button" disabled={isSaving || hasActiveProposal('budget')} onClick={() => void propose('budget')}>{isSaving ? 'Отправляем…' : 'Предложить бюджет'}</button>
+        {scope === 'budget' && (budgetIssue || error) ? <p role="alert" className="trip-draft-editor__byline">{budgetIssue ?? error}</p> : null}
+        <button className="profile-button profile-button--primary" type="button" disabled={isSaving || hasActiveProposal('budget') || Boolean(budgetIssue) || budgetConflict} onClick={() => void propose('budget')}>{isSaving ? 'Отправляем…' : 'Предложить бюджет'}</button>
+
+        {budgetConflict ? <>
+          {confirmReload ? <p>Актуальная версия заменит несохранённые поля после успешной загрузки.</p> : null}
+          <button className="profile-button profile-button--secondary" type="button"
+            onClick={confirmReload ? () => void reload() : requestDraftReload}>
+            {confirmReload ? 'Загрузить и заменить' : 'Загрузить актуальную версию'}
+          </button>
+          <button className="profile-button profile-button--secondary" type="button" onClick={() => {
+            if (confirmReload) setConfirmReload(false);
+            else { setHasConflict(false); setError(null); }
+          }}>{confirmReload ? 'Оставить текущие правки' : 'Остаться и проверить правки'}</button>
+        </> : null}
       </DraftSection>
 
       <DraftSection title="Проживание" navigation={navigation} scope="accommodation" open={hasActiveProposal('accommodation')} summary={sectionState('Проживание', content.accommodations, confirmedContent.accommodations)}>
@@ -544,6 +563,8 @@ export function TripDraftEditor({ token, userId, draft: initialDraft, trip, alte
         {['route', 'dates', 'accommodation', 'transport'].map((target) => <button key={target}
           className="profile-button profile-button--secondary" type="button"
           onClick={() => navigation.navigate({ screen: 'edit', scope: target })}>{scopeTitle(target)}</button>)}
+        <button className="profile-button profile-button--secondary" type="button" onClick={() => navigation.navigate({ screen: 'alternatives' })}>Сохранённые варианты</button>
+        <button className="trip-workspace-editor__day-link" type="button" onClick={() => navigation.navigate({ screen: 'draft' })}>Все разделы черновика</button>
       </nav> : null}
     </section>
     )}
@@ -706,9 +727,17 @@ function DraftField({
   label,
   value,
   onChange,
-  type = 'text'
-}: Readonly<{ label: string; value: string; onChange: (value: string) => void; type?: 'date' | 'datetime-local' | 'number' | 'text' | 'time' }>) {
-  return <label className="trip-draft-editor__field"><span>{label}</span><input className="profile-input" type={type} value={value} placeholder={type === 'text' || type === 'number' ? 'Не указано' : undefined} onChange={(event) => onChange(event.target.value)} /></label>;
+  type = 'text',
+  error,
+  placeholder = type === 'text' || type === 'number' ? 'Не указано' : undefined
+}: Readonly<{ label: string; value: string; onChange: (value: string) => void; type?: 'date' | 'datetime-local' | 'number' | 'text' | 'time'; error?: string; placeholder?: string }>) {
+  const errorId = useId();
+  const field = <label className="trip-draft-editor__field">
+    <span>{label}</span><input className="profile-input" type={type} value={value} placeholder={placeholder}
+      aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined}
+      onChange={(event) => onChange(event.target.value)} />
+  </label>;
+  return error ? <div className="form-field-with-error">{field}<p id={errorId} className="profile-field-error">{error}</p></div> : field;
 }
 
 function toLocalDateTimeInput(value: string | null): string {

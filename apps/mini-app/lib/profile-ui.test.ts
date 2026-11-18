@@ -30,7 +30,7 @@ test('profile edit validates, preserves draft on failure, and returns to saved v
     const destination = container.querySelector<HTMLInputElement>('input[aria-invalid]') ?? [...container.querySelectorAll<HTMLInputElement>('input')].find((input) => input.value === 'Алтай');
     assert.ok(destination);
     await act(async () => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(destination), 'value')?.set?.call(destination, 'Байкал'); destination.dispatchEvent(new dom.window.Event('input', { bubbles: true })); });
-    await act(async () => button('Изменить профиль').click());
+    await act(async () => button('Редактировать').click());
     assert.ok(container.querySelector('.profile-design__view[hidden]'));
     await setName(''); await act(async () => button('Сохранить').click());
     assert.equal(calls, 0); assert.ok(container.querySelector('input[aria-invalid="true"]'));
@@ -42,7 +42,7 @@ test('profile edit validates, preserves draft on failure, and returns to saved v
     fail = false; await act(async () => button('Сохранить').click());
     assert.equal(calls, 2); assert.equal((saved as ProfileResponse | null)?.display_name, 'Марина');
     assert.match(container.textContent ?? '', /Профиль сохранён/);
-    assert.ok(button('Изменить профиль'));
+    assert.ok(button('Редактировать'));
     assert.equal(destination.value, 'Байкал');
   } finally {
     await act(async () => root.unmount()); dom.window.close();

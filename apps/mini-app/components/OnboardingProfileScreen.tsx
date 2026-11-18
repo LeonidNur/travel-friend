@@ -75,7 +75,8 @@ export function OnboardingProfileForm({
   onProfileSaved,
   onOnboardingStarted,
   onBack,
-  onContinue
+  onContinue,
+  previewState
 }: Readonly<{
   profile: ProfileResponse | null;
   step: Exclude<OnboardingVisualStep, 'first_trip'>;
@@ -85,12 +86,14 @@ export function OnboardingProfileForm({
   onOnboardingStarted: () => void;
   onBack: () => void;
   onContinue: () => void;
+  previewState?: 'validation' | 'saving' | 'saved' | 'error';
 }>) {
   const [draft, setDraft] = useState<OnboardingProfileDraft>(() => createOnboardingProfileDraft(profile));
-  const [validationErrors, setValidationErrors] = useState<OnboardingProfileValidationErrors>({});
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<OnboardingProfileValidationErrors>(previewState === 'validation' && step === 'profile' ? { displayName: 'Укажите имя' } : {});
+  const [apiError, setApiError] = useState<string | null>(previewState === 'error' ? 'Проверьте подключение и повторите попытку.' : null);
+  const [styleError, setStyleError] = useState(previewState === 'validation' && step === 'travel_style');
+  const [isSaving, setIsSaving] = useState(previewState === 'saving');
+  const [isSaved, setIsSaved] = useState(previewState === 'saved');
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const displayNameInputRef = useRef<HTMLInputElement>(null);
   const birthDateInputRef = useRef<HTMLInputElement>(null);
@@ -123,6 +126,12 @@ export function OnboardingProfileForm({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (step === 'travel_style' && draft.travelStyle.length === 0) {
+      setStyleError(true);
+      setApiError(null);
+      return;
+    }
 
     if (token === null || onboardingStatus === null) {
       setApiError('Сессия недоступна. Откройте приложение ещё раз.');
@@ -188,43 +197,51 @@ export function OnboardingProfileForm({
               message={step === 'profile'
                 ? 'Через секунду откроется выбор стиля поездки.'
                 : 'Через секунду откроется план первой поездки.'}
-            />
+            ><button type="button" className="profile-button profile-button--primary" disabled>Сохранено</button></OnboardingStatusPanel>
           ) : null}
+          {apiError ? <OnboardingStatusPanel tone="error"
+            title={step === 'profile' ? 'Не удалось сохранить профиль' : 'Не удалось сохранить стиль поездки'} message={apiError} /> : null}
+          {styleError ?
+            <OnboardingStatusPanel tone="error" title="Выберите стиль поездки" message="Нужен хотя бы один вариант, чтобы продолжить." /> : null}
           {step === 'profile' ? (
             <>
               <section className="onboarding-section">
                 <h2 className="surface-card__title">Основная информация</h2>
                 <div className="profile-form__section">
-                  <label className="profile-form__field">
-                    <span className="profile-form__label">Имя *</span>
-                    <input
-                      ref={displayNameInputRef}
-                      className="profile-input"
-                      type="text"
-                      value={draft.displayName}
-                      onChange={handleTextChange('displayName')}
-                      placeholder="Введите имя"
-                      disabled={isSaving || isSaved}
-                      aria-invalid={validationErrors.displayName ? 'true' : undefined}
-                      aria-describedby={validationErrors.displayName ? 'onboarding-name-error' : undefined}
-                    />
+                  <div className="onboarding-field">
+                    <label className="profile-form__field">
+                      <span className="profile-form__label">Имя *</span>
+                      <input
+                        ref={displayNameInputRef}
+                        className="profile-input"
+                        type="text"
+                        value={draft.displayName}
+                        onChange={handleTextChange('displayName')}
+                        placeholder="Введите имя"
+                        disabled={isSaving || isSaved}
+                        aria-invalid={validationErrors.displayName ? 'true' : undefined}
+                        aria-describedby={validationErrors.displayName ? 'onboarding-name-error' : undefined}
+                      />
+                    </label>
                     {validationErrors.displayName ? <FieldError id="onboarding-name-error" message={validationErrors.displayName} /> : null}
-                  </label>
+                  </div>
 
-                  <label className="profile-form__field">
-                    <span className="profile-form__label">Дата рождения</span>
-                    <input
-                      ref={birthDateInputRef}
-                      className="profile-input"
-                      type="date"
-                      value={draft.birthDate}
-                      onChange={handleTextChange('birthDate')}
-                      disabled={isSaving || isSaved}
-                      aria-invalid={validationErrors.birthDate ? 'true' : undefined}
-                      aria-describedby={validationErrors.birthDate ? 'onboarding-birth-date-error' : undefined}
-                    />
+                  <div className="onboarding-field">
+                    <label className="profile-form__field">
+                      <span className="profile-form__label">Дата рождения</span>
+                      <input
+                        ref={birthDateInputRef}
+                        className="profile-input"
+                        type="date"
+                        value={draft.birthDate}
+                        onChange={handleTextChange('birthDate')}
+                        disabled={isSaving || isSaved}
+                        aria-invalid={validationErrors.birthDate ? 'true' : undefined}
+                        aria-describedby={validationErrors.birthDate ? 'onboarding-birth-date-error' : undefined}
+                      />
+                    </label>
                     {validationErrors.birthDate ? <FieldError id="onboarding-birth-date-error" message={validationErrors.birthDate} /> : null}
-                  </label>
+                  </div>
 
                   <label className="profile-form__field">
                     <span className="profile-form__label">Город</span>
@@ -256,23 +273,20 @@ export function OnboardingProfileForm({
                 options={TRAVEL_STYLE_OPTIONS}
                 selectedValues={draft.travelStyle}
                   disabled={isSaving || isSaved}
-                onToggle={(value) => updateDraft({ ...draft, travelStyle: toggleMultiValue(draft.travelStyle, value) })}
+                onToggle={(value) => {
+                  setStyleError(false);
+                  updateDraft({ ...draft, travelStyle: toggleMultiValue(draft.travelStyle, value) });
+                }}
               />
             </section>
           )}
 
-          {apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}
-
-          <div className="profile-actions">
-            {step === 'travel_style' ? (
-              <button type="button" className="profile-button profile-button--secondary" onClick={onBack} disabled={isSaving || isSaved}>
-                Назад
-              </button>
-            ) : null}
-            <button type="submit" className="profile-button profile-button--primary" disabled={isSaving || isSaved}>
-              {isSaving ? 'Сохранение…' : isSaved ? 'Сохранено' : 'Сохранить'}
+          {!isSaved ? <div className="profile-actions">
+            <button type="submit" className="profile-button profile-button--primary" disabled={isSaving}>
+              {isSaving ? 'Сохранение…' : 'Сохранить'}
             </button>
-          </div>
+            {step === 'travel_style' ? <button type="button" className="onboarding-card__back" onClick={onBack} disabled={isSaving}>Назад</button> : null}
+          </div> : null}
         </form>
       </section>
     </main>

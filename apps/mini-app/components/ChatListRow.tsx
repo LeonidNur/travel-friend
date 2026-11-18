@@ -9,7 +9,7 @@ export function ChatListRow({ chat, currentUserId }: Readonly<{ chat: ChatRespon
     <div className="chat-card__avatar" aria-hidden="true">{chat.type === 'group' ? chat.participant_count : getAvatarInitials(chat.companion.display_name)}</div>
     <div className="chat-card__content"><div className="chat-card__header"><div className="chat-card__identity"><p className="chat-card__name">{name}</p></div></div>
       <div className="chat-card__secondary"><p className="chat-card__last-message">{chat.last_message === null ? 'Сообщений пока нет' : `${chat.last_message.sender_user_id === currentUserId ? 'Вы: ' : ''}${chat.last_message.content_text ?? 'Системное сообщение'}`}</p>
-        <div className="chat-card__preview"><span className="chat-card__preview-time">{chat.last_message === null ? '' : formatChatListTimestamp(chat.last_message.created_at)}</span>{chat.unread_count > 0 ? <span className="chat-card__unread" aria-label={`Непрочитанных сообщений: ${chat.unread_count}`}>{chat.unread_count}</span> : null}</div>
+        <div className="chat-card__preview"><span className="chat-card__preview-time">{chat.last_message === null ? '' : formatChatListTimestamp(chat.last_message.created_at)}</span>{chat.unread_count > 0 ? <span className="chat-card__unread" aria-label={`Непрочитанных сообщений: ${chat.unread_count}`}>{chat.last_message ? ' · ' : ''}{chat.unread_count} {chat.unread_count % 10 === 1 && chat.unread_count % 100 !== 11 ? 'новое' : 'новых'}</span> : null}</div>
       </div>
     </div>
   </Link>;

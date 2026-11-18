@@ -19,13 +19,13 @@ export function ChipSelector<T extends string>({
         return (
           <button
             type="button"
-            className={`chip chip-button${isSelected ? ' chip-button--selected' : ''}`}
+            className="selectable-chip"
             key={option}
             aria-pressed={isSelected}
             disabled={disabled}
             onClick={() => onToggle(option)}
           >
-            {option}
+            <span className={`chip chip-button${isSelected ? ' chip-button--selected' : ''}`}>{option}</span>
           </button>
         );
       })}
@@ -41,7 +41,8 @@ export function LevelSelector<TLevel extends number>({
   onChange,
   disabled = false,
   iconSrc,
-  rangeLabels
+  rangeLabels,
+  compactScale = false
 }: Readonly<{
   legend: string;
   name: string;
@@ -51,16 +52,17 @@ export function LevelSelector<TLevel extends number>({
   disabled?: boolean;
   iconSrc?: string;
   rangeLabels?: readonly [string, string];
+  compactScale?: boolean;
 }>) {
   return (
-    <fieldset className="profile-form__fieldset" data-icon-selector={iconSrc ? 'true' : undefined}>
-      <legend className="profile-form__label">{legend}</legend>
+    <fieldset className="profile-form__fieldset" data-icon-selector={iconSrc ? 'true' : undefined} data-compact-scale={compactScale || undefined}>
+      <legend className={compactScale ? "sr-only" : "profile-form__label"}>{legend}</legend>
       <div className="level-grid">
         {options.map((option) => {
           const checked = option.level === value;
 
           return (
-            <label className={`level-card${checked ? ' level-card--selected' : ''}`} key={option.level}>
+            <label className={`level-card${checked ? ' level-card--selected' : ''}`} key={option.level} data-filled={compactScale ? value === null || option.level <= value : undefined}>
               <input
                 className="sr-only"
                 type="radio"

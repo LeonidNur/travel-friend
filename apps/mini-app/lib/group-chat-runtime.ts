@@ -1,14 +1,11 @@
 import type { ChatResponse } from './backend-api-client';
 
-export type GroupChatCompanion = Readonly<{
-  user_id: string;
-  display_name: string;
-}>;
+export type GroupChatCompanion = Extract<ChatResponse, { type: 'direct' }>['companion'];
 
 export function getAvailableGroupChatCompanions(chats: readonly ChatResponse[]): GroupChatCompanion[] {
   return chats.flatMap((chat) =>
     chat.type === 'direct'
-      ? [{ user_id: chat.companion.user_id, display_name: chat.companion.display_name }]
+      ? [chat.companion]
       : []
   );
 }

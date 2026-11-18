@@ -712,3 +712,26 @@ test('initial programme failure protects the draft until it can seed confirmed d
     await ui.cleanup();
   }
 });
+
+test('scoped budget keeps invalid values visible and prevents sending until corrected', async () => {
+  let attempts = 0;
+  const ui = await mountEditor(createApi({
+    saveTripDraft: async () => { attempts++; throw new Error('Unexpected request'); }
+  }), undefined, draft, [], trip, true);
+  try {
+    await act(async () => button(ui.container, 'Редактировать · бюджет').click());
+    await changeInput(ui.container, 'От', '30000');
+    await changeInput(ui.container, 'До', '25000');
+    assert.equal(ui.container.querySelectorAll('input[aria-invalid="true"]').length, 2);
+    assert.equal(fieldValue(ui.container, 'От'), '30000');
+    assert.equal(fieldValue(ui.container, 'До'), '25000');
+    assert.ok(button(ui.container, 'Предложить бюджет').disabled);
+    await act(async () => button(ui.container, 'Предложить бюджет').click());
+    assert.equal(attempts, 0);
+    await changeInput(ui.container, 'До', '35000');
+    assert.equal(ui.container.querySelectorAll('input[aria-invalid="true"]').length, 0);
+    assert.equal(button(ui.container, 'Предложить бюджет').disabled, false);
+  } finally {
+    await ui.cleanup();
+  }
+});

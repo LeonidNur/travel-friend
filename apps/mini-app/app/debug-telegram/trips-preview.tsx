@@ -3,6 +3,7 @@
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { TripsList } from '@/components/TripsList';
 import { TripWorkspace, type TripView } from '@/components/TripWorkspace';
+import { ApiError } from '@/lib/backend-api-client';
 import type { TripDraftEditorProps } from '@/components/TripDraftEditor';
 import type {
   TripDetailResponse, TripDraftContent, TripItineraryDayResponse,
@@ -14,6 +15,10 @@ export const tripsPreviewOptions = [
   ['trips-empty', 'Поездки: пусто'], ['trips-error', 'Поездки: ошибка'],
   ['trips-overview', 'Поездка: обзор'], ['trips-program', 'Поездка: программа'],
   ['trips-draft', 'Черновик: разделы'], ['trips-budget', 'Черновик: бюджет'],
+  ['trips-budget-validation', 'Черновик: проверка бюджета'], ['trips-budget-conflict', 'Черновик: конфликт версий'],
+  ['trips-budget-saving', 'Черновик: отправка'], ['trips-budget-error', 'Черновик: ошибка сети'],
+  ['trips-vote-conflict', 'Голосование: конфликт'], ['trips-vote-saved', 'Голосование: голос сохранён'],
+  ['trips-vote-history', 'Голосование: история'],
   ['trips-route', 'Черновик: маршрут'], ['trips-day', 'Черновик: день'],
   ['trips-event', 'Черновик: событие'], ['trips-dates', 'Черновик: даты'],
   ['trips-accommodation', 'Черновик: проживание'], ['trips-transport', 'Черновик: транспорт'],
@@ -103,6 +108,11 @@ const views: Record<string, TripView> = {
   'trips-overview': { screen: 'overview' }, 'trips-program': { screen: 'program' },
   'trips-draft': { screen: 'draft' }, 'trips-alternatives': { screen: 'alternatives' },
   'trips-budget': { screen: 'edit', scope: 'budget' }, 'trips-route': { screen: 'edit', scope: 'route' },
+  'trips-budget-validation': { screen: 'edit', scope: 'budget' },
+  'trips-budget-conflict': { screen: 'edit', scope: 'budget' },
+  'trips-budget-saving': { screen: 'edit', scope: 'budget' },
+  'trips-budget-error': { screen: 'edit', scope: 'budget' },
+  'trips-vote-history': { screen: 'proposals' },
   'trips-day': { screen: 'edit', scope: 'itinerary:day:day1' },
   'trips-dates': { screen: 'edit', scope: 'dates' },
   'trips-accommodation': { screen: 'edit', scope: 'accommodation' },
@@ -114,12 +124,23 @@ const readOnly = async (): Promise<never> => { throw new Error('Запись о�
 
 export function TripsPreview({ view, onChange }: Readonly<{ view: string; onChange: (view: string) => void }>) {
   const voteStatus = view.startsWith('trips-vote-') ? view.slice('trips-vote-'.length) : null;
-  const proposal = voteStatus ? getProposal(voteStatus === 'error' ? 'pending' : voteStatus as TripProposalStatus) : null;
+  const voteMode = voteStatus === 'error' || voteStatus === 'conflict' || voteStatus === 'saved' ? 'pending' : voteStatus;
+  const proposal = voteMode && voteMode !== 'history' ? getProposal(voteMode as TripProposalStatus) : null;
+  const readProposals = voteMode === 'history' ? [
+    getProposal('accepted'),
+    { ...getProposal('rejected'), id: 'route-proposal', title: 'Маршрут', operations: [{ scope: 'route', expected_version: 0, old_value: content.route_stops, proposed_value: alternativeContent.route_stops }] },
+    { ...getProposal('cancelled'), id: 'budget-cancelled', title: 'Бюджет' },
+    { ...getProposal('expired'), id: 'dates-expired', title: 'Даты', operations: [{ scope: 'dates', expected_version: 0, old_value: null, proposed_value: { date_from: '2026-11-20', date_to: '2026-11-22' } }] }
+  ] : proposal ? [voteStatus === 'saved' ? {
+    ...proposal, own_vote: 'accept' as const, voters: proposal.voters.map((voter) => voter.user_id === 'alex'
+      ? { ...voter, vote: 'accept' as const, voted_at: created } : voter)
+  } : proposal] : [];
   const shownTrip = voteStatus === 'accepted' ? { ...trip, trip: { ...trip.trip, budget_status: 'confirmed' as const,
     budget_min: proposedBudget.min, budget_max: proposedBudget.max, budget_currency: proposedBudget.currency,
     budget_scope: proposedBudget.scope } } : trip;
   const shownDraft = { ...draft, content: {
     ...content,
+    ...(view.startsWith('trips-budget-') ? { budget: { ...proposedBudget, min: view === 'trips-budget-validation' ? '30000' : proposedBudget.min } } : {}),
     ...(view === 'trips-dates' ? { date_from: '2026-11-20', date_to: '2026-11-22' } : {}),
     ...(view === 'trips-accommodation' ? { accommodations: [{
       id: 'stay', name: 'Harbour Stay', location: 'Сидней', date_from: null, date_to: null, notes: 'Вариант для обсуждения'
@@ -132,12 +153,21 @@ export function TripsPreview({ view, onChange }: Readonly<{ view: string; onChan
   const editor: Omit<TripDraftEditorProps, 'trip' | 'confirmedDays' | 'navigation'> = {
     token: '', userId: voteStatus === 'accepted' ? 'kirill' : 'alex', draft: shownDraft, alternatives: [alternative],
     api: {
-      getTripDraft: async () => ({ draft: shownDraft, alternatives: [alternative] }),
+      getTripDraft: async () => ({ draft: view.startsWith('trips-budget-') ? draft : shownDraft, alternatives: [alternative] }),
       getTripDraftAlternative: async () => ({ ...alternative, content: alternativeContent }),
-      getTripProposals: async () => proposal ? [{ ...proposal, scopes: ['budget'] }] : [],
-      getTripProposal: async () => proposal ?? readOnly(),
-      saveTripDraft: readOnly, saveTripDraftAlternative: readOnly, createTripProposal: readOnly,
-      voteTripProposal: readOnly, cancelTripProposal: readOnly
+      getTripProposals: async () => readProposals.map((item) => ({ ...item, scopes: item.operations.map((operation) => operation.scope) })),
+      getTripProposal: async (_token, _tripId, id) => readProposals.find((item) => item.id === id) ?? readOnly(),
+      saveTripDraft: async () => {
+        if (view === 'trips-budget-conflict') throw new ApiError(409, { detail: 'Draft version conflict' });
+        if (view === 'trips-budget-saving') return new Promise<never>(() => undefined);
+        return readOnly();
+      },
+      saveTripDraftAlternative: readOnly, createTripProposal: readOnly,
+      voteTripProposal: async () => {
+        if (voteStatus === 'conflict') throw new ApiError(409, { detail: 'Proposal changed' });
+        return readOnly();
+      },
+      cancelTripProposal: readOnly
     },
     authorLabel: (id) => names[id as keyof typeof names] ?? id, onProposalAccepted: () => undefined
   };
@@ -145,7 +175,7 @@ export function TripsPreview({ view, onChange }: Readonly<{ view: string; onChan
   const state = listState[view as keyof typeof listState];
 
   return <div className="app-shell">
-    <main className="app-content" style={{ paddingTop: 44 }}><div className="app-content__frame">
+    <main className="app-content"><div className="app-content__frame">
       {state ? <TripsList state={state} trips={list} onRetry={() => onChange('trips-list')}
         onOpen={() => onChange('trips-overview')} /> :
         <TripWorkspace key={view} trip={shownTrip} days={days} editor={editor}

@@ -119,7 +119,7 @@ async function mount<TProps extends object>(
 }
 
 function findButton(container: HTMLElement, text: string): HTMLButtonElement {
-  const found = [...container.querySelectorAll<HTMLButtonElement>('.profile-actions button')]
+  const found = [...container.querySelectorAll<HTMLButtonElement>('.profile-actions button, .onboarding-status button')]
     .find((button) => button.textContent?.trim() === text);
   assert.ok(found, `button "${text}" exists`);
   return found;
@@ -190,7 +190,7 @@ test('onboarding progresses through profile, travel style and first trip with re
     await act(async () => { context.mock.timers.tick(1); });
     assert.match(ui.container.textContent ?? '', /Шаг 2 из 3/);
     assert.equal(findButton(ui.container, 'Сохранить').disabled, false);
-    const choice = ui.container.querySelector<HTMLButtonElement>('.chip-button');
+    const choice = ui.container.querySelector<HTMLButtonElement>('.selectable-chip');
     assert.ok(choice);
     assert.equal(choice.disabled, false);
     await act(async () => choice.click());
@@ -319,7 +319,7 @@ test('First Trip has one completion CTA and transitions only one second after al
   } satisfies OnboardingTravelIntentFormProps);
 
   try {
-    assert.equal(ui.container.querySelectorAll('.profile-actions button').length, 1);
+    assert.equal(ui.container.querySelectorAll('.profile-actions button, .onboarding-status button').length, 1);
     assert.equal(findButton(ui.container, 'Завершить настройку').textContent?.trim(), 'Завершить настройку');
     await setField(ui.container, 'Направление *', 'Алтай');
     await act(async () => findButton(ui.container, 'Завершить настройку').click());
@@ -411,4 +411,26 @@ test('First Trip save and completion errors preserve draft and retry completion 
 
 test.after(() => {
   globalThis.fetch = originalFetch;
+});
+
+
+test('travel style shows its validation card and does not save an empty selection', async () => {
+  setFetchHandler(async () => { throw new Error('Unexpected request'); });
+  const ui = await mount(profileForm, {
+    profile: { ...profile, travel_style: [] }, step: 'travel_style', onboardingStatus: 'in_progress', token: 'session',
+    onProfileSaved: () => undefined, onOnboardingStarted: () => undefined, onBack: () => undefined,
+    onContinue: () => assert.fail('Must stay on travel style')
+  });
+  try {
+    await act(async () => findButton(ui.container, 'Сохранить').click());
+    assert.match(ui.container.querySelector('[role="alert"]')?.textContent ?? '', /Нужен хотя бы один вариант/);
+    assert.equal(fetchCalls.length, 0);
+    const choice = ui.container.querySelector<HTMLButtonElement>('button[aria-pressed="false"]');
+    assert.ok(choice);
+    await act(async () => choice.click());
+    assert.equal(choice.getAttribute('aria-pressed'), 'true');
+    assert.equal(ui.container.querySelector('[role="alert"]'), null);
+  } finally {
+    await ui.cleanup();
+  }
 });

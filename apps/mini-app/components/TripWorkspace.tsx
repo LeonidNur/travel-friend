@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { TripDraftEditor, type TripDraftEditorProps } from '@/components/TripDraftEditor';
 import type { TripDetailResponse, TripItineraryDayResponse } from '@/lib/backend-api-client';
@@ -29,16 +29,20 @@ type Props = Readonly<{
 const overview: TripView = { screen: 'overview' };
 
 export function TripWorkspace({ trip, days, editor, draftError, isDraftWaitingForItinerary, isRefreshing, itineraryState = 'loaded', onRetryDraft, onRetryItinerary, previewView, previewProposalId }: Props) {
-  const [views, setViews] = useState<readonly TripView[]>([previewView ?? overview]);
+  const viewport = useRef<HTMLDivElement>(null);
+  const [views, setViews] = useState<readonly TripView[]>(() => {
+    if (previewView?.screen === 'edit') return [overview, { screen: 'program' }, previewView];
+    return [previewView ?? overview];
+  });
   const [focusedProposalId, setFocusedProposalId] = useState<string | null>(previewProposalId ?? null);
   const view = views.at(-1) ?? overview;
   const navigate = (next: TripView) => {
     setViews((history) => [...history, next]);
-    window.scrollTo({ top: 0 });
+    viewport.current?.scrollTo({ top: 0 });
   };
   const back = () => {
     setViews((history) => history.length > 1 ? history.slice(0, -1) : [overview]);
-    window.scrollTo({ top: 0 });
+    viewport.current?.scrollTo({ top: 0 });
   };
 
   useEffect(() => {
@@ -55,11 +59,13 @@ export function TripWorkspace({ trip, days, editor, draftError, isDraftWaitingFo
 
   const edit = (scope: string) => navigate({ screen: 'edit', scope });
   const editorVisible = focusedProposalId !== null || (view.screen !== 'overview' && view.screen !== 'program');
-  return <div className={styles.workspace}>
+  return <div ref={viewport} className={styles.workspace}>
     <section className={styles.stack} hidden={editorVisible}>
       {view.screen === 'overview' ? <TripOverview trip={trip} days={days} itineraryState={itineraryState}
-        onProgram={() => navigate({ screen: 'program' })} onEdit={edit}
-        onDraft={() => navigate({ screen: 'draft' })} onAlternatives={() => navigate({ screen: 'alternatives' })}
+        onProgram={() => navigate({ screen: 'program' })} onEditBudget={() => {
+          setViews((history) => [...history, { screen: 'program' }, { screen: 'edit', scope: 'budget' }]);
+          viewport.current?.scrollTo({ top: 0 });
+        }}
         onProposals={() => navigate({ screen: 'proposals' })} /> : null}
       {view.screen === 'program' ? <TripProgram days={days} state={itineraryState} onRetry={onRetryItinerary}
         onEdit={edit} onBack={back} /> : null}
@@ -79,22 +85,22 @@ export function TripWorkspace({ trip, days, editor, draftError, isDraftWaitingFo
         } : undefined} navigation={{
         view, navigate, back, focusedProposalId,
         backLabel: views.at(-2)?.screen === 'program' ? 'К программе' : undefined,
-        openProposal: (id) => { setFocusedProposalId(id); window.scrollTo({ top: 0 }); },
+        openProposal: (id) => { setFocusedProposalId(id); viewport.current?.scrollTo({ top: 0 }); },
         closeProposal: () => {
           setFocusedProposalId(null);
           if (window.location.hash.startsWith('#proposal-')) {
             window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
           }
-          window.scrollTo({ top: 0 });
+          viewport.current?.scrollTo({ top: 0 });
         }
       }} />
     </div> : null}
   </div>;
 }
 
-function TripOverview({ trip, days, itineraryState, onProgram, onEdit, onDraft, onAlternatives, onProposals }: Readonly<{
+function TripOverview({ trip, days, itineraryState, onProgram, onEditBudget, onProposals }: Readonly<{
   trip: TripDetailResponse; days: readonly TripItineraryDayResponse[]; itineraryState: Props['itineraryState'];
-  onProgram: () => void; onEdit: (scope: string) => void; onDraft: () => void; onAlternatives: () => void; onProposals: () => void;
+  onProgram: () => void; onEditBudget: () => void; onProposals: () => void;
 }>) {
   const route = formatTripRouteStops(trip.route_stops);
   const dates = formatTripDetailDates(trip.trip.date_from, trip.trip.date_to);
@@ -124,11 +130,9 @@ function TripOverview({ trip, days, itineraryState, onProgram, onEdit, onDraft, 
       })}</div> : null}
       <button className={styles.primary} onClick={onProgram}>Открыть программу</button>
     </article>
-    <button className={styles.action} onClick={() => onEdit('budget')}>Изменить бюджет</button>
+    <button className={styles.action} onClick={onEditBudget}>Изменить бюджет</button>
     <Link className={styles.action} href="/trips">К поездкам</Link>
-    <button className={styles.action} onClick={onDraft}>Общий черновик</button>
-    <button className={styles.action} onClick={onAlternatives}>Сохранённые варианты</button>
-    <button className={styles.action} onClick={onProposals}>Предложения</button>
+    <button className={styles.action} onClick={onProposals}>История предложений</button>
   </>;
 }
 
@@ -156,7 +160,7 @@ function TripProgram({ days, state, onRetry, onEdit, onBack }: Readonly<{
         <button className={styles.action} onClick={() => onEdit(`itinerary:day:${day.id}`)}>Изменить день</button>}
     </article>)}
     <button className={styles.action} onClick={onBack}>К обзору поездки</button>
-    <button className={styles.action} onClick={() => onEdit('itinerary:all')}>Изменить программу</button>
+    <button className={styles.secondaryLink} onClick={() => onEdit('itinerary:all')}>Изменить программу</button>
   </>;
 }
 

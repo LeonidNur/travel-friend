@@ -184,3 +184,21 @@
   display: grid;
   gap: 16px;
 }
+
+.trip-workspace-editor__rows .trip-draft-editor__field:has(input[aria-invalid='true']) {
+  border-color: #d52525;
+}
+
+.trip-workspace-editor__rows .profile-field-error {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.trip-workspace-editor .profile-button {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.trip-workspace-editor .profile-button--primary:disabled {
+  background: #e7e7e7;
+}

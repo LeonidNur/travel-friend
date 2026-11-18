@@ -186,7 +186,7 @@ export default function ChatsPage() {
   }
 
   return (
-    <section className="page">
+    <section className="page chats-list-screen">
       <ChatsListHeader disabled={screenState === 'loading' || screenState === 'error'} onCreate={() => {
             setIsGroupFormOpen((isOpen) => !isOpen);
             setGroupError(null);

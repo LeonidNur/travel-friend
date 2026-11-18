@@ -101,10 +101,14 @@
   width: 12px;
   height: 12px;
   margin: 0;
+  appearance: none;
+  border: 1.5px solid #000;
+  border-radius: 50%;
+  background: transparent;
 }
 
-.trip-vote-screen .trip-proposal-card__actions label:has(input:checked) {
-  background: #fff;
+.trip-vote-screen .trip-proposal-card__actions input[type='radio']:checked {
+  background: #000;
 }
 
 .trip-vote-screen .trip-proposal-card__actions label:has(input:disabled) {
@@ -120,6 +124,8 @@
   border-radius: 50px;
   overflow-wrap: anywhere;
   white-space: normal;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .trip-vote-screen .profile-button--secondary,
@@ -129,10 +135,24 @@
 
 .trip-vote-screen .profile-button:disabled,
 .trip-vote-history .profile-button:disabled {
-  opacity: .45;
+  background: #e7e7e7;
+  color: #616161;
   cursor: default;
 }
 
 .trip-vote-screen__error {
   color: #8b2525;
+}
+
+
+.trip-vote-screen__back {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 24px;
+  background: transparent;
+  color: #424242;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
 }

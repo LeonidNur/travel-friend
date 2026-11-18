@@ -66,7 +66,8 @@ export function OnboardingTravelIntentForm({
   token,
   onProfileSaved,
   onTravelIntentSaved,
-  onOnboardingCompleted
+  onOnboardingCompleted,
+  previewState
 }: Readonly<{
   travelIntent: TravelIntentResponse | null;
   profile: ProfileResponse;
@@ -75,17 +76,18 @@ export function OnboardingTravelIntentForm({
   onProfileSaved: (profile: ProfileResponse) => void;
   onTravelIntentSaved: (travelIntent: TravelIntentResponse) => void;
   onOnboardingCompleted: () => void;
+  previewState?: 'validation' | 'saving' | 'saved' | 'error' | 'completing' | 'completion-error';
 }>) {
   const [draft, setDraft] = useState<OnboardingTravelIntentDraft>(() => createOnboardingTravelIntentDraft(travelIntent));
   const [budgetLevel, setBudgetLevel] = useState(() => createOnboardingProfileDraft(profile).budgetLevel);
   const [comfortLevel, setComfortLevel] = useState(() => createOnboardingProfileDraft(profile).comfortLevel);
-  const [validationErrors, setValidationErrors] = useState<OnboardingTravelIntentValidationErrors>({});
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  const [isCompleting, setIsCompleting] = useState(false);
-  const [isTripDataSaved, setIsTripDataSaved] = useState(false);
-  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<OnboardingTravelIntentValidationErrors>(previewState === 'validation' ? { destination: 'Укажите направление' } : {});
+  const [apiError, setApiError] = useState<string | null>(previewState === 'error' ? 'Проверьте подключение и повторите попытку.' : null);
+  const [isSaving, setIsSaving] = useState(previewState === 'saving');
+  const [isSaved, setIsSaved] = useState(previewState === 'saved');
+  const [isCompleting, setIsCompleting] = useState(previewState === 'completing');
+  const [isTripDataSaved, setIsTripDataSaved] = useState(previewState === 'completion-error');
+  const [completionError, setCompletionError] = useState<string | null>(previewState === 'completion-error' ? 'Повторите завершение настройки.' : null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTravelIntentRef = useRef<TravelIntentResponse | null>(null);
   const destinationInputRef = useRef<HTMLInputElement>(null);
@@ -195,9 +197,11 @@ export function OnboardingTravelIntentForm({
   return (
     <main className="auth-gate onboarding-profile" aria-live="polite">
       <section className="onboarding-card auth-gate__card">
-        <p className="section-kicker">Шаг 3 из 3</p>
-        <h1 className="auth-gate__title">Первая поездка</h1>
-        <p className="surface-card__copy">Добавьте план поездки и настройте личные предпочтения бюджета и комфорта.</p>
+        <header className="onboarding-card__header">
+          <p className="section-kicker">Шаг 3 из 3</p>
+          <h1 className="auth-gate__title">Первая поездка</h1>
+          <p className="surface-card__copy">Добавьте план поездки и настройте личные предпочтения бюджета и комфорта.</p>
+        </header>
 
         <form className="profile-form onboarding-profile__form" onSubmit={handleSubmit} noValidate>
           {isCompleting ? (
@@ -210,7 +214,7 @@ export function OnboardingTravelIntentForm({
             <OnboardingStatusPanel
               title="Настройка завершена"
               message="Через секунду откроется Discover / Matching."
-            />
+            ><button type="button" className="profile-button profile-button--primary" disabled>Завершено</button></OnboardingStatusPanel>
           ) : null}
           {completionError ? (
             <OnboardingStatusPanel
@@ -220,54 +224,61 @@ export function OnboardingTravelIntentForm({
               detail={completionError}
             />
           ) : null}
+          {apiError ? <OnboardingStatusPanel tone="error" title="Не удалось сохранить данные" message={apiError} /> : null}
           <section className="onboarding-section">
             <h2 className="surface-card__title">План первой поездки</h2>
             <div className="profile-form__section">
-              <label className="profile-form__field">
-                <span className="profile-form__label">Направление *</span>
-                <input
-                  ref={destinationInputRef}
-                  className="profile-input"
-                  type="text"
-                  value={draft.destination}
-                  onChange={handleTextChange('destination')}
-                  placeholder="Куда хотите поехать?"
-                  disabled={isSaving || isCompleting || isSaved}
-                  aria-invalid={validationErrors.destination ? 'true' : undefined}
-                  aria-describedby={validationErrors.destination ? 'onboarding-destination-error' : undefined}
-                />
+              <div className="onboarding-field onboarding-field--destination">
+                <label className="profile-form__field">
+                  <span className="profile-form__label">Направление *</span>
+                  <input
+                    ref={destinationInputRef}
+                    className="profile-input"
+                    type="text"
+                    value={draft.destination}
+                    onChange={handleTextChange('destination')}
+                    placeholder="Куда хотите поехать?"
+                    disabled={isSaving || isCompleting || isSaved}
+                    aria-invalid={validationErrors.destination ? 'true' : undefined}
+                    aria-describedby={validationErrors.destination ? 'onboarding-destination-error' : undefined}
+                  />
+                </label>
                 {validationErrors.destination ? <FieldError id="onboarding-destination-error" message={validationErrors.destination} /> : null}
-              </label>
+              </div>
 
-              <label className="profile-form__field">
-                <span className="profile-form__label">Дата начала</span>
-                <input
-                  ref={dateFromInputRef}
-                  className="profile-input"
-                  type="date"
-                  value={draft.dateFrom}
-                  onChange={handleTextChange('dateFrom')}
-                  disabled={isSaving || isCompleting || isSaved}
-                  aria-invalid={validationErrors.dateFrom ? 'true' : undefined}
-                  aria-describedby={validationErrors.dateFrom ? 'onboarding-date-from-error' : undefined}
-                />
+              <div className="onboarding-field">
+                <label className="profile-form__field">
+                  <span className="profile-form__label">Дата начала</span>
+                  <input
+                    ref={dateFromInputRef}
+                    className="profile-input"
+                    type="date"
+                    value={draft.dateFrom}
+                    onChange={handleTextChange('dateFrom')}
+                    disabled={isSaving || isCompleting || isSaved}
+                    aria-invalid={validationErrors.dateFrom ? 'true' : undefined}
+                    aria-describedby={validationErrors.dateFrom ? 'onboarding-date-from-error' : undefined}
+                  />
+                </label>
                 {validationErrors.dateFrom ? <FieldError id="onboarding-date-from-error" message={validationErrors.dateFrom} /> : null}
-              </label>
+              </div>
 
-              <label className="profile-form__field">
-                <span className="profile-form__label">Дата окончания</span>
-                <input
-                  ref={dateToInputRef}
-                  className="profile-input"
-                  type="date"
-                  value={draft.dateTo}
-                  onChange={handleTextChange('dateTo')}
-                  disabled={isSaving || isCompleting || isSaved}
-                  aria-invalid={validationErrors.dateTo ? 'true' : undefined}
-                  aria-describedby={validationErrors.dateTo ? 'onboarding-date-to-error' : undefined}
-                />
+              <div className="onboarding-field">
+                <label className="profile-form__field">
+                  <span className="profile-form__label">Дата окончания</span>
+                  <input
+                    ref={dateToInputRef}
+                    className="profile-input"
+                    type="date"
+                    value={draft.dateTo}
+                    onChange={handleTextChange('dateTo')}
+                    disabled={isSaving || isCompleting || isSaved}
+                    aria-invalid={validationErrors.dateTo ? 'true' : undefined}
+                    aria-describedby={validationErrors.dateTo ? 'onboarding-date-to-error' : undefined}
+                  />
+                </label>
                 {validationErrors.dateTo ? <FieldError id="onboarding-date-to-error" message={validationErrors.dateTo} /> : null}
-              </label>
+              </div>
             </div>
           </section>
 
@@ -288,7 +299,8 @@ export function OnboardingTravelIntentForm({
                 setCompletionError(null);
               }}
               iconSrc="/figma-assets/budget-low.svg"
-              rangeLabels={['₽ низкий бюджет', '₽₽₽₽ высокий бюджет']}
+              compactScale
+              rangeLabels={['низкий бюджет', 'высокий бюджет']}
             />
           </section>
 
@@ -308,20 +320,19 @@ export function OnboardingTravelIntentForm({
                 setCompletionError(null);
               }}
               iconSrc="/figma-assets/comfort-low.svg"
+              compactScale
+              rangeLabels={['низкий комфорт', 'высокий комфорт']}
             />
           </section>
 
-          {apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}
-
-          <div className="profile-actions">
+          {!isSaved ? <div className="profile-actions">
             <button type="submit" className="profile-button profile-button--primary" disabled={isSaving || isCompleting || isSaved}>
               {isSaving ? 'Сохранение…'
                 : isCompleting ? 'Завершение…'
-                  : isSaved ? 'Завершено'
-                    : isTripDataSaved && completionError ? 'Повторить завершение'
+                  : isTripDataSaved && completionError ? 'Повторить завершение'
                       : 'Завершить настройку'}
             </button>
-          </div>
+          </div> : null}
         </form>
       </section>
     </main>

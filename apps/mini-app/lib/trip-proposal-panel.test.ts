@@ -90,8 +90,8 @@ test('proposal opens from history, preserves the vote on 409 and transitions onl
     await act(async () => findButton('Проголосовать').click());
     assert.equal(votes, 1);
     assert.equal(refreshes, 0);
-    assert.ok(radio.checked);
-    assert.ok(findButton('Проголосовать').disabled);
+    assert.equal(container.querySelector('input[type="radio"]'), null, 'voting controls are hidden until reload');
+    assert.match(container.textContent ?? '', /Выбранное решение: Принять/);
     await act(async () => findButton('Назад').click());
     await act(async () => findButton('Открыть предложение', 1).click());
     assert.equal(reads, 2);
