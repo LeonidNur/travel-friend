@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 
 import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { ChipSelector, LevelSelector } from '@/components/ProfileSelectors';
@@ -18,7 +19,7 @@ import {
   type ProfileTravelIntentValidationErrors
 } from '@/lib/profile-travel-intent';
 import {
-  BUDGET_OPTIONS, COMFORT_OPTIONS, INTEREST_OPTIONS, TRAVEL_STYLE_OPTIONS, getAvatarInitials,
+  BUDGET_OPTIONS, COMFORT_OPTIONS, INTEREST_OPTIONS, TRAVEL_STYLE_OPTIONS,
   fromCanonicalProfileLevel, getBudgetLabel, getComfortLabel, toggleMultiValue
 } from '@/lib/travel-preferences';
 
@@ -35,7 +36,6 @@ function levelLabel(value: string | null, getLabel: (level: 1 | 2 | 3 | 4) => st
 function createDetailItems(profile: ProfileResponse): DetailItem[] {
   return [
     { label: 'Бюджет', value: levelLabel(profile.budget_level, getBudgetLabel) },
-    { label: 'Стиль путешествий', value: profile.travel_style.filter((value): value is string => value !== null).join(', ') || 'Не указан' },
     { label: 'Уровень комфорта', value: levelLabel(profile.comfort_level, getComfortLabel) }
   ];
 }
@@ -79,6 +79,7 @@ export default function ProfilePage() {
   const activeDraft = draftProfile ?? createProfileEditingDraft(profile);
   const age = profile.birth_date === null ? null : calculateAgeFromBirthDate(profile.birth_date);
   const interests = profile.interests.filter((interest): interest is string => interest !== null);
+  const travelStyles = profile.travel_style.filter((style): style is string => style !== null);
 
   const updateDraft = (nextDraft: ProfileEditingDraft) => {
     setDraftProfile(nextDraft);
@@ -114,7 +115,7 @@ export default function ProfilePage() {
 
   return (
     <section className="page">
-      <article className="hero-card"><div className="profile-header"><p className="section-kicker">Профиль</p>{isEditing ? <span className="profile-status">Редактирование</span> : <button type="button" className="profile-action" onClick={handleEditStart}>Изменить профиль</button>}</div><div className="profile-hero"><div className="profile-hero__avatar" aria-hidden="true">{getAvatarInitials(profile.display_name)}</div><div className="profile-hero__content"><h2 className="hero-card__title profile-hero__title">{profile.display_name}{age === null ? '' : `, ${age}`}</h2><p className="profile-hero__city">{profile.city ?? 'Город не указан'}</p></div></div></article>
+      <article className="hero-card profile-page__identity"><div className="profile-header"><p className="section-kicker">Профиль</p>{isEditing ? <span className="profile-status">Редактирование</span> : <button type="button" className="profile-action" onClick={handleEditStart}>Изменить профиль</button>}</div><div className="profile-hero"><div className="profile-hero__avatar" aria-hidden="true"><Image className="profile-hero__avatar-image" src="/figma-assets/profile-placeholder.png" width={740} height={740} alt="" /></div><div className="profile-hero__content"><h2 className="hero-card__title profile-hero__title">{profile.display_name}{age === null ? '' : `, ${age}`}</h2><p className="profile-hero__city">{profile.city ?? 'Город не указан'}</p></div></div></article>
       {isEditing ? <article className="surface-card"><div className="profile-form">
         <div className="profile-form__section"><p className="surface-card__title">Основное</p>
           <label className="profile-form__field"><span className="profile-form__label">Имя</span><input ref={nameInputRef} className="profile-input" type="text" value={activeDraft.displayName} onChange={handleTextChange('displayName')} placeholder="Как вас зовут" disabled={isSaving} aria-invalid={validationErrors.displayName ? 'true' : undefined} aria-describedby={validationErrors.displayName ? 'profile-name-error' : undefined} />{validationErrors.displayName ? <p className="profile-field-error" id="profile-name-error" role="alert">{validationErrors.displayName}</p> : null}</label>
@@ -126,13 +127,34 @@ export default function ProfilePage() {
         <div className="profile-form__section"><p className="surface-card__title">Предпочтения в поездках</p><LevelSelector legend="Бюджет" name="budget" value={activeDraft.budgetLevel} options={BUDGET_OPTIONS} disabled={isSaving} onChange={(budgetLevel) => updateDraft({ ...activeDraft, budgetLevel })} /><div className="profile-form__field"><span className="profile-form__label">Стиль путешествий</span><ChipSelector options={TRAVEL_STYLE_OPTIONS} selectedValues={activeDraft.travelStyle} onToggle={(value) => { if (!isSaving) updateDraft({ ...activeDraft, travelStyle: toggleMultiValue(activeDraft.travelStyle, value) }); }} /></div><LevelSelector legend="Уровень комфорта" name="comfort" value={activeDraft.comfortLevel} options={COMFORT_OPTIONS} disabled={isSaving} onChange={(comfortLevel) => updateDraft({ ...activeDraft, comfortLevel })} /></div>
         {apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}<div className="profile-actions"><button type="button" className="profile-button profile-button--primary" onClick={handleSave} disabled={isSaving}>{isSaving ? 'Сохраняем…' : 'Сохранить'}</button><button type="button" className="profile-button profile-button--secondary" onClick={handleCancel} disabled={isSaving}>Отмена</button></div>
       </div></article> : null}
-      <section className="card-grid" aria-label="Профиль пользователя"><article className="surface-card"><p className="surface-card__title">О себе</p><p className="surface-card__copy">{profile.bio ?? 'Пользователь пока не добавил описание.'}</p></article><article className="surface-card"><p className="surface-card__title">Интересы</p><div className="chip-row" aria-label="Интересы путешествий">{interests.length > 0 ? interests.map((interest) => <span className="chip" key={interest}>{interest}</span>) : <span className="surface-card__note">Не указаны</span>}</div></article><article className="surface-card"><p className="surface-card__title">Предпочтения в поездках</p><DetailList items={createDetailItems(profile)} /></article></section>
       <ProfileTravelIntent
         state={serverTravelIntent}
         token={session?.accessToken ?? null}
         onSaved={setServerTravelIntent}
         onRetry={reloadServerTravelIntent}
       />
+      <section className="card-grid" aria-label="Профиль пользователя">
+        <article className="surface-card">
+          <p className="surface-card__title">О себе</p>
+          <p className="surface-card__copy">{profile.bio ?? 'Пользователь пока не добавил описание.'}</p>
+        </article>
+        <article className="surface-card">
+          <p className="surface-card__title">Интересы</p>
+          <div className="chip-row" aria-label="Интересы путешествий">
+            {interests.length > 0 ? interests.map((interest) => <span className="chip" key={interest}>{interest}</span>) : <span className="surface-card__note">Не указаны</span>}
+          </div>
+        </article>
+        <article className="surface-card">
+          <p className="surface-card__title">Стиль поездки</p>
+          <div className="chip-row" aria-label="Стиль поездки">
+            {travelStyles.length > 0 ? travelStyles.map((style) => <span className="chip" key={style}>{style}</span>) : <span className="surface-card__note">Не указан</span>}
+          </div>
+        </article>
+        <article className="surface-card">
+          <p className="surface-card__title">Бюджет и комфорт</p>
+          <DetailList items={createDetailItems(profile)} />
+        </article>
+      </section>
     </section>
   );
 }
@@ -158,18 +180,18 @@ function ProfileTravelIntent({
   const dateToInputRef = useRef<HTMLInputElement>(null);
 
   if (state.status === 'loading') {
-    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Текущий план поездки</p><p className="surface-card__note">Загружаем план поездки…</p></article>;
+    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Планы поездок</p><p className="surface-card__note">Загружаем план поездки…</p></article>;
   }
 
   if (state.status === 'error' || state.status === 'invariant_error') {
     const message = state.status === 'invariant_error'
       ? 'Не удалось подтвердить активный план поездки. Попробуйте загрузить данные ещё раз.'
       : 'Не удалось загрузить план поездки. Проверьте подключение и попробуйте ещё раз.';
-    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Текущий план поездки</p><p className="surface-card__copy">{message}</p><button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button></article>;
+    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Планы поездок</p><p className="surface-card__copy">{message}</p><button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button></article>;
   }
 
   if (state.travelIntent === null) {
-    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Текущий план поездки</p><p className="surface-card__copy">Не удалось подтвердить активный план поездки. Попробуйте загрузить данные ещё раз.</p><button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button></article>;
+    return <article className="surface-card surface-card--compact"><p className="surface-card__title">Планы поездок</p><p className="surface-card__copy">Не удалось подтвердить активный план поездки. Попробуйте загрузить данные ещё раз.</p><button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button></article>;
   }
 
   const travelIntent = state.travelIntent;
@@ -221,5 +243,5 @@ function ProfileTravelIntent({
     setIsEditing(false);
   };
 
-  return <article className="surface-card surface-card--compact"><div className="profile-header"><p className="surface-card__title">Текущий план поездки</p>{isEditing ? <span className="profile-status">Редактирование</span> : <button className="profile-action" type="button" onClick={() => { updateDraft(createProfileTravelIntentDraft(travelIntent)); setValidationErrors({}); setIsEditing(true); }}>Изменить</button>}</div>{isEditing ? <form className="profile-form" onSubmit={handleSave} noValidate><label className="profile-form__field"><span className="profile-form__label">Направление</span><input ref={destinationInputRef} className="profile-input" type="text" value={activeDraft.destination} onChange={handleTravelIntentTextChange('destination')} disabled={isSaving} aria-invalid={validationErrors.destination ? 'true' : undefined} />{validationErrors.destination ? <p className="profile-field-error" role="alert">{validationErrors.destination}</p> : null}</label><label className="profile-form__field"><span className="profile-form__label">Дата начала</span><input ref={dateFromInputRef} className="profile-input" type="date" value={activeDraft.dateFrom} onChange={handleTravelIntentTextChange('dateFrom')} disabled={isSaving} aria-invalid={validationErrors.dateFrom ? 'true' : undefined} />{validationErrors.dateFrom ? <p className="profile-field-error" role="alert">{validationErrors.dateFrom}</p> : null}</label><label className="profile-form__field"><span className="profile-form__label">Дата окончания</span><input ref={dateToInputRef} className="profile-input" type="date" value={activeDraft.dateTo} onChange={handleTravelIntentTextChange('dateTo')} disabled={isSaving} aria-invalid={validationErrors.dateTo ? 'true' : undefined} />{validationErrors.dateTo ? <p className="profile-field-error" role="alert">{validationErrors.dateTo}</p> : null}</label>{apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}<div className="profile-actions"><button className="profile-button profile-button--primary" type="submit" disabled={isSaving}>{isSaving ? 'Сохраняем…' : 'Сохранить'}</button><button className="profile-button profile-button--secondary" type="button" onClick={handleCancel} disabled={isSaving}>Отмена</button></div></form> : <dl className="detail-list"><div className="detail-list__item"><dt className="detail-list__label">Направление</dt><dd className="detail-list__value">{travelIntent.destination}</dd></div><div className="detail-list__item"><dt className="detail-list__label">Дата начала</dt><dd className="detail-list__value">{formatRussianDate(travelIntent.date_from) ?? 'Не указана'}</dd></div><div className="detail-list__item"><dt className="detail-list__label">Дата окончания</dt><dd className="detail-list__value">{formatRussianDate(travelIntent.date_to) ?? 'Не указана'}</dd></div></dl>}</article>;
+  return <article className="surface-card surface-card--compact"><div className="profile-header"><p className="surface-card__title">Планы поездок</p>{isEditing ? <span className="profile-status">Редактирование</span> : <button className="profile-action" type="button" onClick={() => { updateDraft(createProfileTravelIntentDraft(travelIntent)); setValidationErrors({}); setIsEditing(true); }}>Изменить</button>}</div>{isEditing ? <form className="profile-form" onSubmit={handleSave} noValidate><label className="profile-form__field"><span className="profile-form__label">Направление</span><input ref={destinationInputRef} className="profile-input" type="text" value={activeDraft.destination} onChange={handleTravelIntentTextChange('destination')} disabled={isSaving} aria-invalid={validationErrors.destination ? 'true' : undefined} />{validationErrors.destination ? <p className="profile-field-error" role="alert">{validationErrors.destination}</p> : null}</label><label className="profile-form__field"><span className="profile-form__label">Дата начала</span><input ref={dateFromInputRef} className="profile-input" type="date" value={activeDraft.dateFrom} onChange={handleTravelIntentTextChange('dateFrom')} disabled={isSaving} aria-invalid={validationErrors.dateFrom ? 'true' : undefined} />{validationErrors.dateFrom ? <p className="profile-field-error" role="alert">{validationErrors.dateFrom}</p> : null}</label><label className="profile-form__field"><span className="profile-form__label">Дата окончания</span><input ref={dateToInputRef} className="profile-input" type="date" value={activeDraft.dateTo} onChange={handleTravelIntentTextChange('dateTo')} disabled={isSaving} aria-invalid={validationErrors.dateTo ? 'true' : undefined} />{validationErrors.dateTo ? <p className="profile-field-error" role="alert">{validationErrors.dateTo}</p> : null}</label>{apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}<div className="profile-actions"><button className="profile-button profile-button--primary" type="submit" disabled={isSaving}>{isSaving ? 'Сохраняем…' : 'Сохранить'}</button><button className="profile-button profile-button--secondary" type="button" onClick={handleCancel} disabled={isSaving}>Отмена</button></div></form> : <dl className="detail-list"><div className="detail-list__item"><dt className="detail-list__label">Направление</dt><dd className="detail-list__value">{travelIntent.destination}</dd></div><div className="detail-list__item"><dt className="detail-list__label">Дата начала</dt><dd className="detail-list__value">{formatRussianDate(travelIntent.date_from) ?? 'Не указана'}</dd></div><div className="detail-list__item"><dt className="detail-list__label">Дата окончания</dt><dd className="detail-list__value">{formatRussianDate(travelIntent.date_to) ?? 'Не указана'}</dd></div></dl>}</article>;
 }

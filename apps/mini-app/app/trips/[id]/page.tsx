@@ -6,7 +6,7 @@ import { use, useEffect, useState } from 'react';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import { ApiError, createBackendApiClient, type TripDetailResponse, type TripDraftDetailResponse, type TripItineraryResponse } from '@/lib/backend-api-client';
 import { TripDraftEditor } from '@/components/TripDraftEditor';
-import { formatTripParticipants, getPersistedTripStatusLabel, getTripDetailScreenState } from '@/lib/trip-detail-runtime';
+import { formatTripBudget, formatTripDetailDates, formatTripParticipants, formatTripRouteStops, getPersistedTripStatusLabel, getTripDetailScreenState } from '@/lib/trip-detail-runtime';
 
 interface TripDetailsPageProps {
   params: Promise<{
@@ -120,20 +120,37 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
   }
 
   const participants = formatTripParticipants(detail.participants);
+  const route = formatTripRouteStops(detail.route_stops);
+  const dates = formatTripDetailDates(detail.trip.date_from, detail.trip.date_to);
+  const budget = formatTripBudget({
+    min: detail.trip.budget_min,
+    max: detail.trip.budget_max,
+    currency: detail.trip.budget_currency,
+    scope: detail.trip.budget_scope
+  });
 
   return (
     <section className="page">
       <article className="surface-card trip-details-header">
-        <Link className="navigation-link" href="/trips" aria-label="Вернуться к списку поездок">
-          ← Назад
-        </Link>
+        <div className="trip-details-header__actions">
+          <Link className="profile-button profile-button--secondary" href="/trips" aria-label="Вернуться к списку поездок">
+            ← Назад
+          </Link>
+          <Link className="profile-button profile-button--secondary" href={`/chats/${detail.trip.chat_id}`}>Открыть чат</Link>
+        </div>
         <p className="section-kicker">Поездка</p>
-        <h2 className="trip-details-header__title">{getPersistedTripStatusLabel(detail.trip.status)}</h2>
+        <h1 className="trip-details-header__title">{route ?? getPersistedTripStatusLabel(detail.trip.status)}</h1>
+        <span className="chat-status trip-card__status">{getPersistedTripStatusLabel(detail.trip.status)}</span>
+        {dates !== null || budget !== null ? (
+          <dl className="trip-summary__facts">
+            {dates !== null ? <div><dt>Даты</dt><dd>{dates}</dd></div> : null}
+            {budget !== null ? <div><dt>Бюджет</dt><dd>{budget}</dd></div> : null}
+          </dl>
+        ) : null}
         <div className="trip-details-header__meta">
           <p className="trip-details-header__participants">
             Участники: {participants.length > 0 ? participants.join(', ') : 'не указаны'}
           </p>
-          <Link className="navigation-link" href={`/chats/${detail.trip.chat_id}`}>Перейти в чат</Link>
         </div>
       </article>
 

@@ -1,13 +1,14 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { ChipSelector, LevelSelector } from '@/components/ProfileSelectors';
+import { ChipSelector } from '@/components/ProfileSelectors';
 import { OnboardingTravelIntentScreen } from '@/components/OnboardingTravelIntentScreen';
 import { useCurrentUserProfile } from '@/components/CurrentUserProfileProvider';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import { createBackendApiClient, type ProfileResponse } from '@/lib/backend-api-client';
 import { focusFirstValidationErrorField } from '@/lib/form-validation-focus';
+import { OnboardingStatusPanel } from '@/components/OnboardingStatusPanel';
 import {
   createOnboardingProfileDraft,
   saveOnboardingProfile,
@@ -15,19 +16,24 @@ import {
   type OnboardingProfileValidationErrors
 } from '@/lib/onboarding-profile';
 import {
-  BUDGET_OPTIONS,
-  COMFORT_OPTIONS,
   INTEREST_OPTIONS,
   TRAVEL_STYLE_OPTIONS,
   toggleMultiValue
 } from '@/lib/travel-preferences';
+import {
+  getNextOnboardingVisualStep,
+  getOnboardingStepLabel,
+  getPreviousOnboardingVisualStep,
+  ONBOARDING_SUCCESS_DELAY_MS,
+  type OnboardingVisualStep
+} from '@/lib/onboarding-visual-steps';
 
 const backendApiClient = createBackendApiClient();
 
 export function OnboardingProfileScreen() {
   const { onboardingStatus, session, markOnboardingInProgress } = useTelegramAuthSession();
   const { serverProfile, setServerProfile } = useCurrentUserProfile();
-  const [step, setStep] = useState<'profile' | 'travel_intent'>('profile');
+  const [step, setStep] = useState<OnboardingVisualStep>('profile');
 
   if (serverProfile.status === 'loading') {
     return <OnboardingMessage title="Загружаем профиль" message="Подготавливаем первый шаг настройки." />;
@@ -37,35 +43,47 @@ export function OnboardingProfileScreen() {
     return <OnboardingMessage title="Не удалось загрузить профиль" message="Попробуйте открыть приложение ещё раз." />;
   }
 
-  if (step === 'travel_intent') {
-    return <OnboardingTravelIntentScreen onBack={() => setStep('profile')} />;
+  if (step === 'first_trip') {
+    return <OnboardingTravelIntentScreen />;
   }
 
   return (
     <OnboardingProfileForm
       profile={serverProfile.profile}
+    step={step}
       onboardingStatus={onboardingStatus}
       token={session?.accessToken ?? null}
       onProfileSaved={setServerProfile}
       onOnboardingStarted={markOnboardingInProgress}
-      onContinue={() => setStep('travel_intent')}
+    onBack={() => {
+      const previousStep = getPreviousOnboardingVisualStep(step);
+      if (previousStep !== null) setStep(previousStep);
+    }}
+    onContinue={() => {
+      const nextStep = getNextOnboardingVisualStep(step);
+      if (nextStep !== null) setStep(nextStep);
+    }}
     />
   );
 }
 
-function OnboardingProfileForm({
+export function OnboardingProfileForm({
   profile,
+  step,
   onboardingStatus,
   token,
   onProfileSaved,
   onOnboardingStarted,
+  onBack,
   onContinue
 }: Readonly<{
   profile: ProfileResponse | null;
+  step: Exclude<OnboardingVisualStep, 'first_trip'>;
   onboardingStatus: 'not_started' | 'in_progress' | null;
   token: string | null;
   onProfileSaved: (profile: ProfileResponse) => void;
   onOnboardingStarted: () => void;
+  onBack: () => void;
   onContinue: () => void;
 }>) {
   const [draft, setDraft] = useState<OnboardingProfileDraft>(() => createOnboardingProfileDraft(profile));
@@ -73,18 +91,31 @@ function OnboardingProfileForm({
   const [apiError, setApiError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const displayNameInputRef = useRef<HTMLInputElement>(null);
   const birthDateInputRef = useRef<HTMLInputElement>(null);
+  const aboutInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = aboutInputRef.current;
+    if (textarea === null) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 54)}px`;
+  }, [draft.bio]);
+
+  useEffect(() => () => {
+    if (successTimerRef.current !== null) clearTimeout(successTimerRef.current);
+  }, []);
 
   const updateDraft = (nextDraft: OnboardingProfileDraft) => {
     setDraft(nextDraft);
-    setIsSaved(false);
   };
 
   const handleTextChange =
     (field: 'displayName' | 'birthDate' | 'city' | 'bio') =>
     (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       updateDraft({ ...draft, [field]: event.target.value });
+      setIsSaved(false);
       if (field === 'displayName' || field === 'birthDate') {
         setValidationErrors((errors) => ({ ...errors, [field]: undefined }));
       }
@@ -99,6 +130,7 @@ function OnboardingProfileForm({
     }
 
     setIsSaving(true);
+    setIsSaved(false);
     setApiError(null);
     const result = await saveOnboardingProfile({
       draft,
@@ -130,104 +162,115 @@ function OnboardingProfileForm({
     setDraft(createOnboardingProfileDraft(result.profile));
     setValidationErrors({});
     setIsSaved(true);
+    successTimerRef.current = setTimeout(() => {
+      successTimerRef.current = null;
+      onContinue();
+    }, ONBOARDING_SUCCESS_DELAY_MS);
   };
 
   return (
     <main className="auth-gate onboarding-profile" aria-live="polite">
-      <section className="surface-card auth-gate__card">
-        <p className="section-kicker">Шаг 1 из 2</p>
-        <h1 className="auth-gate__title">Расскажите немного о себе</h1>
-        <p className="surface-card__copy">Эти данные нужны, чтобы подготовить ваш профиль путешественника.</p>
-
+      <section className="onboarding-card auth-gate__card">
+        <header className="onboarding-card__header">
+          <p className="section-kicker">{getOnboardingStepLabel(step)}</p>
+          <h1 className="auth-gate__title">{step === 'profile' ? 'Профиль' : 'Стиль поездки'}</h1>
+          <p className="surface-card__copy">
+            {step === 'profile'
+              ? 'Заполните основную информацию, расскажите о себе и выберите интересы.'
+              : 'Выберите один или несколько вариантов — их можно сочетать.'}
+          </p>
+        </header>
         <form className="profile-form onboarding-profile__form" onSubmit={handleSubmit} noValidate>
-          <div className="profile-form__section">
-            <label className="profile-form__field">
-              <span className="profile-form__label">Имя *</span>
-              <input
-                ref={displayNameInputRef}
-                className="profile-input"
-                type="text"
-                value={draft.displayName}
-                onChange={handleTextChange('displayName')}
-                placeholder="Как вас зовут"
-                disabled={isSaving}
-                aria-invalid={validationErrors.displayName ? 'true' : undefined}
-                aria-describedby={validationErrors.displayName ? 'onboarding-name-error' : undefined}
-              />
-              {validationErrors.displayName ? <FieldError id="onboarding-name-error" message={validationErrors.displayName} /> : null}
-            </label>
-
-            <label className="profile-form__field">
-              <span className="profile-form__label">Дата рождения</span>
-              <input
-                ref={birthDateInputRef}
-                className="profile-input"
-                type="date"
-                value={draft.birthDate}
-                onChange={handleTextChange('birthDate')}
-                disabled={isSaving}
-                aria-invalid={validationErrors.birthDate ? 'true' : undefined}
-                aria-describedby={validationErrors.birthDate ? 'onboarding-birth-date-error' : undefined}
-              />
-              {validationErrors.birthDate ? <FieldError id="onboarding-birth-date-error" message={validationErrors.birthDate} /> : null}
-            </label>
-
-            <label className="profile-form__field">
-              <span className="profile-form__label">Город</span>
-              <input className="profile-input" type="text" value={draft.city} onChange={handleTextChange('city')} disabled={isSaving} />
-            </label>
-
-            <label className="profile-form__field">
-              <span className="profile-form__label">О себе</span>
-              <textarea className="profile-input onboarding-profile__textarea" value={draft.bio} onChange={handleTextChange('bio')} disabled={isSaving} />
-            </label>
-          </div>
-
-          <div className="profile-form__section">
-            <p className="surface-card__title">Интересы</p>
-            <ChipSelector<string>
-              options={INTEREST_OPTIONS}
-              selectedValues={draft.interests}
-              onToggle={(value) => updateDraft({ ...draft, interests: toggleMultiValue(draft.interests, value) })}
+          {isSaved ? (
+            <OnboardingStatusPanel
+              title={step === 'profile' ? 'Профиль сохранён' : 'Стиль поездки сохранён'}
+              message={step === 'profile'
+                ? 'Через секунду откроется выбор стиля поездки.'
+                : 'Через секунду откроется план первой поездки.'}
             />
-          </div>
+          ) : null}
+          {step === 'profile' ? (
+            <>
+              <section className="onboarding-section">
+                <h2 className="surface-card__title">Основная информация</h2>
+                <div className="profile-form__section">
+                  <label className="profile-form__field">
+                    <span className="profile-form__label">Имя *</span>
+                    <input
+                      ref={displayNameInputRef}
+                      className="profile-input"
+                      type="text"
+                      value={draft.displayName}
+                      onChange={handleTextChange('displayName')}
+                      placeholder="Введите имя"
+                      disabled={isSaving || isSaved}
+                      aria-invalid={validationErrors.displayName ? 'true' : undefined}
+                      aria-describedby={validationErrors.displayName ? 'onboarding-name-error' : undefined}
+                    />
+                    {validationErrors.displayName ? <FieldError id="onboarding-name-error" message={validationErrors.displayName} /> : null}
+                  </label>
 
-          <div className="profile-form__section">
-            <p className="surface-card__title">Предпочтения в поездках</p>
-            <div className="profile-form__field">
-              <span className="profile-form__label">Стиль путешествий</span>
+                  <label className="profile-form__field">
+                    <span className="profile-form__label">Дата рождения</span>
+                    <input
+                      ref={birthDateInputRef}
+                      className="profile-input"
+                      type="date"
+                      value={draft.birthDate}
+                      onChange={handleTextChange('birthDate')}
+                      disabled={isSaving || isSaved}
+                      aria-invalid={validationErrors.birthDate ? 'true' : undefined}
+                      aria-describedby={validationErrors.birthDate ? 'onboarding-birth-date-error' : undefined}
+                    />
+                    {validationErrors.birthDate ? <FieldError id="onboarding-birth-date-error" message={validationErrors.birthDate} /> : null}
+                  </label>
+
+                  <label className="profile-form__field">
+                    <span className="profile-form__label">Город</span>
+                    <input className="profile-input" type="text" value={draft.city} onChange={handleTextChange('city')} disabled={isSaving || isSaved} placeholder="Введите город" />
+                  </label>
+                </div>
+              </section>
+
+              <section className="onboarding-section">
+                <h2 className="surface-card__title">О себе</h2>
+                <textarea ref={aboutInputRef} className="profile-input onboarding-profile__textarea" aria-label="О себе" value={draft.bio} onChange={handleTextChange('bio')} disabled={isSaving || isSaved} placeholder="Расскажите о себе" rows={3} />
+              </section>
+
+              <section className="onboarding-section">
+                <h2 className="surface-card__title">Интересы</h2>
+                <ChipSelector<string>
+                  options={INTEREST_OPTIONS}
+                  selectedValues={draft.interests}
+                  disabled={isSaving || isSaved}
+                  onToggle={(value) => updateDraft({ ...draft, interests: toggleMultiValue(draft.interests, value) })}
+                />
+              </section>
+            </>
+          ) : (
+            <section className="onboarding-section">
+              <h2 className="surface-card__title">Стиль поездки</h2>
+              <p className="surface-card__copy">Можно выбрать несколько вариантов.</p>
               <ChipSelector<string>
                 options={TRAVEL_STYLE_OPTIONS}
                 selectedValues={draft.travelStyle}
+                  disabled={isSaving || isSaved}
                 onToggle={(value) => updateDraft({ ...draft, travelStyle: toggleMultiValue(draft.travelStyle, value) })}
               />
-            </div>
-            <LevelSelector
-              legend="Уровень бюджета"
-              name="onboarding-budget"
-              value={draft.budgetLevel}
-              options={BUDGET_OPTIONS}
-              disabled={isSaving}
-              onChange={(budgetLevel) => updateDraft({ ...draft, budgetLevel })}
-            />
-            <LevelSelector
-              legend="Уровень комфорта"
-              name="onboarding-comfort"
-              value={draft.comfortLevel}
-              options={COMFORT_OPTIONS}
-              disabled={isSaving}
-              onChange={(comfortLevel) => updateDraft({ ...draft, comfortLevel })}
-            />
-          </div>
+            </section>
+          )}
 
           {apiError ? <p className="profile-field-error" role="alert">{apiError}</p> : null}
-          {isSaved ? <p className="onboarding-profile__saved" role="status">Профиль сохранён.</p> : null}
 
           <div className="profile-actions">
-            <button type="submit" className="profile-button profile-button--primary" disabled={isSaving}>
-              {isSaving ? 'Сохраняем…' : 'Сохранить профиль'}
+            {step === 'travel_style' ? (
+              <button type="button" className="profile-button profile-button--secondary" onClick={onBack} disabled={isSaving || isSaved}>
+                Назад
+              </button>
+            ) : null}
+            <button type="submit" className="profile-button profile-button--primary" disabled={isSaving || isSaved}>
+              {isSaving ? 'Сохранение…' : isSaved ? 'Сохранено' : 'Сохранить'}
             </button>
-            {profile !== null || isSaved ? <button type="button" className="profile-button profile-button--secondary" onClick={onContinue}>Далее</button> : null}
           </div>
         </form>
       </section>

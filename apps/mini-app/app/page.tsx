@@ -80,7 +80,8 @@ export default function HomePage() {
   return (
     <section className="page">
       <article className="hero-card">
-        <h1 className="hero-card__title">Найдите попутчика</h1>
+        <h1 className="hero-card__title">Мэтч</h1>
+        <p className="hero-card__copy">Найдите попутчика</p>
       </article>
 
       {state.matchFeedback ? (

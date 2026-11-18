@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import Script from 'next/script';
 
 import { CurrentUserProfileProvider } from '@/components/CurrentUserProfileProvider';
@@ -7,6 +8,12 @@ import { TelegramAuthBootstrapProvider } from '@/components/TelegramAuthBootstra
 import { TelegramAppShell } from '@/components/TelegramAppShell';
 
 import './globals.css';
+
+const inter = Inter({
+  subsets: ['latin', 'cyrillic'],
+  display: 'swap',
+  variable: '--font-inter'
+});
 
 export const metadata: Metadata = {
   title: 'Travel Friend',
@@ -20,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body>
+      <body className={inter.variable}>
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="afterInteractive"

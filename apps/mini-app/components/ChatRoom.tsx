@@ -435,16 +435,15 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const chatTitle = isGroupChat ? chat.title ?? 'Групповой чат' : companion?.display_name ?? '';
   const tripButtonState = getTripNavigationButtonState(tripLookup, isCreatingTrip);
 
+  // TODO(design-handoff): Figma does not define group rename or participant-profile states; keep the current controls and links.
   return (
     <section className="page">
       <article className="hero-card chat-room-hero">
         <div className="profile-header">
           <Link className="profile-button profile-button--secondary profile-back-button" href="/chats">
-            Назад к чатам
+            ← К чатам
           </Link>
-          <span className="profile-status">Чат</span>
         </div>
-        <p className="section-kicker">{isGroupChat ? 'Группа' : 'Диалог'}</p>
         <div className="profile-hero">
           <div className="profile-hero__avatar" aria-hidden="true">
             {getAvatarInitials(chatTitle)}
@@ -496,20 +495,35 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
               </div>
             ) : null}
             {companion !== null ? <p className="profile-hero__city">{companion.city ?? 'Город не указан'}</p> : null}
-            {companion !== null ? <Link href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>Открыть профиль</Link> : null}
+            {companion !== null ? <Link className="chat-room__profile-link" href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>Открыть профиль</Link> : null}
           </div>
+        </div>
+        <div className="chat-room__trip-summary">
+          <p className="surface-card__copy">{getTripNavigationDescription(tripLookup)}</p>
+          {tripLookup.status === 'error' ? (
+            <p className="chat-room__composer-note" role="alert">Не удалось проверить поездку. Повторите попытку.</p>
+          ) : null}
+          {tripError !== null ? <p className="chat-room__composer-note" role="alert">{tripError}</p> : null}
+          {tripButtonState.showRetry ? (
+            <button className="profile-button profile-button--secondary" type="button" onClick={retryTripLookup}>
+              Повторить
+            </button>
+          ) : (
+            <button className="profile-button profile-button--primary" disabled={tripButtonState.disabled} type="button" onClick={handleCreateTrip}>
+              {tripButtonState.label}
+            </button>
+          )}
         </div>
       </article>
 
-      <article className="surface-card surface-card--compact">
-        <div className="chat-room__participants-header">
-          <p className="surface-card__title">{isGroupChat ? 'Участники' : 'Собеседник'}</p>
-          <span className="chat-room__participants-count">
-            {isGroupChat ? `${chat.participant_count} участников` : 'Прямой чат'}
-          </span>
-        </div>
-        <div className="chat-room__participants" aria-label={isGroupChat ? 'Участники чата' : 'Собеседник в чате'}>
-          {isGroupChat ? chat.participants.map((participant) => {
+      {isGroupChat ? (
+        <article className="surface-card surface-card--compact">
+          <div className="chat-room__participants-header">
+            <p className="surface-card__title">Участники</p>
+            <span className="chat-room__participants-count">{chat.participant_count} участников</span>
+          </div>
+          <div className="chat-room__participants" aria-label="Участники чата">
+            {chat.participants.map((participant) => {
             const participantName = participant.display_name ?? 'Имя не указано';
 
             return (
@@ -526,42 +540,13 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
                 </div>
               </Link>
             );
-          }) : companion === null ? null : (
-            <Link className="chat-room__participant" href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>
-              <div className="chat-room__participant-avatar" aria-hidden="true">
-                {getAvatarInitials(companion.display_name)}
-              </div>
-              <div className="chat-room__participant-copy">
-                <p className="chat-room__participant-name">
-                  {companion.display_name}
-                  {companion.age === null ? '' : `, ${companion.age}`}
-                </p>
-                <p className="chat-room__participant-meta">{companion.city ?? 'Город не указан'}</p>
-              </div>
-            </Link>
-          )}
-        </div>
-      </article>
-
-      <article className="surface-card surface-card--compact">
-        <p className="surface-card__title">Поездка</p>
-        <p className="surface-card__copy">{getTripNavigationDescription(tripLookup)}</p>
-        {tripLookup.status === 'error' ? (
-          <p className="chat-room__composer-note" role="alert">Не удалось проверить поездку. Повторите попытку.</p>
-        ) : null}
-        {tripError !== null ? <p className="chat-room__composer-note" role="alert">{tripError}</p> : null}
-        {tripButtonState.showRetry ? (
-          <button className="profile-button profile-button--secondary" type="button" onClick={retryTripLookup}>
-            Повторить
-          </button>
-        ) : (
-          <button className="profile-button profile-button--primary" disabled={tripButtonState.disabled} type="button" onClick={handleCreateTrip}>
-            {tripButtonState.label}
-          </button>
-        )}
-      </article>
+            })}
+          </div>
+        </article>
+      ) : null}
 
       <section className="surface-card chat-room" aria-label="История сообщений">
+        <h2 className="surface-card__title">Сообщения</h2>
         {isOffline ? <p className="chat-room__composer-note" role="status">Нет подключения. Сообщения обновятся после восстановления сети; черновик сохранён.</p> : null}
         {syncError ? (
           <p className="chat-room__composer-note" role="status">
@@ -607,29 +592,29 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
           })}
         </div>
 
-        <form className="chat-room__composer" onSubmit={handleSubmit}>
-          <label className="sr-only" htmlFor="chat-room-message">
-            Сообщение
-          </label>
-          <textarea
-            id="chat-room-message"
-            className="profile-input chat-room__input"
-            value={draftMessage}
-            onChange={(event) => setDraftMessage(event.target.value)}
-            placeholder="Напишите сообщение для старта обсуждения"
-            rows={3}
-            disabled={isSending}
-          />
-          <div className="chat-room__composer-footer">
-            <p className="chat-room__composer-note" role={sendError ? 'alert' : undefined}>
-              {sendError ?? 'Сообщение будет добавлено в чат после подтверждения сервером.'}
-            </p>
-            <button className="profile-button profile-button--primary" type="submit" disabled={isSending}>
-              {isSending ? 'Отправляем…' : 'Отправить сообщение'}
-            </button>
-          </div>
-        </form>
       </section>
+      <form className="surface-card chat-room__composer" onSubmit={handleSubmit}>
+        <label className="sr-only" htmlFor="chat-room-message">
+          Сообщение
+        </label>
+        <textarea
+          id="chat-room-message"
+          className="profile-input chat-room__input"
+          value={draftMessage}
+          onChange={(event) => setDraftMessage(event.target.value)}
+          placeholder="Напишите сообщение для старта обсуждения"
+          rows={2}
+          disabled={isSending}
+        />
+        <div className="chat-room__composer-footer">
+          <p className={`chat-room__composer-note${sendError ? '' : ' sr-only'}`} role={sendError ? 'alert' : undefined}>
+            {sendError ?? 'Сообщение будет добавлено в чат после подтверждения сервером.'}
+          </p>
+          <button className="profile-button profile-button--primary" type="submit" disabled={isSending}>
+            {isSending ? 'Отправляем…' : 'Отправить'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }

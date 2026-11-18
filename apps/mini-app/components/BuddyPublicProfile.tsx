@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
 import { DiscoverMatchFeedback } from '@/components/DiscoverMatchFeedback';
@@ -9,7 +10,6 @@ import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvid
 import { ApiError, createBackendApiClient, type DiscoverCandidateResponse, type DiscoverDecision } from '@/lib/backend-api-client';
 import { getDiscoverLevelLabels } from '@/lib/discover-runtime';
 import { formatRussianDateRange } from '@/lib/russian-date-format';
-import { getAvatarInitials } from '@/lib/travel-preferences';
 import { findDiscoverCandidateById, getDiscoverPublicProfileState } from '@/lib/discover-public-profile-runtime';
 
 const backendApiClient = createBackendApiClient();
@@ -133,14 +133,16 @@ export function BuddyPublicProfile({ userId }: BuddyPublicProfileProps) {
 
   return (
     <section className="page">
-      <article className="hero-card">
+      <article className="hero-card public-profile__identity">
         <div className="profile-header">
           <ProfileBackButton />
           <span className="profile-status">Анкета попутчика</span>
         </div>
         <p className="section-kicker">Публичный профиль</p>
         <div className="profile-hero">
-          <div className="profile-hero__avatar" aria-hidden="true">{getAvatarInitials(candidate.display_name)}</div>
+          <div className="profile-hero__avatar" aria-hidden="true">
+            <Image className="profile-hero__avatar-image" src="/figma-assets/profile-placeholder.png" width={740} height={740} alt="" />
+          </div>
           <div className="profile-hero__content">
             <h1 className="hero-card__title profile-hero__title">
               {candidate.display_name}{candidate.age === null ? '' : `, ${candidate.age}`}

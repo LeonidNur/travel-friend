@@ -56,8 +56,9 @@ export default function TripsPage() {
 
   return (
     <section className="page">
-      <article className="hero-card">
+      <article className="hero-card screen-heading">
         <h2 className="hero-card__title">Поездки</h2>
+        <p className="hero-card__copy">Ваши будущие и созданные поездки</p>
       </article>
 
       {screenState === 'loading' ? (

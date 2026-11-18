@@ -12,6 +12,7 @@ import {
   normalizeGroupChatTitle,
   validateGroupChatCompanionIds
 } from '@/lib/group-chat-runtime';
+import { getAvatarInitials } from '@/lib/travel-preferences';
 
 const backendApiClient = createBackendApiClient();
 
@@ -178,8 +179,9 @@ export default function ChatsPage() {
 
   return (
     <section className="page">
-      <article className="hero-card">
+      <article className="hero-card screen-heading">
         <h2 className="hero-card__title">Чаты</h2>
+        <p className="hero-card__copy">Обсуждения с будущими попутчиками</p>
         <button
           className="profile-button profile-button--secondary"
           type="button"
@@ -265,42 +267,43 @@ export default function ChatsPage() {
           {refreshError ? <p className="chat-room__composer-note" role="status">Не удалось обновить чаты. Повторим автоматически.</p> : null}
           {chats.map((chat) => (
             <Link className="surface-card surface-card--compact chat-card chat-card--link" key={chat.chat_id} href={`/chats/${chat.chat_id}`}>
-              <div className="chat-card__header">
-                {chat.type === 'direct' ? (
-                  <div>
-                    <p className="surface-card__title">{chat.companion.display_name}</p>
-                    <p className="chat-card__meta">
-                      {chat.companion.age === null ? 'Возраст не указан' : `${chat.companion.age} лет`} ·{' '}
-                      {chat.companion.city ?? 'Город не указан'}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="surface-card__title">{chat.title ?? 'Групповой чат'}</p>
-                    <p className="chat-card__meta">{chat.participant_count} участников</p>
-                    <p className="chat-card__meta">
-                      {chat.participants.map((participant) => participant.display_name ?? 'Имя не указано').join(' · ')}
-                    </p>
-                  </div>
-                )}
-                <div className="chat-card__preview">
-                  <span className="chat-card__preview-time">
-                    {chat.last_message === null
-                      ? ''
-                      : formatChatListTimestamp(chat.last_message.created_at)}
-                  </span>
-                  {chat.unread_count > 0 ? (
-                    <span className="chat-card__unread" aria-label={`Непрочитанных сообщений: ${chat.unread_count}`}>
-                      {chat.unread_count}
-                    </span>
-                  ) : null}
-                </div>
+              <div className="chat-card__avatar" aria-hidden="true">
+                {getAvatarInitials(chat.type === 'direct' ? chat.companion.display_name : chat.title ?? 'Групповой чат')}
               </div>
-              <p className="chat-card__last-message">
-                {chat.last_message === null
-                  ? 'Сообщений пока нет'
-                  : `${chat.last_message.sender_user_id === session?.userId ? 'Вы: ' : ''}${chat.last_message.content_text ?? 'Системное сообщение'}`}
-              </p>
+              <div className="chat-card__content">
+                <div className="chat-card__header">
+                  <div className="chat-card__identity">
+                    {chat.type === 'direct' ? (
+                      <>
+                        <p className="chat-card__name">{chat.companion.display_name}</p>
+                        <p className="chat-card__meta">{chat.companion.city ?? 'Город не указан'}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="chat-card__name">{chat.title ?? 'Групповой чат'}</p>
+                        <p className="chat-card__meta">
+                          {chat.participants.map((participant) => participant.display_name ?? 'Имя не указано').join(', ')}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <div className="chat-card__preview">
+                    <span className="chat-card__preview-time">
+                      {chat.last_message === null ? '' : formatChatListTimestamp(chat.last_message.created_at)}
+                    </span>
+                    {chat.unread_count > 0 ? (
+                      <span className="chat-card__unread" aria-label={`Непрочитанных сообщений: ${chat.unread_count}`}>
+                        {chat.unread_count}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <p className="chat-card__last-message">
+                  {chat.last_message === null
+                    ? 'Сообщений пока нет'
+                    : `${chat.last_message.sender_user_id === session?.userId ? 'Вы: ' : ''}${chat.last_message.content_text ?? 'Системное сообщение'}`}
+                </p>
+              </div>
             </Link>
           ))}
         </section>
