@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { act, createElement } from 'react';
+import { act, createElement, useState } from 'react';
 import type { Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
 import test from 'node:test';
 
-import { TripDraftEditor } from '../components/TripDraftEditor';
+import type { TripView } from '../components/TripWorkspace';
+import { TripDraftEditor, type TripDraftEditorProps } from '../components/TripDraftEditor';
 import { ApiError } from './backend-api-client';
 import type {
   BackendApiClient,
@@ -93,7 +94,7 @@ function createApi(overrides: Partial<Pick<BackendApiClient,
 
 async function mountEditor(api = createApi(), onProposalAccepted: () => void = () => undefined,
                            draftOverride: TripDraftResponse = draft,
-                           confirmedDays: readonly TripItineraryDayResponse[] = [], tripOverride: TripDetailResponse = trip) {
+                           confirmedDays: readonly TripItineraryDayResponse[] = [], tripOverride: TripDetailResponse = trip, useScopedNavigation = false, initialItineraryNotice?: TripDraftEditorProps['confirmedItineraryNotice']) {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'http://localhost' });
   const globals = ['window', 'document', 'navigator', 'HTMLElement', 'Node', 'Event', 'MouseEvent'] as const;
   const previous = new Map<string, PropertyDescriptor | undefined>();
@@ -107,19 +108,18 @@ async function mountEditor(api = createApi(), onProposalAccepted: () => void = (
   const container = dom.window.document.getElementById('root');
   assert.ok(container);
   const root: Root = createRoot(container);
-  await act(async () => root.render(createElement(TripDraftEditor, {
+  const props: TripDraftEditorProps = {
     token: 'session-token', userId: 'member-1', draft: draftOverride, trip: tripOverride, alternatives: detail.alternatives, confirmedDays,
-    api, authorLabel: () => 'Участник', onProposalAccepted
-  })));
+    api, authorLabel: () => 'Участник', onProposalAccepted, confirmedItineraryNotice: initialItineraryNotice
+  };
+  const render = (overrides: Partial<TripDraftEditorProps> = {}) =>
+    act(async () => root.render(createElement(useScopedNavigation ? ScopedEditor : TripDraftEditor, { ...props, ...overrides })));
+  await render();
   return {
     api,
     container,
-    async updateDraft(nextDraft: TripDraftResponse) {
-      await act(async () => root.render(createElement(TripDraftEditor, {
-        token: 'session-token', userId: 'member-1', draft: nextDraft, trip: tripOverride, alternatives: detail.alternatives,
-        confirmedDays, api, authorLabel: () => 'Участник', onProposalAccepted
-      })));
-    },
+    updateDraft: (nextDraft: TripDraftResponse) => render({ draft: nextDraft }),
+    setConfirmedItinerary: (days: readonly TripItineraryDayResponse[]) => render({ confirmedDays: days, confirmedItineraryNotice: undefined }),
     async cleanup() {
       await act(async () => root.unmount());
       dom.window.close();
@@ -132,6 +132,22 @@ async function mountEditor(api = createApi(), onProposalAccepted: () => void = (
       else Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', previousActEnvironment);
     }
   };
+}
+
+function ScopedEditor(props: TripDraftEditorProps) {
+  const [views, setViews] = useState<readonly TripView[]>([{ screen: 'draft' }]);
+  const [focusedProposalId, setFocusedProposalId] = useState<string | null>(null);
+  return createElement(TripDraftEditor, {
+    ...props,
+    navigation: {
+      view: views.at(-1) ?? { screen: 'draft' },
+      navigate: (view) => setViews((history) => [...history, view]),
+      back: () => setViews((history) => history.slice(0, -1)),
+      focusedProposalId,
+      openProposal: setFocusedProposalId,
+      closeProposal: () => setFocusedProposalId(null)
+    }
+  });
 }
 
 function button(container: HTMLElement, label: string): HTMLButtonElement {
@@ -290,21 +306,19 @@ test('opening an alternative fetches one snapshot and confirms before replacing 
     getTripDraftAlternative: async () => { fetchCalls += 1; return alternative; }
   });
   const ui = await mountEditor(api);
-  const originalConfirm = window.confirm;
   try {
     await addAndEditFirstRouteStop(ui.container, 'Самара');
-    window.confirm = () => false;
     await act(async () => button(ui.container, 'Открыть в редакторе').click());
     assert.equal(fetchCalls, 0);
+    await act(async () => button(ui.container, 'Оставить текущие правки').click());
     assert.equal(fieldValue(ui.container, 'Место 1'), 'Самара');
 
-    window.confirm = () => true;
     await act(async () => button(ui.container, 'Открыть в редакторе').click());
+    await act(async () => button(ui.container, 'Заменить и открыть').click());
     assert.equal(fetchCalls, 1);
     assert.match(ui.container.textContent ?? '', /Море/);
     assert.match(ui.container.textContent ?? '', /предложите его участникам/);
   } finally {
-    window.confirm = originalConfirm;
     await ui.cleanup();
   }
 });
@@ -627,6 +641,73 @@ test('event-level Proposal is disabled until its parent day is confirmed', async
   try {
     assert.equal((button(ui.container, 'Предложить событие') as HTMLButtonElement).disabled, true);
     assert.match(ui.container.textContent ?? '', /Сначала согласуйте день/);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('scope navigation and a failed alternative request preserve local edits and retry the same proposal', async () => {
+  const requests: { key: string; scope: string; version: number }[] = [];
+  let alternativeCalls = 0;
+  const api = createApi({
+    getTripDraftAlternative: async () => { alternativeCalls += 1; throw new Error('offline'); },
+    createTripProposal: async (_token, _tripId, request) => {
+      requests.push({ key: request.idempotency_key, scope: request.scopes[0], version: request.draft_version });
+      if (requests.length === 1) throw new Error('response lost');
+      return proposal;
+    }
+  });
+  const ui = await mountEditor(api, () => undefined, draft, [], trip, true);
+  const click = async (name: string) => act(async () => button(ui.container, name).click());
+  try {
+    await click('Редактировать · маршрут');
+    await addAndEditFirstRouteStop(ui.container, 'Самара');
+    assert.doesNotMatch(ui.container.textContent ?? '', /Предложить бюджет/);
+    await click('Назад');
+    await click('Открыть варианты');
+    await click('Открыть в редакторе');
+    assert.equal(alternativeCalls, 0);
+    await click('Заменить и открыть');
+    assert.equal(alternativeCalls, 1);
+    assert.match(ui.container.textContent ?? '', /Текущие правки остались/);
+    await click('Назад');
+    await click('Редактировать · маршрут');
+    assert.equal(fieldValue(ui.container, 'Место 1'), 'Самара');
+    await click('Предложить маршрут');
+    assert.match(ui.container.textContent ?? '', /ответ на создание предложения не получен/);
+    await click('Назад');
+    await click('Редактировать · маршрут');
+    assert.equal(fieldValue(ui.container, 'Место 1'), 'Самара');
+    await click('Предложить маршрут');
+    assert.equal(requests.length, 2);
+    assert.deepEqual(requests[0], requests[1]);
+    assert.equal(requests[0].scope, 'route');
+    assert.equal(requests[0].version, 2);
+    assert.match(ui.container.textContent ?? '', /Предложение отправлено/);
+    assert.equal(trip.route_stops.length, 0);
+  } finally {
+    await ui.cleanup();
+  }
+});
+
+test('initial programme failure protects the draft until it can seed confirmed days', async () => {
+  let request: TripDraftSaveRequest | undefined;
+  const api = createApi({
+    saveTripDraft: async (_token, _tripId, payload) => {
+      request = payload;
+      return { ...draft, version: 2, content: payload.content };
+    }
+  });
+  const ui = await mountEditor(api, undefined, draft, [], trip, false, { failed: true });
+  try {
+    assert.match(ui.container.textContent ?? '', /Не удалось загрузить согласованную программу/);
+    assert.equal(ui.container.querySelector('fieldset')?.disabled, true);
+    await ui.setConfirmedItinerary([{ id: 'day', position: 0, day_date: null, title: 'Согласованный день', notes: null, events: [] }]);
+    assert.equal(ui.container.querySelector('fieldset')?.disabled, false);
+    await addAndEditFirstRouteStop(ui.container, 'Самара');
+    await act(async () => button(ui.container, 'Предложить маршрут').click());
+    assert.equal(request?.base_version, 1);
+    assert.equal(request?.content.days[0]?.title, 'Согласованный день');
   } finally {
     await ui.cleanup();
   }

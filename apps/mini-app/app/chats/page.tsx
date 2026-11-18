@@ -1,18 +1,20 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
+import { ChatListRow } from '@/components/ChatListRow';
+import { ChatsListHeader } from '@/components/ChatsListHeader';
+import { ChatsScreenStatus } from '@/components/ChatsScreenStatus';
+import { GroupChatForm } from '@/components/GroupChatForm';
 import { createBackendApiClient, type ChatResponse } from '@/lib/backend-api-client';
-import { formatChatListTimestamp, getChatsScreenState } from '@/lib/chat-runtime';
+import { getChatsScreenState } from '@/lib/chat-runtime';
 import {
   getAvailableGroupChatCompanions,
   normalizeGroupChatTitle,
   validateGroupChatCompanionIds
 } from '@/lib/group-chat-runtime';
-import { getAvatarInitials } from '@/lib/travel-preferences';
 
 const backendApiClient = createBackendApiClient();
 
@@ -177,135 +179,27 @@ export default function ChatsPage() {
     }
   };
 
+  if (isGroupFormOpen) {
+    return <GroupChatForm companions={companions} selectedIds={selectedCompanionIds} title={groupTitle} error={groupError}
+      isCreating={isCreatingGroup} canRetry={canRetryGroupCreation} onTitleChange={setGroupTitle} onToggle={toggleCompanion}
+      onSubmit={handleCreateGroup} onBack={() => setIsGroupFormOpen(false)} />;
+  }
+
   return (
     <section className="page">
-      <article className="hero-card screen-heading">
-        <h2 className="hero-card__title">Чаты</h2>
-        <p className="hero-card__copy">Обсуждения с будущими попутчиками</p>
-        <button
-          className="profile-button profile-button--secondary"
-          type="button"
-          disabled={screenState !== 'success'}
-          onClick={() => {
+      <ChatsListHeader disabled={screenState === 'loading' || screenState === 'error'} onCreate={() => {
             setIsGroupFormOpen((isOpen) => !isOpen);
             setGroupError(null);
             setCanRetryGroupCreation(false);
-          }}
-        >
-          Создать групповой чат
-        </button>
-      </article>
+          }} />
 
-      {isGroupFormOpen ? (
-        <article className="surface-card surface-card--compact" aria-labelledby="group-chat-create-title">
-          <h2 className="surface-card__title" id="group-chat-create-title">Новый групповой чат</h2>
-          {companions.length === 0 ? (
-            <p className="surface-card__copy">Нет доступных собеседников из прямых чатов.</p>
-          ) : (
-            <form className="group-chat-create" onSubmit={handleCreateGroup}>
-              <p className="surface-card__copy">Выберите минимум двух собеседников.</p>
-              <label className="profile-field">
-                <span>Название группы (необязательно)</span>
-                <input
-                  autoComplete="off"
-                  disabled={isCreatingGroup}
-                  value={groupTitle}
-                  onChange={(event) => setGroupTitle(event.target.value)}
-                />
-              </label>
-              <div className="group-chat-create__options">
-                {companions.map((companion) => (
-                  <label className="group-chat-create__option" key={companion.user_id}>
-                    <input
-                      checked={selectedCompanionIds.includes(companion.user_id)}
-                      disabled={isCreatingGroup}
-                      type="checkbox"
-                      onChange={() => toggleCompanion(companion.user_id)}
-                    />
-                    <span>{companion.display_name}</span>
-                  </label>
-                ))}
-              </div>
-              {groupError !== null ? <p className="chat-room__composer-note" role="alert">{groupError}</p> : null}
-              <button className="profile-button profile-button--primary" disabled={isCreatingGroup} type="submit">
-                {isCreatingGroup ? 'Создаём…' : canRetryGroupCreation ? 'Повторить создание' : 'Создать чат'}
-              </button>
-            </form>
-          )}
-        </article>
-      ) : null}
-
-      {screenState === 'loading' ? (
-        <article className="surface-card surface-card--compact empty-state-card" aria-live="polite">
-          <p className="section-kicker">Загружаем чаты</p>
-        </article>
-      ) : null}
-
-      {screenState === 'error' ? (
-        <article className="surface-card surface-card--compact empty-state-card" role="alert">
-          <p className="section-kicker">Не удалось загрузить чаты</p>
-          <p className="surface-card__copy">{error}</p>
-          <button className="profile-button profile-button--secondary" type="button" onClick={handleRetry}>
-            Повторить
-          </button>
-        </article>
-      ) : null}
-
-      {screenState === 'empty' ? (
-        <article className="surface-card surface-card--compact empty-state-card">
-          <p className="section-kicker">Чатов пока нет</p>
-          <h2 className="empty-state-card__title">Здесь появятся ваши обсуждения</h2>
-          <Link className="profile-button profile-button--primary" href="/">
-            Перейти к анкетам
-          </Link>
-        </article>
-      ) : null}
+      {screenState !== 'success' ? <ChatsScreenStatus state={screenState} error={error} onRetry={handleRetry} /> : null}
 
       {screenState === 'success' ? (
         <section className="list-stack" aria-label="Список чатов">
           {isOffline ? <p className="chat-room__composer-note" role="status">Нет подключения. Список не обновляется.</p> : null}
           {refreshError ? <p className="chat-room__composer-note" role="status">Не удалось обновить чаты. Повторим автоматически.</p> : null}
-          {chats.map((chat) => (
-            <Link className="surface-card surface-card--compact chat-card chat-card--link" key={chat.chat_id} href={`/chats/${chat.chat_id}`}>
-              <div className="chat-card__avatar" aria-hidden="true">
-                {getAvatarInitials(chat.type === 'direct' ? chat.companion.display_name : chat.title ?? 'Групповой чат')}
-              </div>
-              <div className="chat-card__content">
-                <div className="chat-card__header">
-                  <div className="chat-card__identity">
-                    {chat.type === 'direct' ? (
-                      <>
-                        <p className="chat-card__name">{chat.companion.display_name}</p>
-                        <p className="chat-card__meta">{chat.companion.city ?? 'Город не указан'}</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="chat-card__name">{chat.title ?? 'Групповой чат'}</p>
-                        <p className="chat-card__meta">
-                          {chat.participants.map((participant) => participant.display_name ?? 'Имя не указано').join(', ')}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                  <div className="chat-card__preview">
-                    <span className="chat-card__preview-time">
-                      {chat.last_message === null ? '' : formatChatListTimestamp(chat.last_message.created_at)}
-                    </span>
-                    {chat.unread_count > 0 ? (
-                      <span className="chat-card__unread" aria-label={`Непрочитанных сообщений: ${chat.unread_count}`}>
-                        {chat.unread_count}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <p className="chat-card__last-message">
-                  {chat.last_message === null
-                    ? 'Сообщений пока нет'
-                    : `${chat.last_message.sender_user_id === session?.userId ? 'Вы: ' : ''}${chat.last_message.content_text ?? 'Системное сообщение'}`}
-                </p>
-              </div>
-            </Link>
-          ))}
+          {chats.map((chat) => <ChatListRow key={chat.chat_id} chat={chat} currentUserId={session?.userId} />)}
         </section>
       ) : null}
     </section>

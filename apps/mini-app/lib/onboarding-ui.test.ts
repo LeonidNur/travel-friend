@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { act, createElement, type ComponentType } from 'react';
+import { act, createElement, useState, type ComponentType } from 'react';
 import type { Root } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 import test from 'node:test';
@@ -139,6 +139,75 @@ async function setField(container: HTMLElement, label: string, value: string) {
     control.dispatchEvent(new window.Event('change', { bubbles: true }));
   });
 }
+
+test('onboarding progresses through profile, travel style and first trip with retry', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  let failProfile = true;
+  let savedProfile = profile;
+  setFetchHandler(async (input, init) => {
+    if (String(input).endsWith('/me/profile')) {
+      if (failProfile) throw new Error('Ошибка сохранения');
+      savedProfile = { ...savedProfile, ...JSON.parse(String(init?.body)) };
+      return jsonResponse(savedProfile);
+    }
+    throw new Error(`Unexpected request ${String(input)}`);
+  });
+
+  function Flow() {
+    const [step, setStep] = useState<'profile' | 'travel_style' | 'first_trip'>('profile');
+    const [currentProfile, setCurrentProfile] = useState(profile);
+    if (step === 'first_trip') {
+      assert.ok(tripForm);
+      return createElement(tripForm, {
+        travelIntent: null, profile: currentProfile, onboardingStatus: 'in_progress', token: 'session-token',
+        onProfileSaved: setCurrentProfile, onTravelIntentSaved: () => undefined,
+        onOnboardingCompleted: () => undefined
+      });
+    }
+    assert.ok(profileForm);
+    return createElement(profileForm, {
+      profile: currentProfile, step, onboardingStatus: 'in_progress', token: 'session-token',
+      onProfileSaved: setCurrentProfile, onOnboardingStarted: () => undefined,
+      onBack: () => setStep('profile'),
+      onContinue: () => setStep(step === 'profile' ? 'travel_style' : 'first_trip')
+    });
+  }
+
+  const ui = await mount(Flow, {});
+  try {
+    await setField(ui.container, 'Имя *', 'Марина');
+    await act(async () => findButton(ui.container, 'Сохранить').click());
+    assert.match(ui.container.textContent ?? '', /Ошибка сохранения/);
+    assert.equal(ui.container.querySelector<HTMLInputElement>('input')?.value, 'Марина');
+    await act(async () => { context.mock.timers.tick(1000); });
+    assert.match(ui.container.textContent ?? '', /Шаг 1 из 3/);
+
+    failProfile = false;
+    await act(async () => findButton(ui.container, 'Сохранить').click());
+    assert.match(ui.container.textContent ?? '', /Профиль сохранён/);
+    await act(async () => { context.mock.timers.tick(999); });
+    assert.match(ui.container.textContent ?? '', /Шаг 1 из 3/);
+    await act(async () => { context.mock.timers.tick(1); });
+    assert.match(ui.container.textContent ?? '', /Шаг 2 из 3/);
+    assert.equal(findButton(ui.container, 'Сохранить').disabled, false);
+    const choice = ui.container.querySelector<HTMLButtonElement>('.chip-button');
+    assert.ok(choice);
+    assert.equal(choice.disabled, false);
+    await act(async () => choice.click());
+    const selectedStyle = choice.textContent?.trim();
+    await act(async () => findButton(ui.container, 'Сохранить').click());
+    assert.equal(savedProfile.display_name, 'Марина');
+    assert.ok(selectedStyle && savedProfile.travel_style.includes(selectedStyle));
+    assert.match(ui.container.textContent ?? '', /Стиль поездки сохранён/);
+    await act(async () => { context.mock.timers.tick(999); });
+    assert.match(ui.container.textContent ?? '', /Шаг 2 из 3/);
+    await act(async () => { context.mock.timers.tick(1); });
+    assert.match(ui.container.textContent ?? '', /Первая поездка/);
+    assert.equal(findButton(ui.container, 'Завершить настройку').disabled, false);
+  } finally {
+    await ui.cleanup();
+  }
+});
 
 test('Profile and Travel Style use Save, show backend success, and advance after one second', async (context) => {
   context.mock.timers.enable({ apis: ['setTimeout'] });

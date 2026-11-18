@@ -35,7 +35,7 @@ test('renders dates and budget only from persisted values', () => {
   assert.equal(formatTripDetailDates(null, null), null);
   assert.equal(
     formatTripBudget({ min: '1200.00', max: '1500.00', currency: 'RUB', scope: 'per_person' }),
-    '1200.00–1500.00 RUB · на человека'
+    '1\u00a0200,00–1\u00a0500,00 RUB · на человека'
   );
   assert.equal(formatTripBudget({ min: null, max: null, currency: 'RUB', scope: null }), null);
 });

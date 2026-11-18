@@ -17,6 +17,10 @@ export function TelegramAppShell({ children }: TelegramAppShellProps) {
   const shouldHideBottomNavigation = pathname.startsWith('/chats/');
   useTelegram();
 
+  if (process.env.NODE_ENV === 'development' && pathname === '/debug-telegram') {
+    return children;
+  }
+
   if (authStatus === 'onboarding_required') {
     return <OnboardingProfileScreen />;
   }

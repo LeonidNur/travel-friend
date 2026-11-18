@@ -1,7 +1,12 @@
 'use client';
 
 import Script from 'next/script';
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
+
+const VisualPreview = process.env.NODE_ENV === 'development'
+  ? dynamic(() => import('./visual-preview'))
+  : null;
 
 type TelegramWebApp = {
   initData?: string;
@@ -57,6 +62,7 @@ function getDiagnostics(): TelegramDiagnostics {
 
 export default function DebugTelegramPage() {
   const [diagnostics, setDiagnostics] = useState<TelegramDiagnostics | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const refreshDiagnostics = useCallback(() => {
     setDiagnostics(getDiagnostics());
@@ -80,8 +86,11 @@ export default function DebugTelegramPage() {
     return () => cancelAnimationFrame(animationFrameId);
   }, [refreshDiagnostics]);
 
+  if (showPreview && VisualPreview) return <VisualPreview />;
+
   return (
     <main className="debug-page">
+      {VisualPreview ? <button type="button" onClick={() => setShowPreview(true)}>Открыть UI preview</button> : null}
       <Script
         src="https://telegram.org/js/telegram-web-app.js"
         strategy="afterInteractive"

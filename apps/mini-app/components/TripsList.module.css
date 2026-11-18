@@ -1,0 +1,96 @@
+.page,
+.list {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.heading {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.heading,
+.subtitle,
+.list,
+.card h2,
+.card p,
+.panel h2,
+.panel p {
+  margin: 0;
+}
+
+.list {
+  padding: 0;
+  list-style: none;
+}
+
+.card,
+.panel {
+  display: grid;
+  min-width: 0;
+  padding: 24px;
+  border-radius: 28px;
+  background: var(--surface);
+  color: #000;
+  overflow-wrap: anywhere;
+}
+
+.card {
+  justify-items: start;
+  gap: 10px;
+}
+
+.panel,
+.notice {
+  display: grid;
+  gap: 12px;
+}
+
+.card h2,
+.panel h2 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 21px;
+}
+
+.card p,
+.subtitle {
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.panel p,
+.action {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: normal;
+}
+
+.status {
+  padding: 7px 14px;
+  border-radius: 50px;
+  background: #c0c0c0;
+  font-size: 15px;
+  line-height: normal;
+}
+
+.status[data-status='forming'] { background: #e7ecf5; }
+.status[data-status='active'] { background: #e7f4e8; }
+.status[data-status='cancelled'],
+.panel[data-state='error'] { background: #ffe2de; }
+
+.action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 50px;
+  background: #fff;
+  color: #000;
+  text-align: center;
+  cursor: pointer;
+}

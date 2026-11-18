@@ -38,6 +38,7 @@ type ChatRoomState = 'error' | 'loaded' | 'loading' | 'not_found';
 
 interface ChatRoomProps {
   chatId: string;
+  preview?: Readonly<{ chat: ChatResponse; messages: ChatMessageResponse[]; userId: string; sendError?: string }>;
 }
 
 const backendApiClient = createBackendApiClient();
@@ -46,11 +47,12 @@ function getMessageClassName(isCurrentUser: boolean) {
   return `chat-room__message${isCurrentUser ? ' chat-room__message--outgoing' : ' chat-room__message--incoming'}`;
 }
 
-export function ChatRoom({ chatId }: ChatRoomProps) {
+export function ChatRoom({ chatId, preview }: ChatRoomProps) {
   const { session } = useTelegramAuthSession();
   const router = useRouter();
-  const [chat, setChat] = useState<ChatResponse | null>(null);
-  const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
+  const fixture = process.env.NODE_ENV === 'development' ? preview : undefined;
+  const [chat, setChat] = useState<ChatResponse | null>(() => fixture?.chat ?? null);
+  const [messages, setMessages] = useState<ChatMessageResponse[]>(() => fixture?.messages ?? []);
   const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [historyError, setHistoryError] = useState(false);
@@ -58,14 +60,14 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   const [readError, setReadError] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [readRetryKey, setReadRetryKey] = useState(0);
-  const [roomState, setRoomState] = useState<ChatRoomState>('loading');
+  const [roomState, setRoomState] = useState<ChatRoomState>(() => fixture ? 'loaded' : 'loading');
   const [reloadKey, setReloadKey] = useState(0);
-  const [draftMessage, setDraftMessage] = useState('');
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [draftMessage, setDraftMessage] = useState(() => fixture?.sendError ? 'Встретимся в субботу?' : '');
+  const [sendError, setSendError] = useState<string | null>(() => fixture?.sendError ?? null);
   const [isSending, setIsSending] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [tripError, setTripError] = useState<string | null>(null);
-  const [tripLookup, setTripLookup] = useState<TripNavigationLookupState>({ status: 'loading' });
+  const [tripLookup, setTripLookup] = useState<TripNavigationLookupState>(() => fixture ? { status: 'loaded', tripId: null } : { status: 'loading' });
   const [tripLookupKey, setTripLookupKey] = useState(0);
   const [isEditingGroupTitle, setIsEditingGroupTitle] = useState(false);
   const [groupTitleDraft, setGroupTitleDraft] = useState('');
@@ -274,8 +276,8 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   }, [chat, roomState, session, tripLookupKey]);
 
   const renderedMessages = useMemo(
-    () => (session === null ? [] : mapChatMessages(messages, session.userId)),
-    [messages, session]
+    () => session === null && !fixture ? [] : mapChatMessages(messages, session?.userId ?? fixture?.userId ?? ''),
+    [messages, session, fixture]
   );
   const messageHistoryState = getChatMessageHistoryState(renderedMessages);
 
@@ -432,24 +434,24 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
 
   const isGroupChat = chat.type === 'group';
   const companion = chat.type === 'direct' ? chat.companion : null;
-  const chatTitle = isGroupChat ? chat.title ?? 'Групповой чат' : companion?.display_name ?? '';
+  const chatTitle = isGroupChat ? chat.title ?? (chat.participants.map((person) => person.display_name).filter(Boolean).join(', ') || 'Групповой чат') : companion?.display_name ?? '';
   const tripButtonState = getTripNavigationButtonState(tripLookup, isCreatingTrip);
 
   // TODO(design-handoff): Figma does not define group rename or participant-profile states; keep the current controls and links.
   return (
     <section className="page">
       <article className="hero-card chat-room-hero">
-        <div className="profile-header">
+        <div className="chat-room-hero__header">
           <Link className="profile-button profile-button--secondary profile-back-button" href="/chats">
             ← К чатам
           </Link>
-        </div>
         <div className="profile-hero">
           <div className="profile-hero__avatar" aria-hidden="true">
-            {getAvatarInitials(chatTitle)}
+            {isGroupChat ? chat.participant_count : getAvatarInitials(chatTitle)}
           </div>
           <div className="profile-hero__content">
             <h2 className="hero-card__title profile-hero__title">{chatTitle}</h2>
+            {isGroupChat ? <p className="profile-hero__city">{chat.participant_count} участников</p> : null}
             {isGroupChat ? (
               <div className="chat-room__group-title-actions">
                 {!isEditingGroupTitle ? (
@@ -497,6 +499,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
             {companion !== null ? <p className="profile-hero__city">{companion.city ?? 'Город не указан'}</p> : null}
             {companion !== null ? <Link className="chat-room__profile-link" href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>Открыть профиль</Link> : null}
           </div>
+        </div>
         </div>
         <div className="chat-room__trip-summary">
           <p className="surface-card__copy">{getTripNavigationDescription(tripLookup)}</p>
@@ -580,7 +583,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
             }
 
             const sourceMessage = messages.find((source) => source.message_id === message.messageId);
-            const authorLabel = sourceMessage === undefined ? null : getMessageAuthorLabel(chat, sourceMessage, session?.userId ?? '');
+            const authorLabel = sourceMessage === undefined ? null : getMessageAuthorLabel(chat, sourceMessage, session?.userId ?? fixture?.userId ?? '');
 
             return (
               <div className={getMessageClassName(message.isOwn)} key={message.messageId}>

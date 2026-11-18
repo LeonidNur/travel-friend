@@ -74,12 +74,25 @@ export function formatTripBudget({
     return null;
   }
 
-  const amount = min !== null && max !== null ? `${min}–${max}` : min ?? max;
+  const amount = [min, max].filter((value) => value !== null).map(formatBudgetAmount).join('–');
   const currencyValue = currency === null ? amount : `${amount} ${currency}`;
 
   return scope === null ? currencyValue : `${currencyValue} · ${BUDGET_SCOPE_LABELS[scope]}`;
 }
 
+function formatBudgetAmount(amount: string): string {
+  const decimal = /^(-?\d+)(?:\.(\d+))?$/.exec(amount);
+  if (!decimal) return amount;
+  const [, integer, fraction] = decimal;
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+  return fraction ? `${grouped},${fraction}` : grouped;
+}
+
 export function getPersistedTripStatusLabel(status: PersistedTripStatus): string {
   return TRIP_STATUS_LABELS[status];
+}
+
+export function formatTripDayCount(count: number): string {
+  const form = new Intl.PluralRules('ru').select(count);
+  return `${count} ${form === 'one' ? 'день' : form === 'few' ? 'дня' : 'дней'}`;
 }

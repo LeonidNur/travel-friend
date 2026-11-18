@@ -164,6 +164,7 @@ export function OnboardingProfileForm({
     setIsSaved(true);
     successTimerRef.current = setTimeout(() => {
       successTimerRef.current = null;
+      setIsSaved(false);
       onContinue();
     }, ONBOARDING_SUCCESS_DELAY_MS);
   };
