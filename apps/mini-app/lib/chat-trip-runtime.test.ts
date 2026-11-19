@@ -107,9 +107,21 @@ test('loads an existing Trip from the read endpoint for direct and group Chats',
       return [tripListItem(chatId, 'forming')];
     });
 
-    assert.deepEqual(state, { status: 'loaded', tripId: 'trip-existing' });
+    assert.deepEqual(state, { status: 'loaded', tripId: 'trip-existing', route: null });
     assert.equal(reads, 1);
   }
+});
+
+test('uses confirmed stop labels for the matching unfinished Trip and ignores unavailable routes', async () => {
+  const state = await loadChatTripNavigationState('group-chat', async () => [
+    { ...tripListItem('another-chat', 'forming'), route_place_labels: ['Казань'] },
+    { ...tripListItem('group-chat', 'completed'), route_place_labels: ['Омск'] },
+    { ...tripListItem('group-chat', 'active'), route_place_labels: [' Сидней ', '', 'Кэрнс'] }
+  ]);
+  assert.equal(getTripNavigationDescription(state), 'Сидней → Кэрнс');
+  assert.equal(getTripNavigationDescription(await loadChatTripNavigationState('group-chat', async () => [
+    tripListItem('group-chat', 'active')
+  ])), null);
 });
 
 test('returns an explicit retryable state when the Trip list cannot be read', async () => {
@@ -136,9 +148,9 @@ test('chooses loading, retry, create, and open states without creating a Trip fo
     label: 'Создать поездку',
     showRetry: false
   });
-  assert.deepEqual(getTripNavigationButtonState({ status: 'loaded', tripId: 'trip-existing' }, false), {
+  assert.deepEqual(getTripNavigationButtonState({ status: 'loaded', tripId: 'trip-existing', route: null }, false), {
     disabled: false,
-    label: 'Открыть поездку',
+    label: 'План поездки',
     showRetry: false
   });
   assert.deepEqual(getTripNavigationButtonState({ status: 'loaded', tripId: null }, true), {
@@ -149,8 +161,8 @@ test('chooses loading, retry, create, and open states without creating a Trip fo
 });
 
 test('describes Trip navigation according to lookup state', () => {
-  assert.equal(getTripNavigationDescription({ status: 'loading' }), 'Проверяем, есть ли поездка для этого чата.');
-  assert.equal(getTripNavigationDescription({ status: 'error' }), 'Повторите проверку, чтобы узнать, доступна ли поездка.');
+  assert.equal(getTripNavigationDescription({ status: 'loading' }), null);
+  assert.equal(getTripNavigationDescription({ status: 'error' }), null);
   assert.equal(getTripNavigationDescription({ status: 'loaded', tripId: null }), 'Создайте поездку для участников этого чата.');
-  assert.equal(getTripNavigationDescription({ status: 'loaded', tripId: 'trip-existing' }), 'Откройте поездку участников этого чата.');
+  assert.equal(getTripNavigationDescription({ status: 'loaded', tripId: 'trip-existing', route: 'Москва' }), 'Москва');
 });

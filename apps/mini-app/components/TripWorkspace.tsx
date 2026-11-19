@@ -3,19 +3,21 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
-import { TripDraftEditor, type TripDraftEditorProps } from '@/components/TripDraftEditor';
-import type { TripDetailResponse, TripItineraryDayResponse } from '@/lib/backend-api-client';
+import { TripDraftEditor, type TripDraftEditorHandle, type TripDraftEditorProps } from '@/components/TripDraftEditor';
+import { TripLogistics } from '@/components/TripLogistics';
+import { TripDayCard, TripOverview, dayName } from '@/components/TripOverview';
+import type { TripDetailResponse, TripDraftResponse, TripItineraryDayResponse } from '@/lib/backend-api-client';
 import { formatRussianDate } from '@/lib/russian-date-format';
-import { formatTripBudget, formatTripDetailDates, formatTripParticipants, formatTripRouteStops, getPersistedTripStatusLabel, formatTripDayCount } from '@/lib/trip-detail-runtime';
+import { createConfirmedContent, formatTripDayCount, getTripOverviewData } from '@/lib/trip-detail-runtime';
 import styles from './TripWorkspace.module.css';
 
-export type TripView = Readonly<{ screen: 'overview' | 'program' | 'draft' | 'alternatives' | 'proposals' }> |
+export type TripView = Readonly<{ screen: 'overview' | 'program' | 'logistics' | 'draft' | 'alternatives' | 'proposals' }> |
   Readonly<{ screen: 'edit'; scope: string }>;
 
 type Props = Readonly<{
   trip: TripDetailResponse;
   days: readonly TripItineraryDayResponse[];
-  editor?: Omit<TripDraftEditorProps, 'trip' | 'confirmedDays' | 'navigation' | 'confirmedItineraryNotice' | 'isRefreshing'>;
+  editor?: Omit<TripDraftEditorProps, 'trip' | 'confirmedDays' | 'navigation' | 'confirmedItineraryNotice' | 'isRefreshing' | 'ref' | 'onDraftSnapshot'>;
   draftError?: string | null;
   isDraftWaitingForItinerary?: boolean;
   isRefreshing?: boolean;
@@ -28,8 +30,27 @@ type Props = Readonly<{
 
 const overview: TripView = { screen: 'overview' };
 
+export function TripDetailStatus({ state, onRetry }: Readonly<{ state: 'loading' | 'error' | 'not_found'; onRetry?: () => void }>) {
+  const loading = state === 'loading';
+  const unavailable = state === 'not_found';
+  return <section className={styles.stack} aria-label="Поездка">
+    <h1>Поездка</h1>
+    <article className={styles.card} data-error={!loading} role={loading ? 'status' : 'alert'}>
+      <h2>{loading ? 'Загружаем поездку' : unavailable ? 'Поездка недоступна' : 'Не удалось загрузить поездку'}</h2>
+      <p>{loading ? 'Запрашиваем согласованный план…' : unavailable ? 'Поездка не найдена или у вас нет доступа.' : 'Проверьте подключение. Можно повторить запрос.'}</p>
+      {unavailable ? <Link className={styles.primary} href="/trips">К поездкам</Link> : null}
+      {state === 'error' && onRetry ? <button className={styles.primary} type="button" onClick={onRetry}>Повторить</button> : null}
+    </article>
+  </section>;
+}
+
 export function TripWorkspace({ trip, days, editor, draftError, isDraftWaitingForItinerary, isRefreshing, itineraryState = 'loaded', onRetryDraft, onRetryItinerary, previewView, previewProposalId }: Props) {
   const viewport = useRef<HTMLDivElement>(null);
+  const draftEditor = useRef<TripDraftEditorHandle>(null);
+  const [latestDraft, setLatestDraft] = useState<Pick<TripDraftResponse, 'content' | 'version'> | null>(null);
+  const initialDraft = editor?.draft;
+  const persistedDraft = initialDraft && latestDraft && latestDraft.version >= initialDraft.version ? latestDraft : initialDraft;
+  const overviewData = getTripOverviewData(trip.trip.status, itineraryState, createConfirmedContent(trip, days), persistedDraft);
   const [views, setViews] = useState<readonly TripView[]>(() => {
     if (previewView?.screen === 'edit') return [overview, { screen: 'program' }, previewView];
     return [previewView ?? overview];
@@ -42,6 +63,14 @@ export function TripWorkspace({ trip, days, editor, draftError, isDraftWaitingFo
   };
   const back = () => {
     setViews((history) => history.length > 1 ? history.slice(0, -1) : [overview]);
+    viewport.current?.scrollTo({ top: 0 });
+  };
+  const toProgram = () => {
+    setViews([overview, { screen: 'program' }]);
+    viewport.current?.scrollTo({ top: 0 });
+  };
+  const toOverview = () => {
+    setViews([overview]);
     viewport.current?.scrollTo({ top: 0 });
   };
 
@@ -58,17 +87,27 @@ export function TripWorkspace({ trip, days, editor, draftError, isDraftWaitingFo
   }, []);
 
   const edit = (scope: string) => navigate({ screen: 'edit', scope });
-  const editorVisible = focusedProposalId !== null || (view.screen !== 'overview' && view.screen !== 'program');
+  const editorVisible = focusedProposalId !== null || !['overview', 'program', 'logistics'].includes(view.screen);
+  const previousScreen = views.at(-2)?.screen;
+  const backLabel = previousScreen === 'logistics' ? 'К жилью и транспорту' : previousScreen === 'program' ? 'К программе' : undefined;
   return <div ref={viewport} className={styles.workspace}>
     <section className={styles.stack} hidden={editorVisible}>
-      {view.screen === 'overview' ? <TripOverview trip={trip} days={days} itineraryState={itineraryState}
-        onProgram={() => navigate({ screen: 'program' })} onEditBudget={() => {
+      {view.screen === 'overview' ? <TripOverview trip={trip} days={days} itineraryState={itineraryState} data={overviewData}
+        onLogistics={() => navigate({ screen: 'logistics' })}
+        onEdit={edit} onFirstDay={() => draftEditor.current?.openFirstDay()} canAddFirstDay={Boolean(editor) && !isRefreshing}
+        draftRecovery={!editor && draftError ? <article className={styles.card} data-error="true" role="alert">
+          <h2>Черновик не загрузился</h2>
+          <p>{itineraryState === 'loaded' ? 'Согласованная программа доступна. ' : ''}Повторите загрузку черновика.</p>
+          {onRetryDraft ? <button className={styles.primary} type="button" onClick={onRetryDraft} disabled={isRefreshing}>Повторить</button> : null}
+        </article> : null}
+        onProgram={toProgram} onEditBudget={() => {
           setViews((history) => [...history, { screen: 'program' }, { screen: 'edit', scope: 'budget' }]);
           viewport.current?.scrollTo({ top: 0 });
         }}
         onProposals={() => navigate({ screen: 'proposals' })} /> : null}
-      {view.screen === 'program' ? <TripProgram days={days} state={itineraryState} onRetry={onRetryItinerary}
-        onEdit={edit} onBack={back} /> : null}
+      {view.screen === 'program' ? <TripProgram days={days} state={itineraryState} detailed={overviewData.mode === 'complex'} onRetry={onRetryItinerary}
+        onEdit={edit} onBack={toOverview} /> : null}
+      {view.screen === 'logistics' ? <TripLogistics trip={trip} onEdit={edit} onBack={toOverview} /> : null}
     </section>
     {editorVisible && !editor ? <section className={styles.stack}>
       <h1>Рабочая версия поездки</h1>
@@ -76,15 +115,16 @@ export function TripWorkspace({ trip, days, editor, draftError, isDraftWaitingFo
         <p>{draftError ?? 'Загружаем общий черновик…'}</p>
         {draftError ? <button className={styles.primary} onClick={onRetryDraft}>Повторить</button> : null}
       </article>
-      <button className={styles.action} onClick={() => { setFocusedProposalId(null); back(); }}>Назад</button>
+      <button className={styles.action} onClick={() => { setFocusedProposalId(null); back(); }}>{backLabel ?? 'Назад'}</button>
     </section> : null}
     {editor ? <div hidden={!editorVisible}>
-      <TripDraftEditor {...editor} trip={trip} confirmedDays={days} isRefreshing={isRefreshing}
+      <TripDraftEditor {...editor} ref={draftEditor} trip={trip} confirmedDays={days} isRefreshing={isRefreshing}
+        onDraftSnapshot={(content, version) => setLatestDraft((previous) => previous && previous.version > version ? previous : { content, version })}
         confirmedItineraryNotice={isDraftWaitingForItinerary ? {
           failed: itineraryState === 'error', onRetry: onRetryItinerary
         } : undefined} navigation={{
-        view, navigate, back, focusedProposalId,
-        backLabel: views.at(-2)?.screen === 'program' ? 'К программе' : undefined,
+        view, navigate, back, toProgram, focusedProposalId,
+        backLabel,
         openProposal: (id) => { setFocusedProposalId(id); viewport.current?.scrollTo({ top: 0 }); },
         closeProposal: () => {
           setFocusedProposalId(null);
@@ -98,56 +138,18 @@ export function TripWorkspace({ trip, days, editor, draftError, isDraftWaitingFo
   </div>;
 }
 
-function TripOverview({ trip, days, itineraryState, onProgram, onEditBudget, onProposals }: Readonly<{
-  trip: TripDetailResponse; days: readonly TripItineraryDayResponse[]; itineraryState: Props['itineraryState'];
-  onProgram: () => void; onEditBudget: () => void; onProposals: () => void;
-}>) {
-  const route = formatTripRouteStops(trip.route_stops);
-  const dates = formatTripDetailDates(trip.trip.date_from, trip.trip.date_to);
-  const budget = formatTripBudget({ min: trip.trip.budget_min, max: trip.trip.budget_max, currency: trip.trip.budget_currency, scope: trip.trip.budget_scope });
-  const status = getPersistedTripStatusLabel(trip.trip.status);
-  const participants = formatTripParticipants(trip.participants);
-  return <>
-    <h1>Поездка</h1>
-    <article className={styles.card}>
-      <h2>{route ?? 'Маршрут не указан'}</h2>
-      <p>{[new Intl.ListFormat('ru').format(participants), status].filter(Boolean).join(' · ')}</p>
-      <p className={styles.meta}>{[days.length ? formatTripDayCount(days.length) : null, dates ?? 'Даты не указаны'].filter(Boolean).join(' · ')}</p>
-      <Link className={styles.action} href={`/chats/${trip.trip.chat_id}`}>Перейти в чат</Link>
-    </article>
-    <article className={styles.card}>
-      <h2>Согласованный план</h2>
-      <p>Маршрут: {route ?? 'не указан'}<br />Даты: {dates ?? 'не указаны'}<br />Бюджет: {budget ?? 'не заполнен'}</p>
-    </article>
-    <article className={styles.card}>
-      <h2>Программа{days.length ? ` · ${formatTripDayCount(days.length)}` : ''}</h2>
-      {itineraryState === 'loading' ? <p>Загружаем программу…</p> : null}
-      {itineraryState === 'error' ? <p>Не удалось загрузить программу.</p> : null}
-      {itineraryState === 'loaded' && days.length === 0 ? <p>Согласованных дней пока нет.</p> : null}
-      {days.length > 0 ? <div>{days.slice(0, 3).map((day, index) => {
-        const firstActivity = day.events.find((event) => event.kind === 'activity');
-        return <p key={day.id}>{dayName(day, index)}{index === 0 && firstActivity ? <><br />{firstActivity.title}{firstActivity.start_time ? '' : ' · время не указано'}</> : null}</p>;
-      })}</div> : null}
-      <button className={styles.primary} onClick={onProgram}>Открыть программу</button>
-    </article>
-    <button className={styles.action} onClick={onEditBudget}>Изменить бюджет</button>
-    <Link className={styles.action} href="/trips">К поездкам</Link>
-    <button className={styles.action} onClick={onProposals}>История предложений</button>
-  </>;
-}
-
-function TripProgram({ days, state, onRetry, onEdit, onBack }: Readonly<{
-  days: readonly TripItineraryDayResponse[]; state: Props['itineraryState']; onRetry?: () => void;
+function TripProgram({ days, state, detailed, onRetry, onEdit, onBack }: Readonly<{
+  days: readonly TripItineraryDayResponse[]; state: Props['itineraryState']; onRetry?: () => void; detailed: boolean;
   onEdit: (scope: string) => void; onBack: () => void;
 }>) {
   return <>
     <h1>Программа{days.length ? ` · ${formatTripDayCount(days.length)}` : ''}</h1>
-    <p className={styles.meta}>Согласованная программа</p>
+    <p className={styles.meta}>{detailed && days.every((day) => !day.day_date) ? 'Согласованная программа · даты не указаны' : 'Согласованная программа'}</p>
     {state !== 'loaded' || days.length === 0 ? <article className={styles.card} role={state === 'error' ? 'alert' : 'status'}>
       <p>{state === 'error' ? 'Не удалось загрузить согласованную программу.' : state === 'loading' ? 'Загружаем программу…' : 'Согласованных дней пока нет.'}</p>
       {state === 'error' ? <button className={styles.primary} onClick={onRetry}>Повторить</button> : null}
     </article> : null}
-    {days.map((day, index) => <article className={styles.card} key={day.id}>
+    {days.map((day, index) => detailed ? <TripDayCard key={day.id} day={day} index={index} onEdit={onEdit} /> : <article className={styles.card} key={day.id}>
       <h2>{dayName(day, index)}</h2>
       {day.day_date ? <p className={styles.meta}>{formatRussianDate(day.day_date)}</p> : null}
       {day.notes ? <p>{day.notes}</p> : null}
@@ -163,8 +165,3 @@ function TripProgram({ days, state, onRetry, onEdit, onBack }: Readonly<{
     <button className={styles.secondaryLink} onClick={() => onEdit('itinerary:all')}>Изменить программу</button>
   </>;
 }
-
-function dayName(day: TripItineraryDayResponse, index: number): string {
-  return `День ${index + 1}${day.title ? ` · ${day.title}` : ''}`;
-}
-

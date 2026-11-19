@@ -41,7 +41,8 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
   const loadGeneration = useRef(0);
   const [voteChoices, setVoteChoices] = useState<Record<string, 'accept' | 'reject'>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [request, setRequest] = useState<Readonly<{ kind: 'vote' | 'cancel'; proposalId: string }> | null>(null);
+  const saving = request !== null;
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [proposalErrors, setProposalErrors] = useState<Readonly<Record<string, ProposalError | undefined>>>({});
@@ -103,7 +104,7 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
   const vote = useCallback(async (proposal: TripProposalSummaryResponse) => {
     const choice = voteChoices[proposal.id];
     if (!choice || saving || proposalErrors[proposal.id]?.kind === 'conflict' || proposal.status !== 'pending' || proposal.own_vote !== null) return;
-    setSaving(true); setProposalError(proposal.id); setNotice(null);
+    setRequest({ kind: 'vote', proposalId: proposal.id }); setProposalError(proposal.id); setNotice(null);
     try {
       const updated = await api.voteTripProposal(token, tripId, proposal.id, choice);
       setDetails((current) => ({ ...current, [updated.id]: updated }));
@@ -117,14 +118,14 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
     } catch (requestError) {
       const conflict = requestError instanceof ApiError && requestError.status === 409;
       setProposalError(proposal.id, conflict
-        ? { message: 'Состояние предложения изменилось. Обновите список и проверьте актуальный статус.', kind: 'conflict' }
+        ? { message: 'Состояние предложения изменилось. Обновите и проверьте текущий статус. Сохранение голоса не подтверждено.', kind: 'conflict' }
         : { message: 'Не удалось сохранить голос. Выбор остался на экране; можно повторить.', kind: 'vote' });
-    } finally { setSaving(false); }
+    } finally { setRequest(null); }
   }, [api, onAccepted, proposalErrors, saving, setProposalError, token, tripId, voteChoices]);
 
   const cancel = useCallback(async (proposal: TripProposalSummaryResponse) => {
     if (saving) return;
-    setSaving(true); setProposalError(proposal.id); setNotice(null);
+    setRequest({ kind: 'cancel', proposalId: proposal.id }); setProposalError(proposal.id); setNotice(null);
     try {
       const updated = await api.cancelTripProposal(token, tripId, proposal.id);
       setDetails((current) => ({ ...current, [updated.id]: updated }));
@@ -133,7 +134,7 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
       setProposalError(proposal.id, { message: 'Не удалось отменить предложение. Обновите статус и повторите.',
         kind: requestError instanceof ApiError && requestError.status === 409 ? 'conflict' : 'action' });
     }
-    finally { setSaving(false); }
+    finally { setRequest(null); }
   }, [api, saving, setProposalError, token, tripId]);
 
   const renderProposalAtScope = (scope: string) => visibleProposals
@@ -144,6 +145,7 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
       onVote={() => void vote(proposal)} onCancel={() => void cancel(proposal)} saving={saving} userId={userId} />);
 
   const completed = visibleProposals.filter((proposal) => completedStatuses.has(proposal.status));
+  const firstAccepted = completed.find((proposal) => proposal.status === 'accepted');
   const focused = visibleProposals.find((proposal) => proposal.id === focusedProposalId);
   if (onOpenProposal) {
     const focusedRequestError = focusedProposalId ? proposalErrors[focusedProposalId] : undefined;
@@ -155,20 +157,25 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
       }
     };
     const history = <section className="trip-vote-history" aria-label="Предложения по поездке">
-      {isLoading ? <p role="status">Загружаем предложения…</p> : null}
-      {error && !focusedProposalId ? <p role="alert">{error}</p> : null}
-      {visibleProposals.length === 0 && !isLoading ? <p>Предложений пока нет.</p> : null}
+      <header className="trip-vote-heading">
+        <h1>История предложений</h1>
+        <button className="trip-vote-screen__back" type="button" aria-label="Обновить предложения"
+          disabled={isLoading || saving} onClick={() => void reload()}>Обновить</button>
+      </header>
+      {isLoading ? <p role="status">Загружаем предложения…</p> : error ? <p role="alert">{error}</p>
+        : visibleProposals.length === 0 ? <p>Предложений пока нет.</p> : null}
       {visibleProposals.filter((proposal) => !completedStatuses.has(proposal.status)).map((item) => <ProposalLink key={item.id} proposal={item} participantLabel={participantLabel} onOpen={onOpenProposal} />)}
       {completed.map((item, index) => <ProposalLink key={item.id} proposal={item}
         heading={index === 0 ? `Завершённые · ${completed.length}` : undefined}
+        compact={item.id !== firstAccepted?.id}
         participantLabel={participantLabel} onOpen={onOpenProposal} />)}
-      <button className="trip-vote-screen__back" type="button" disabled={isLoading || saving} onClick={() => void reload()}>Обновить предложения</button>
     </section>;
     return <>
       <div hidden={Boolean(focusedProposalId)}>{children(renderProposalAtScope, history)}</div>
       {focusedProposalId && focused ? <TripProposalView proposal={focused} detail={details[focused.id]}
         participantLabel={participantLabel} userId={userId} confirmed={confirmedContext?.(focused)}
         voteChoice={voteChoices[focused.id]} error={focusedError} saving={saving} refreshing={isLoading} voteConflict={focusedRequestError?.kind === 'conflict'}
+        submittingVote={request?.kind === 'vote' && request.proposalId === focused.id}
         comparisonUnavailable={focusedRequestError?.kind === 'detail'} voteError={focusedRequestError?.kind === 'vote'}
         onVoteChoice={(choice) => setVoteChoices((current) => ({ ...current, [focused.id]: choice }))}
         onVote={details[focused.id] ? () => void vote(focused) : undefined} onCancel={() => void cancel(focused)}
@@ -190,7 +197,7 @@ export function TripProposalPanel({ token, userId, tripId, api, participantLabel
     <details className="trip-proposal-history">
       <summary>История предложений{completed.length ? ` · ${completed.length}` : ''}</summary>
       <button className="profile-button profile-button--secondary" type="button" onClick={() => void reload()}>Обновить предложения</button>
-      {completed.length === 0 ? <p className="surface-card__copy">Завершённых предложений пока нет.</p> : completed.map((proposal) => <ProposalCard key={proposal.id}
+      {!isLoading && !error && completed.length === 0 ? <p className="surface-card__copy">Завершённых предложений пока нет.</p> : completed.map((proposal) => <ProposalCard key={proposal.id}
         proposal={proposal} detail={details[proposal.id]} participantLabel={participantLabel}
         saving={saving} userId={userId} />)}
     </details>
@@ -215,6 +222,7 @@ type ProposalViewProps = ProposalCardProps & Readonly<{
   refreshing?: boolean;
   voteConflict?: boolean;
   voteError?: boolean;
+  submittingVote?: boolean;
   comparisonUnavailable?: boolean;
   onReload?: () => void;
   onClose?: () => void;
@@ -223,41 +231,74 @@ type ProposalViewProps = ProposalCardProps & Readonly<{
   onReturnToEdit?: () => void;
 }>;
 
-export function TripProposalView({ confirmed, error, refreshing, voteConflict, voteError, comparisonUnavailable, onReload, onClose, onOpenProgram, onOpenHistory, onReturnToEdit, ...card }: ProposalViewProps) {
+export function TripProposalView({ confirmed, error, refreshing, voteConflict, voteError, submittingVote, comparisonUnavailable, onReload, onClose, onOpenProgram, onOpenHistory, onReturnToEdit, ...card }: ProposalViewProps) {
   const { proposal, voteChoice, saving, userId, participantLabel } = card;
   const isAuthor = proposal.creator_user_id === userId;
   const viewerIsVoter = isAuthor || proposal.voters.some((voter) => voter.user_id === userId);
+  const showVoteProgress = Boolean(submittingVote && !error);
   const canReturnToEdit = ['rejected', 'stale', 'needs_revision'].includes(proposal.status);
   return <section className="trip-vote-screen" aria-labelledby={`vote-heading-${proposal.id}`}>
-    <h2 id={`vote-heading-${proposal.id}`}>{getProposalScopeLabel(proposal.scopes)} · предложение</h2>
-    {viewerIsVoter ? <p className="trip-vote-screen__participant">Вы: {participantLabel(userId)}{isAuthor ? ' · автор' : ''}</p> : null}
+    <header className="trip-vote-heading">
+      <div className="trip-vote-heading__title">
+        <h2 id={`vote-heading-${proposal.id}`}>{getProposalScopeLabel(proposal.scopes)} · предложение</h2>
+        {viewerIsVoter ? <p className="trip-vote-screen__participant">Вы: {participantLabel(userId)}{isAuthor ? ' · автор' : ''}</p> : null}
+      </div>
+      {onClose && (proposal.status !== 'accepted' || !onOpenProgram || !onOpenHistory) ?
+        <button className="trip-vote-screen__back" type="button" onClick={onClose}>Назад</button> : null}
+    </header>
     {confirmed}
-    <ProposalCard {...card} focused refreshing={refreshing} comparisonUnavailable={comparisonUnavailable}
-      hideVoting={voteConflict} hideResult={voteConflict || voteError}
-      onCancel={voteConflict ? undefined : card.onCancel}>
-      {error ? <p role="alert" className="trip-vote-screen__error">{error}</p> : null}
+    <ProposalCard {...card} focused refreshing={refreshing} submittingVote={showVoteProgress} comparisonUnavailable={comparisonUnavailable}
+      hideVoting={voteConflict} hideResult={voteConflict || voteError || showVoteProgress} voteError={voteError}
+      onCancel={voteConflict || showVoteProgress ? undefined : card.onCancel}>
+      {error ? <p role="alert" className={voteConflict || voteError ? undefined : 'trip-vote-screen__error'}>{error}</p> : null}
+      {showVoteProgress ? <p role="status">Отправляем голос. Результат будет показан после ответа сервера.</p> : null}
     </ProposalCard>
     {onOpenProgram ? <button className="profile-button profile-button--secondary" type="button" onClick={onOpenProgram}>К программе</button> : null}
     {onReload && error && !voteError ? <button className="profile-button profile-button--primary" type="button" disabled={refreshing || saving} onClick={onReload}>Обновить предложение</button> : null}
     {voteConflict && voteChoice ? <p className="trip-vote-screen__participant">Выбранное решение: {voteChoice === 'accept' ? 'Принять' : 'Отклонить'}. Оно ещё не подтверждено сервером.</p> : null}
     {proposal.status === 'accepted' && onOpenHistory ? <button className="profile-button profile-button--secondary" type="button" onClick={onOpenHistory}>История предложений</button> : null}
+    {proposal.status === 'rejected' && canReturnToEdit && onReturnToEdit ? <p className="trip-vote-screen__participant">Рабочий черновик не очищен. Можно подготовить другое изменение.</p> : null}
     {canReturnToEdit && onReturnToEdit ? <button className="profile-button profile-button--secondary" type="button" onClick={onReturnToEdit}>{proposal.status === 'stale' ? 'Проверить текущий черновик' : 'Вернуться к правке'}</button> : null}
-    {onClose && (proposal.status !== 'accepted' || !onOpenProgram || !onOpenHistory) ?
-      <button className="trip-vote-screen__back" type="button" onClick={onClose}>Назад</button> : null}
   </section>;
 }
 
-function ProposalLink({ proposal, participantLabel, onOpen, heading }: Readonly<{
+function ProposalLink({ proposal, participantLabel, onOpen, heading, compact = false }: Readonly<{
   proposal: TripProposalSummaryResponse;
   participantLabel: (userId: string) => string;
   onOpen: (id: string) => void;
   heading?: string;
+  compact?: boolean;
 }>) {
+  const completed = completedStatuses.has(proposal.status);
+  const creator = participantLabel(proposal.creator_user_id);
+  const status = proposal.status === 'expired' ? 'срок истёк' : getProposalStatusLabel(proposal.status).toLocaleLowerCase('ru-RU');
+  const title = completed
+    ? `${getProposalScopeLabel(proposal.scopes)} · ${status}`
+    : proposal.title;
+  const rejectingVoter = proposal.status === 'rejected' ? proposal.voters.find((voter) => voter.vote === 'reject') : undefined;
+  const summary = completed
+    ? proposal.status === 'accepted' ? `${creator} · все участники приняли`
+      : rejectingVoter ? `${participantLabel(rejectingVoter.user_id)} · голос против. План не изменён.`
+      : proposal.status === 'expired' ? 'Принятия не было. План не изменён.'
+      : getResultText(proposal, '', participantLabel)
+    : `${getProposalStatusLabel(proposal.status)} · ${creator}`;
+
+  if (compact) {
+    return (
+      <button className="trip-vote-link trip-vote-link--compact" type="button" onClick={() => onOpen(proposal.id)}>
+        {heading ? <strong className="trip-vote-history__heading">{heading}</strong> : null}
+        <strong>{title}</strong>
+        <span>{summary}</span>
+      </button>
+    );
+  }
   return <article className="trip-vote-link">
     {heading ? <h3 className="trip-vote-history__heading">{heading}</h3> : null}
-    <p><strong>{proposal.title}</strong>{completedStatuses.has(proposal.status) ? ` · ${getProposalStatusLabel(proposal.status).toLocaleLowerCase('ru-RU')}` : ''}</p>
-    <p>{completedStatuses.has(proposal.status) ? getResultText(proposal, '', participantLabel) : `${getProposalStatusLabel(proposal.status)} · ${participantLabel(proposal.creator_user_id)}`}</p>
-    <button className="profile-button profile-button--secondary" type="button" onClick={() => onOpen(proposal.id)}>Открыть предложение</button>
+    {completed ? <p>{title}<br />{summary}</p> : <><p><strong>{title}</strong></p><p>{summary}</p></>}
+    <button className="profile-button profile-button--secondary" type="button" onClick={() => onOpen(proposal.id)}>
+      {proposal.status === 'accepted' ? (proposal.scopes.length === 1 && proposal.scopes[0] === 'budget'
+        ? 'Открыть сравнение бюджета' : 'Открыть сравнение') : 'Открыть предложение'}
+    </button>
   </article>;
 }
 
@@ -301,24 +342,26 @@ function getResultText(proposal: TripProposalSummaryResponse, userId: string, pa
       if (waiting.length === 1 && accepted > 0) {
         const pendingUserId = waiting[0].user_id;
         if (pendingUserId === userId) return 'Остался ваш голос. Согласованный план пока не изменён.';
-        return `Приняли ${accepted} из ${proposal.voters.length}. Ожидаем голос: ${participantLabel(pendingUserId)}. Согласованный план пока не изменён.`;
+        return `Приняли ${accepted} из ${proposal.voters.length}. Ждём: ${participantLabel(pendingUserId)}. Согласованный план пока не изменён.`;
       }
       return accepted > 0 ? `Приняли ${accepted} из ${proposal.voters.length}. Согласованный план пока не изменён.` : 'Никто ещё не проголосовал. План не изменён.';
     }
   }
 }
 
-function ProposalCard({ proposal, detail, participantLabel, voteChoice, onVoteChoice, onVote, onCancel, saving, userId, focused = false, refreshing, comparisonUnavailable, hideVoting, hideResult, children }: ProposalCardProps & Readonly<{
-  focused?: boolean; refreshing?: boolean; comparisonUnavailable?: boolean; hideVoting?: boolean; hideResult?: boolean; children?: ReactNode;
+function ProposalCard({ proposal, detail, participantLabel, voteChoice, onVoteChoice, onVote, onCancel, saving, userId, focused = false, refreshing, submittingVote, comparisonUnavailable, hideVoting, hideResult, voteError, children }: ProposalCardProps & Readonly<{
+  focused?: boolean; refreshing?: boolean; submittingVote?: boolean; comparisonUnavailable?: boolean; hideVoting?: boolean; hideResult?: boolean; voteError?: boolean; children?: ReactNode;
 }>) {
   const operations = detail?.operations ?? [];
   const formatComparison = focused ? formatProposalComparison : (_scope: string, value: unknown) => formatProposalValue(value);
   const voting = !hideVoting && proposal.status === 'pending' && proposal.own_vote === null && (!focused || proposal.voters.some((voter) => voter.user_id === userId));
   const result = focused && !hideResult ? getResultText(proposal, userId, participantLabel) : null;
+  const blockedReason = proposal.blocked_reason
+    ? getProposalBlockedReasonLabel(proposal.blocked_reason) ?? 'Ожидает выполнения условия.' : null;
   return <article className="trip-proposal-card" id={`proposal-${proposal.id}`}>
     {focused ? <><h3>{proposal.title}</h3><p>{getProposalStatusLabel(proposal.status)}</p></> : <h5>{proposal.title} · {getProposalStatusLabel(proposal.status)}</h5>}
     <p className="surface-card__copy">Автор: {participantLabel(proposal.creator_user_id)}</p>
-    {proposal.blocked_reason ? <p className="surface-card__copy">{getProposalBlockedReasonLabel(proposal.blocked_reason) ?? 'Ожидает выполнения условия.'}</p> : null}
+    {!focused && blockedReason ? <p className="surface-card__copy">{blockedReason}</p> : null}
     {operations.map((operation) => <div className="trip-proposal-card__diff" key={operation.scope}>
       {focused && operations.length > 1 ? <h4>{getProposalScopeLabel([operation.scope])}</h4> : null}
       <p><strong>{focused ? 'Было' : 'Было:'}</strong>{' '}{formatComparison(operation.scope, operation.old_value)}</p>
@@ -326,13 +369,16 @@ function ProposalCard({ proposal, detail, participantLabel, voteChoice, onVoteCh
     </div>)}
     {!detail && !comparisonUnavailable ? <p className="surface-card__copy" role="status">Загружаем сравнение…</p> : null}
     <ul>{proposal.voters.map((voter) => <li key={voter.user_id}>{participantLabel(voter.user_id)}{voter.user_id === proposal.creator_user_id ? ' (автор)' : ''}: {voter.vote === 'accept' ? 'принял' : voter.vote === 'reject' ? 'отклонил' : 'ожидается голос'}</li>)}</ul>
+    {focused && blockedReason ? <p>{proposal.blocked_reason === 'prerequisite_pending'
+      ? 'Ожидает принятия связанного предложения. После проверки зависимостей голосование может стать доступным.'
+      : blockedReason}</p> : null}
     {result ? <p role="status">{result}</p> : null}
     {children}
-    {voting && (focused || (onVoteChoice && onVote)) ? <div className="trip-proposal-card__actions" role="group" aria-label="Решение по предложению">
+    {voting && (focused || (onVoteChoice && onVote)) ? <div className="trip-proposal-card__actions" data-vote-error={voteError || undefined} data-submitting={submittingVote || undefined} role="group" aria-label="Решение по предложению">
       <label><input type="radio" name={`vote-${proposal.id}`} checked={voteChoice === 'accept'} disabled={saving || refreshing || !onVoteChoice} onChange={() => onVoteChoice?.('accept')} /> Принять</label>
       <label><input type="radio" name={`vote-${proposal.id}`} checked={voteChoice === 'reject'} disabled={saving || refreshing || !onVoteChoice} onChange={() => onVoteChoice?.('reject')} /> Отклонить</label>
-      <button className="profile-button profile-button--primary" type="button" disabled={!voteChoice || saving || refreshing || !onVote} onClick={onVote}>{focused && saving ? 'Отправляем голос…' : 'Проголосовать'}</button>
-      {focused ? <p>{voteChoice ? 'Решение выбрано. Голос ещё не отправлен.' : 'Выберите решение, затем отправьте голос.'}</p> : null}
+      <button className="profile-button profile-button--primary" type="button" disabled={!voteChoice || saving || refreshing || !onVote} onClick={onVote}>{submittingVote ? 'Отправляем голос…' : 'Проголосовать'}</button>
+      {focused && !voteError ? <p>{voteChoice ? 'Решение выбрано. Голос ещё не отправлен.' : 'Выберите решение, затем отправьте голос.'}</p> : null}
     </div> : null}
     {focused && proposal.status === 'pending' && proposal.own_vote !== null ? <>
       <button className="profile-button profile-button--primary" type="button" disabled>Ваш голос сохранён</button>

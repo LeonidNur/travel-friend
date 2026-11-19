@@ -5,6 +5,13 @@
   min-width: 0;
 }
 
+.page {
+  max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 14px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+
 .heading {
   font-size: 20px;
   font-weight: 600;

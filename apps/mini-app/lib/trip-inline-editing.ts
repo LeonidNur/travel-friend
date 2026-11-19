@@ -123,7 +123,7 @@ function formatBudgetScope(value: unknown): string {
   return String(value);
 }
 
-function formatEventKind(value: unknown): string {
+export function formatEventKind(value: unknown): string {
   const labels: Readonly<Record<string, string>> = {
     activity: 'Занятие', transport: 'Транспорт', accommodation: 'Проживание', meal: 'Питание', note: 'Заметка', other: 'Другое'
   };

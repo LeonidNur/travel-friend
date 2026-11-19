@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 
 import { ChipSelector } from '@/components/ProfileSelectors';
 import { OnboardingTravelIntentScreen } from '@/components/OnboardingTravelIntentScreen';
@@ -97,14 +97,6 @@ export function OnboardingProfileForm({
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const displayNameInputRef = useRef<HTMLInputElement>(null);
   const birthDateInputRef = useRef<HTMLInputElement>(null);
-  const aboutInputRef = useRef<HTMLTextAreaElement>(null);
-
-  useLayoutEffect(() => {
-    const textarea = aboutInputRef.current;
-    if (textarea === null) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.max(textarea.scrollHeight, 54)}px`;
-  }, [draft.bio]);
 
   useEffect(() => () => {
     if (successTimerRef.current !== null) clearTimeout(successTimerRef.current);
@@ -252,7 +244,7 @@ export function OnboardingProfileForm({
 
               <section className="onboarding-section">
                 <h2 className="surface-card__title">О себе</h2>
-                <textarea ref={aboutInputRef} className="profile-input onboarding-profile__textarea" aria-label="О себе" value={draft.bio} onChange={handleTextChange('bio')} disabled={isSaving || isSaved} placeholder="Расскажите о себе" rows={3} />
+                <textarea className="profile-input onboarding-profile__textarea" aria-label="О себе" value={draft.bio} onChange={handleTextChange('bio')} disabled={isSaving || isSaved} placeholder="Расскажите о себе" rows={3} />
               </section>
 
               <section className="onboarding-section">

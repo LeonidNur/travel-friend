@@ -81,5 +81,5 @@ function Section({ title, values, ownValues }: Readonly<{
 
 function Level({ label, level, icon }: Readonly<{ label: string; level: number | null; icon: string }>) {
   if (level === null) return null;
-  return <div className="buddy-card__level" aria-label={`${label}: ${level} из 4`}><span>{label}:</span>{Array.from({ length: level }, (_, i) => <Image key={i} src={icon} width={24} height={24} alt="" />)}</div>;
+  return <div className="buddy-card__level" aria-label={`${label}: ${level} из 4`}><span>{label}:</span><span className="buddy-card__level-icons">{Array.from({ length: level }, (_, i) => <Image key={i} src={icon} width={24} height={24} alt="" />)}</span></div>;
 }

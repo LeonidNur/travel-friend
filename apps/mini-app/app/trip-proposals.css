@@ -5,7 +5,20 @@
   min-width: 0;
 }
 
-.trip-vote-screen > h2 {
+.trip-vote-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trip-vote-heading__title {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.trip-vote-heading h2 {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
@@ -147,7 +160,8 @@
 
 .trip-vote-screen__back {
   min-height: 44px;
-  padding: 0 12px;
+  flex: none;
+  padding: 0 4px;
   border: 0;
   border-radius: 24px;
   background: transparent;
@@ -155,4 +169,45 @@
   font-size: 14px;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.trip-vote-screen .trip-proposal-card__actions:not([data-vote-error]) label:has(input:checked:not(:disabled)) {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.trip-vote-screen .trip-proposal-card__actions .profile-button--primary:not(:disabled) {
+  background: #fff;
+}
+
+.trip-vote-screen .trip-proposal-card__actions[data-submitting] label:has(input:disabled) {
+  background: #ccc;
+  color: #737373;
+  opacity: 1;
+}
+
+.trip-vote-screen .trip-proposal-card__actions[data-submitting] input[type='radio'] {
+  border-color: #737373;
+}
+
+.trip-vote-screen .trip-proposal-card__actions[data-submitting] input[type='radio']:checked {
+  background: #737373;
+}
+
+.trip-vote-screen .trip-proposal-card__actions[data-submitting] .profile-button:disabled {
+  background: #eaeaea;
+  color: #737373;
+}
+
+.trip-vote-link--compact {
+  width: 100%;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.trip-vote-link--compact > strong {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 21px;
 }

@@ -1,7 +1,24 @@
 import Link from 'next/link';
 
-export function ChatsScreenStatus({ state, error, onRetry }: Readonly<{ state: 'loading' | 'error' | 'empty'; error?: string | null; onRetry: () => void }>) {
-  if (state === 'loading') return <article className="surface-card surface-card--compact empty-state-card" aria-live="polite"><p className="section-kicker">Загружаем чаты</p></article>;
-  if (state === 'error') return <article className="surface-card surface-card--compact empty-state-card" role="alert"><p className="section-kicker">Не удалось загрузить чаты</p><p className="surface-card__copy">{error}</p><button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button></article>;
-  return <article className="surface-card surface-card--compact empty-state-card"><p className="section-kicker">Чатов пока нет</p><h2 className="empty-state-card__title">Здесь появятся ваши обсуждения</h2><Link className="profile-button profile-button--primary" href="/">Перейти к анкетам</Link></article>;
+export function ChatsScreenStatus({ state, onRetry }: Readonly<{ state: 'loading' | 'error' | 'empty'; onRetry: () => void }>) {
+  if (state === 'loading') return (
+    <article className="chat-screen-status" role="status">
+      <h2>Загружаем чаты</h2>
+      <p>Получаем список доступных разговоров.</p>
+    </article>
+  );
+  if (state === 'error') return (
+    <article className="chat-screen-status chat-screen-status--error" role="alert">
+      <h2>Не удалось загрузить чаты</h2>
+      <p>Попробуйте загрузить список ещё раз.</p>
+      <button className="profile-button profile-button--primary" type="button" onClick={onRetry}>Повторить</button>
+    </article>
+  );
+  return (
+    <article className="chat-screen-status">
+      <h2>Чатов пока нет</h2>
+      <p>Здесь появятся ваши обсуждения</p>
+      <Link className="profile-button profile-button--primary" href="/">Перейти к анкетам</Link>
+    </article>
+  );
 }

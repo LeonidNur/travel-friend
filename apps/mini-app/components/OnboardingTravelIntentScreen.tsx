@@ -17,6 +17,7 @@ import { createOnboardingProfileDraft, saveOnboardingProfile } from '@/lib/onboa
 import {
   createOnboardingTravelIntentDraft,
   saveOnboardingTravelIntent,
+  validateOnboardingTravelIntent,
   type OnboardingTravelIntentDraft,
   type OnboardingTravelIntentValidationErrors
 } from '@/lib/onboarding-travel-intent';
@@ -81,7 +82,9 @@ export function OnboardingTravelIntentForm({
   const [draft, setDraft] = useState<OnboardingTravelIntentDraft>(() => createOnboardingTravelIntentDraft(travelIntent));
   const [budgetLevel, setBudgetLevel] = useState(() => createOnboardingProfileDraft(profile).budgetLevel);
   const [comfortLevel, setComfortLevel] = useState(() => createOnboardingProfileDraft(profile).comfortLevel);
-  const [validationErrors, setValidationErrors] = useState<OnboardingTravelIntentValidationErrors>(previewState === 'validation' ? { destination: 'Укажите направление' } : {});
+  const [validationErrors, setValidationErrors] = useState<OnboardingTravelIntentValidationErrors>(() => (
+    previewState === 'validation' ? validateOnboardingTravelIntent(createOnboardingTravelIntentDraft(travelIntent)).errors : {}
+  ));
   const [apiError, setApiError] = useState<string | null>(previewState === 'error' ? 'Проверьте подключение и повторите попытку.' : null);
   const [isSaving, setIsSaving] = useState(previewState === 'saving');
   const [isSaved, setIsSaved] = useState(previewState === 'saved');
@@ -220,11 +223,13 @@ export function OnboardingTravelIntentForm({
             <OnboardingStatusPanel
               tone="error"
               title="Не удалось завершить настройку"
-              message="Данные сохранены. Повторите завершение onboarding."
-              detail={completionError}
+              message={`Данные сохранены. ${completionError}`}
             />
           ) : null}
           {apiError ? <OnboardingStatusPanel tone="error" title="Не удалось сохранить данные" message={apiError} /> : null}
+          {!apiError && (validationErrors.destination || validationErrors.dateFrom || validationErrors.dateTo) ? (
+            <OnboardingStatusPanel tone="error" title="Проверьте данные поездки" message="Укажите направление и корректный диапазон дат." />
+          ) : null}
           <section className="onboarding-section">
             <h2 className="surface-card__title">План первой поездки</h2>
             <div className="profile-form__section">

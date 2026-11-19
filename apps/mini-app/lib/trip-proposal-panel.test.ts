@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { act, createElement, useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { JSDOM } from 'jsdom';
 
-import { TripProposalPanel } from '../components/TripProposalPanel';
+import { TripProposalPanel, TripProposalView } from '../components/TripProposalPanel';
 import { ApiError } from './backend-api-client';
 import type { TripProposalResponse, TripProposalSummaryResponse } from './backend-api-client';
 
@@ -35,14 +36,23 @@ test('proposal opens from history, preserves the vote on 409 and transitions onl
   const root = createRoot(container);
 
   let reads = 0;
+  let listReads = 0;
   let votes = 0;
   let refreshes = 0;
   let historyVisits = 0;
   let dateProposalAccepted = false;
+  const rejected = { ...other, id: 'rejected-route', title: 'Изменение маршрута', scopes: ['route'], status: 'rejected' as const,
+    voters: other.voters.map((voter) => voter.user_id === 'me' ? { ...voter, vote: 'reject' as const } : voter)
+  };
   const api = {
-    getTripProposals: async () => [pending, dateProposalAccepted ? { ...other, status: 'accepted' as const } : other],
+    getTripProposals: async () => {
+      listReads++;
+      if (listReads === 1) throw new Error('Temporary request failure');
+      return [pending, dateProposalAccepted ? { ...other, status: 'accepted' as const } : other, rejected];
+    },
     getTripProposal: async (_token: string, _trip: string, id: string) => {
       reads++;
+      if (id === rejected.id) return { ...rejected, operations: [{ scope: 'route', expected_version: 1, old_value: null, proposed_value: [] }] };
       return id === pending.id ? pendingDetail : dateProposalAccepted ? { ...otherDetail, status: 'accepted' as const } : otherDetail;
     },
     voteTripProposal: async (_token: string, _trip: string, id: string) => {
@@ -79,7 +89,18 @@ test('proposal opens from history, preserves the vote on 409 and transitions onl
 
   try {
     await act(async () => root.render(createElement(Harness)));
+    assert.match(container.querySelector('[role="alert"]')?.textContent ?? '', /Не удалось загрузить предложения/);
+    assert.doesNotMatch(container.textContent ?? '', /Предложений пока нет/);
+    const retryHistory = container.querySelector<HTMLButtonElement>('header button[aria-label="Обновить предложения"]');
+    assert.ok(retryHistory);
+    await act(async () => retryHistory.click());
+    assert.equal(listReads, 2);
+    assert.equal(container.querySelector('[role="alert"]'), null);
     assert.equal(reads, 0);
+    const compact = container.querySelector<HTMLButtonElement>('.trip-vote-link--compact');
+    assert.ok(compact);
+    assert.match(compact.textContent ?? '', /Маршрут · отклонено/);
+    assert.match(compact.textContent ?? '', /me · голос против/);
     await act(async () => findButton('Открыть предложение').click());
     assert.equal(reads, 1);
     assert.match(container.textContent ?? '', /Согласованный бюджет: 100/);
@@ -109,7 +130,12 @@ test('proposal opens from history, preserves the vote on 409 and transitions onl
     await act(async () => findButton('История предложений').click());
     assert.equal(historyVisits, 1);
     assert.equal(container.querySelector('.trip-vote-screen'), null);
-    assert.match(container.textContent ?? '', /Завершённые · 1/);
+    assert.match(container.textContent ?? '', /Завершённые · 2/);
+    assert.match(container.textContent ?? '', /author · все участники приняли/);
+    await act(async () => findButton('Открыть сравнение бюджета').click());
+    assert.match(container.querySelector('.trip-vote-screen')?.textContent ?? '', /Все участники приняли/);
+    assert.equal(votes, 2, 'opening accepted history never submits a vote');
+    await act(async () => findButton('Назад').click());
 
     await act(async () => findButton('Открыть предложение').click());
     await act(async () => container.querySelector<HTMLInputElement>('input[type="radio"]')?.click());
@@ -118,6 +144,12 @@ test('proposal opens from history, preserves the vote on 409 and transitions onl
     await act(async () => findButton('Обновить предложение').click());
     assert.match(container.querySelector('.trip-vote-screen')?.textContent ?? '', /Все участники приняли/);
     assert.equal(refreshes, 2, 'refresh confirmed after reload discovers server acceptance');
+    await act(async () => findButton('Назад').click());
+    const rejectedRow = container.querySelector<HTMLButtonElement>('.trip-vote-link--compact');
+    assert.ok(rejectedRow);
+    await act(async () => rejectedRow.click());
+    assert.match(container.querySelector('.trip-vote-screen')?.textContent ?? '', /Маршрут · предложение/);
+    assert.equal(container.querySelector('input[type="radio"]'), null);
   } finally {
     await act(async () => root.unmount());
     dom.window.close();
@@ -128,4 +160,43 @@ test('proposal opens from history, preserves the vote on 409 and transitions onl
     if (previousActEnvironment === undefined) Reflect.deleteProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT');
     else Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', previousActEnvironment);
   }
+});
+
+test('focused blocked proposal explains the prerequisite after the comparison and voter list', () => {
+  const detail: TripProposalResponse = {
+    ...pendingDetail, status: 'blocked', blocked_reason: 'prerequisite_pending'
+  };
+  const markup = renderToStaticMarkup(createElement(TripProposalView, {
+    detail, proposal: { ...detail, scopes: ['budget'] }, userId: 'author', participantLabel: (id) => id
+  }));
+  const explanation = markup.indexOf('Ожидает принятия связанного предложения');
+  assert.ok(explanation > markup.indexOf('ожидается голос'));
+  assert.ok(explanation > markup.indexOf('Предлагается'));
+  assert.doesNotMatch(markup, /Проголосовать/);
+});
+
+test('cancel in progress never masquerades as sending the selected vote', () => {
+  const props = {
+    detail: pendingDetail, proposal: pending, userId: 'author', participantLabel: (id: string) => id,
+    saving: true, voteChoice: 'reject' as const, onCancel: () => undefined
+  };
+  const cancelling = renderToStaticMarkup(createElement(TripProposalView, props));
+  assert.doesNotMatch(cancelling, /Отправляем голос/);
+  assert.match(cancelling, /Отменить предложение/);
+  const voting = renderToStaticMarkup(createElement(TripProposalView, { ...props, submittingVote: true }));
+  assert.match(voting, /Отправляем голос/);
+  assert.doesNotMatch(voting, /Отменить предложение/);
+});
+
+test('a failed vote has one alert and retains the selection, retry and contextual Back', () => {
+  const markup = renderToStaticMarkup(createElement(TripProposalView, {
+    detail: pendingDetail, proposal: pending, userId: 'me', participantLabel: (id) => id,
+    error: 'Не удалось сохранить голос. Выбор остался на экране; можно повторить.',
+    voteError: true, voteChoice: 'accept', onVote: () => undefined, onClose: () => undefined
+  }));
+  assert.equal(markup.match(/Не удалось сохранить голос/g)?.length, 1);
+  assert.match(markup, /role="alert"/);
+  assert.match(markup, /type="radio"[^>]*checked/);
+  assert.match(markup, /type="button">Проголосовать/);
+  assert.match(markup, /<header[^>]*>.*Назад<\/button><\/header>/);
 });

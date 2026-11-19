@@ -235,7 +235,7 @@ test('Profile and Travel Style use Save, show backend success, and advance after
 
       assert.match(ui.container.textContent ?? '', new RegExp(successText));
       assert.match(ui.container.textContent ?? '', new RegExp(`Через секунду откроется ${nextStep}`));
-      assert.equal(findButton(ui.container, 'Сохранено').textContent?.trim(), 'Сохранено');
+      assert.equal(findButton(ui.container, 'Сохранено').disabled, true);
       assert.equal(advances, 0);
 
       await act(async () => { context.mock.timers.tick(999); });
@@ -331,7 +331,7 @@ test('First Trip has one completion CTA and transitions only one second after al
     ]);
     assert.match(ui.container.textContent ?? '', /Настройка завершена/);
     assert.match(ui.container.textContent ?? '', /Через секунду откроется Discover \/ Matching/);
-    assert.equal(findButton(ui.container, 'Завершено').textContent?.trim(), 'Завершено');
+    assert.equal(findButton(ui.container, 'Завершено').disabled, true);
     assert.equal(completed, 0);
 
     await act(async () => { context.mock.timers.tick(999); });

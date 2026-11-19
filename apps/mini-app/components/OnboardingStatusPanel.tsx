@@ -6,11 +6,10 @@ type OnboardingStatusPanelProps = Readonly<{
   title: string;
   message: string;
   tone?: 'default' | 'error';
-  detail?: string;
   children?: ReactNode;
 }>;
 
-export function OnboardingStatusPanel({ title, message, tone = 'default', detail, children }: OnboardingStatusPanelProps) {
+export function OnboardingStatusPanel({ title, message, tone = 'default', children }: OnboardingStatusPanelProps) {
   const panel = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
@@ -22,7 +21,6 @@ export function OnboardingStatusPanel({ title, message, tone = 'default', detail
       <h2>{title}</h2>
       <p>{message}</p>
       {children}
-      {detail ? <p className="onboarding-status__detail">{detail}</p> : null}
     </section>
   );
 }

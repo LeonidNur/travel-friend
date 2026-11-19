@@ -1,11 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
 import { ApiError, createBackendApiClient, type TripDetailResponse, type TripDraftDetailResponse, type TripItineraryResponse } from '@/lib/backend-api-client';
-import { TripWorkspace } from '@/components/TripWorkspace';
+import { TripDetailStatus, TripWorkspace } from '@/components/TripWorkspace';
 import { getTripDetailScreenState } from '@/lib/trip-detail-runtime';
 
 interface TripDetailsPageProps {
@@ -105,25 +104,15 @@ function TripDetailsContent({ id, session }: Readonly<{ id: string; session: Tri
   };
 
   if (screenState === 'loading') {
-    return <TripState title="Загружаем поездку" message={null} />;
+    return <TripDetailStatus state="loading" />;
   }
 
   if (screenState === 'not_found' || errorStatus === 401 || errorStatus === 403) {
-    return (
-      <section className="page">
-        <article className="surface-card surface-card--compact empty-state-card">
-          <p className="section-kicker">Поездка</p>
-          <h2 className="empty-state-card__title">Поездка не найдена</h2>
-          <Link className="profile-button profile-button--secondary" href="/trips">
-            Вернуться к списку поездок
-          </Link>
-        </article>
-      </section>
-    );
+    return <TripDetailStatus state="not_found" />;
   }
 
   if (detail === null) {
-    return <TripState title="Не удалось загрузить поездку" message={error} onRetry={handleRetry} />;
+    return <TripDetailStatus state="error" onRetry={handleRetry} />;
   }
 
   const editor = draftDetail !== null && session !== null ? {

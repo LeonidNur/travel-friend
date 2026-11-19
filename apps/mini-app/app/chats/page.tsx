@@ -187,13 +187,13 @@ export default function ChatsPage() {
 
   return (
     <section className="page chats-list-screen">
-      <ChatsListHeader disabled={screenState === 'loading' || screenState === 'error'} onCreate={() => {
+      <ChatsListHeader onCreate={screenState === 'success' ? () => {
             setIsGroupFormOpen((isOpen) => !isOpen);
             setGroupError(null);
             setCanRetryGroupCreation(false);
-          }} />
+          } : undefined} />
 
-      {screenState !== 'success' ? <ChatsScreenStatus state={screenState} error={error} onRetry={handleRetry} /> : null}
+      {screenState !== 'success' ? <ChatsScreenStatus state={screenState} onRetry={handleRetry} /> : null}
 
       {screenState === 'success' ? (
         <section className="list-stack" aria-label="Список чатов">

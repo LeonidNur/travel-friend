@@ -26,10 +26,28 @@ test('profile edit validates, preserves draft on failure, and returns to saved v
   const setName = async (value: string) => { const input = container.querySelector<HTMLInputElement>('input[placeholder="Как вас зовут"]'); assert.ok(input); await act(async () => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set?.call(input, value); input.dispatchEvent(new dom.window.Event('input', { bubbles: true })); input.dispatchEvent(new dom.window.Event('change', { bubbles: true })); }); };
   try {
     await act(async () => root.render(createElement(ProfileContent, props)));
+    assert.equal(button('Изменить').getAttribute('aria-label'), 'Изменить планы поездок');
     await act(async () => button('Изменить').click());
-    const destination = container.querySelector<HTMLInputElement>('input[aria-invalid]') ?? [...container.querySelectorAll<HTMLInputElement>('input')].find((input) => input.value === 'Алтай');
+    const plan = container.querySelector('form');
+    assert.ok(plan);
+    const destination = plan.querySelector<HTMLInputElement>('input[type="text"]');
     assert.ok(destination);
-    await act(async () => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(destination), 'value')?.set?.call(destination, 'Байкал'); destination.dispatchEvent(new dom.window.Event('input', { bubbles: true })); });
+    const setDestination = async (value: string) => {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(destination), 'value')?.set?.call(destination, value);
+        destination.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      });
+    };
+    await setDestination('');
+    await act(async () => plan.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })));
+    assert.equal(destination.getAttribute('aria-invalid'), 'true');
+    const destinationErrorId = destination.getAttribute('aria-describedby');
+    assert.ok(destinationErrorId);
+    const destinationError = dom.window.document.getElementById(destinationErrorId);
+    assert.equal(destinationError?.textContent, 'Укажите направление');
+    assert.equal(destinationError?.previousElementSibling, destination.closest('label'));
+    await setDestination('Байкал');
+    assert.equal(destination.hasAttribute('aria-invalid'), false);
     await act(async () => button('Редактировать').click());
     assert.ok(container.querySelector('.profile-design__view[hidden]'));
     await setName(''); await act(async () => button('Сохранить').click());
@@ -41,7 +59,7 @@ test('profile edit validates, preserves draft on failure, and returns to saved v
     assert.equal(container.querySelector<HTMLInputElement>('input[placeholder="Как вас зовут"]')?.value, 'Марина');
     fail = false; await act(async () => button('Сохранить').click());
     assert.equal(calls, 2); assert.equal((saved as ProfileResponse | null)?.display_name, 'Марина');
-    assert.match(container.textContent ?? '', /Профиль сохранён/);
+    assert.equal(container.querySelector('.profile-page__identity .profile-header [role="status"]')?.textContent, 'Профиль сохранён');
     assert.ok(button('Редактировать'));
     assert.equal(destination.value, 'Байкал');
   } finally {

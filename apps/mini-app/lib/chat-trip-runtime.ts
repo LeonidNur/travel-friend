@@ -1,4 +1,5 @@
 import { ApiError, type TripCreateResponse, type TripListItemResponse } from './backend-api-client';
+import { formatTripRoute } from './trip-list-runtime';
 
 type CreateChatTripInput = Readonly<{
   chatId: string;
@@ -20,7 +21,8 @@ export type CreateTripButtonState = Readonly<{
 export type TripNavigationLookupState =
   | Readonly<{ status: 'loading' }>
   | Readonly<{ status: 'error' }>
-  | Readonly<{ status: 'loaded'; tripId: string | null }>;
+  | Readonly<{ status: 'loaded'; tripId: null }>
+  | Readonly<{ status: 'loaded'; tripId: string; route: string | null }>;
 
 const CREATE_TRIP_ERROR = 'Не удалось создать поездку. Попробуйте ещё раз.';
 const UNRESOLVED_CONFLICT_ERROR =
@@ -39,7 +41,9 @@ export async function loadChatTripNavigationState(
 ): Promise<TripNavigationLookupState> {
   try {
     const existingTrip = findUnfinishedTripForChat(await getTrips(), chatId);
-    return { status: 'loaded', tripId: existingTrip?.trip_id ?? null };
+    return existingTrip
+      ? { status: 'loaded', tripId: existingTrip.trip_id, route: formatTripRoute(existingTrip.route_place_labels) }
+      : { status: 'loaded', tripId: null };
   } catch {
     return { status: 'error' };
   }
@@ -63,21 +67,15 @@ export function getTripNavigationButtonState(
 
   return lookup.tripId === null
     ? { disabled: false, label: 'Создать поездку', showRetry: false }
-    : { disabled: false, label: 'Открыть поездку', showRetry: false };
+    : { disabled: false, label: 'План поездки', showRetry: false };
 }
 
-export function getTripNavigationDescription(lookup: TripNavigationLookupState): string {
-  if (lookup.status === 'loading') {
-    return 'Проверяем, есть ли поездка для этого чата.';
-  }
-
-  if (lookup.status === 'error') {
-    return 'Повторите проверку, чтобы узнать, доступна ли поездка.';
-  }
+export function getTripNavigationDescription(lookup: TripNavigationLookupState): string | null {
+  if (lookup.status !== 'loaded') return null;
 
   return lookup.tripId === null
     ? 'Создайте поездку для участников этого чата.'
-    : 'Откройте поездку участников этого чата.';
+    : lookup.route;
 }
 
 export async function createChatTrip({ chatId, createTrip, getTrips }: CreateChatTripInput): Promise<CreateChatTripResult> {
