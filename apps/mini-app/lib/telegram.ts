@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  getTelegramViewport,
+  subscribeTelegramViewport,
+  type TelegramInsets,
+  type TelegramViewportApi
+} from '@/lib/telegram-viewport';
 
 type TelegramColorScheme = 'dark' | 'light';
 type TelegramSource = 'browser' | 'telegram-webapp';
@@ -11,6 +17,11 @@ type TelegramWebApp = {
   version?: string;
   colorScheme?: TelegramColorScheme;
   viewportHeight?: number;
+  viewportStableHeight?: number;
+  safeAreaInset?: Partial<TelegramInsets>;
+  contentSafeAreaInset?: Partial<TelegramInsets>;
+  onEvent?: TelegramViewportApi['onEvent'];
+  offEvent?: TelegramViewportApi['offEvent'];
   ready?: () => void;
   expand?: () => void;
 };
@@ -42,6 +53,9 @@ export interface TelegramState {
   version: string;
   colorScheme: TelegramColorScheme;
   viewportHeight: number;
+  viewportStableHeight: number;
+  safeAreaInset: TelegramInsets;
+  contentSafeAreaInset: TelegramInsets;
   initDataLength: number;
 }
 
@@ -64,6 +78,8 @@ function getBrowserViewportHeight(): number {
 }
 
 function getBrowserFallbackState(telegramExists = false): TelegramState {
+  const viewport = getTelegramViewport(undefined, getBrowserViewportHeight());
+
   return {
     isReady: true,
     isTelegram: false,
@@ -73,7 +89,7 @@ function getBrowserFallbackState(telegramExists = false): TelegramState {
     platform: 'browser',
     version: 'n/a',
     colorScheme: getBrowserColorScheme(),
-    viewportHeight: getBrowserViewportHeight(),
+    ...viewport,
     initDataLength: 0
   };
 }
@@ -89,6 +105,9 @@ function getLoadingState(): TelegramState {
     version: 'loading',
     colorScheme: 'light',
     viewportHeight: 0,
+    viewportStableHeight: 0,
+    safeAreaInset: { top: 0, right: 0, bottom: 0, left: 0 },
+    contentSafeAreaInset: { top: 0, right: 0, bottom: 0, left: 0 },
     initDataLength: 0
   };
 }
@@ -106,6 +125,8 @@ function getTelegramState(telegramWindow: TelegramWindow): TelegramState {
     isTelegramReadyCalled = true;
   }
 
+  const viewport = getTelegramViewport(webApp, getBrowserViewportHeight());
+
   return {
     isReady: true,
     isTelegram: true,
@@ -115,7 +136,7 @@ function getTelegramState(telegramWindow: TelegramWindow): TelegramState {
     platform: webApp.platform ?? 'unknown',
     version: webApp.version ?? 'unknown',
     colorScheme: webApp.colorScheme ?? getBrowserColorScheme(),
-    viewportHeight: typeof webApp.viewportHeight === 'number' ? webApp.viewportHeight : getBrowserViewportHeight(),
+    ...viewport,
     initDataLength: webApp.initData?.length ?? 0
   };
 }
@@ -126,9 +147,22 @@ export function useTelegram(): TelegramState {
   useEffect(() => {
     let timeoutId: number | undefined;
     let cancelled = false;
+    let unsubscribeViewport: () => void = () => undefined;
     const maxAttempts = 20;
     const retryDelayMs = 50;
     let attempts = 0;
+    const handleBrowserResize = () => {
+      const webApp = (window as TelegramWindow).Telegram?.WebApp;
+
+      if (!webApp?.viewportHeight) {
+        setTelegramState((currentState) => ({
+          ...currentState,
+          ...getTelegramViewport(undefined, getBrowserViewportHeight())
+        }));
+      }
+    };
+
+    window.addEventListener('resize', handleBrowserResize);
 
     const refreshTelegramState = () => {
       if (cancelled) {
@@ -140,6 +174,11 @@ export function useTelegram(): TelegramState {
 
       if (webApp) {
         setTelegramState(getTelegramState(telegramWindow));
+        unsubscribeViewport = subscribeTelegramViewport(
+          webApp as TelegramViewportApi,
+          getBrowserViewportHeight(),
+          (viewport) => setTelegramState((currentState) => ({ ...currentState, ...viewport }))
+        );
         return;
       }
 
@@ -161,6 +200,8 @@ export function useTelegram(): TelegramState {
       if (timeoutId !== undefined) {
         window.clearTimeout(timeoutId);
       }
+      unsubscribeViewport();
+      window.removeEventListener('resize', handleBrowserResize);
     };
   }, []);
 
