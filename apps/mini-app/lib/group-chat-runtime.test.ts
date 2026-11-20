@@ -35,8 +35,8 @@ test('offers only existing direct Chat companions for a new group Chat', () => {
   assert.deepEqual(
     getAvailableGroupChatCompanions(chats),
     [
-      { user_id: 'user-one', display_name: 'Мария' },
-      { user_id: 'user-two', display_name: 'Илья' }
+      { user_id: 'user-one', display_name: 'Мария', age: 30, city: 'Казань' },
+      { user_id: 'user-two', display_name: 'Илья', age: null, city: null }
     ]
   );
 });

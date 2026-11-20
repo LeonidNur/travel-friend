@@ -15,7 +15,7 @@ export const bottomNavigationItems: NavigationItem[] = [
   {
     href: '/',
     label: 'Discover',
-    title: 'Discover',
+    title: 'Мэтч',
     description: 'Поиск попутчиков и поездок'
   },
   {

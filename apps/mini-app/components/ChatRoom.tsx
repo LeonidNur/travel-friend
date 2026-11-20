@@ -33,40 +33,58 @@ import {
   getGroupParticipantProfilePath
 } from '@/lib/chat-participant-profile-runtime';
 import { normalizeGroupChatTitle } from '@/lib/group-chat-runtime';
+import { formatTripRoute } from '@/lib/trip-list-runtime';
 
 type ChatRoomState = 'error' | 'loaded' | 'loading' | 'not_found';
 
 interface ChatRoomProps {
   chatId: string;
+  preview?: Readonly<{ chat: ChatResponse; messages: ChatMessageResponse[]; userId: string; sendError?: string;
+    roomState?: ChatRoomState; sending?: boolean; empty?: boolean;
+    hasOlder?: boolean; tripId?: string; tripRoute?: readonly string[]; creatingTrip?: boolean; tripError?: string;
+  }>;
 }
 
 const backendApiClient = createBackendApiClient();
+const participantCountForms = new Intl.PluralRules('ru');
+
+function formatParticipantCount(count: number) {
+  const form = participantCountForms.select(count);
+  return `${count} ${form === 'one' ? 'участник' : form === 'few' ? 'участника' : 'участников'}`;
+}
 
 function getMessageClassName(isCurrentUser: boolean) {
   return `chat-room__message${isCurrentUser ? ' chat-room__message--outgoing' : ' chat-room__message--incoming'}`;
 }
 
-export function ChatRoom({ chatId }: ChatRoomProps) {
+export function ChatRoom({ chatId, preview }: ChatRoomProps) {
   const { session } = useTelegramAuthSession();
   const router = useRouter();
-  const [chat, setChat] = useState<ChatResponse | null>(null);
-  const [messages, setMessages] = useState<ChatMessageResponse[]>([]);
-  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const fixture = process.env.NODE_ENV === 'development' ? preview : undefined;
+  const [chat, setChat] = useState<ChatResponse | null>(() => fixture?.chat ?? null);
+  const [messages, setMessages] = useState<ChatMessageResponse[]>(() => fixture?.empty ? [] : fixture?.messages ?? []);
+  const [hasMoreOlder, setHasMoreOlder] = useState(fixture?.hasOlder ?? false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [historyError, setHistoryError] = useState(false);
   const [syncError, setSyncError] = useState(false);
   const [readError, setReadError] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [readRetryKey, setReadRetryKey] = useState(0);
-  const [roomState, setRoomState] = useState<ChatRoomState>('loading');
+  const [roomState, setRoomState] = useState<ChatRoomState>(() => fixture ? fixture.roomState ?? 'loaded' : 'loading');
   const [reloadKey, setReloadKey] = useState(0);
-  const [draftMessage, setDraftMessage] = useState('');
-  const [sendError, setSendError] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState(false);
-  const [isCreatingTrip, setIsCreatingTrip] = useState(false);
-  const [tripError, setTripError] = useState<string | null>(null);
-  const [tripLookup, setTripLookup] = useState<TripNavigationLookupState>({ status: 'loading' });
+  const [draftMessage, setDraftMessage] = useState(() => fixture?.sendError || fixture?.sending ? 'Встретимся в субботу?' : '');
+  const [sendError, setSendError] = useState<string | null>(() => fixture?.sendError ?? null);
+  const [isSending, setIsSending] = useState(fixture?.sending ?? false);
+  const [isCreatingTrip, setIsCreatingTrip] = useState(fixture?.creatingTrip ?? false);
+  const [tripError, setTripError] = useState<string | null>(fixture?.tripError ?? null);
+  const [tripLookup, setTripLookup] = useState<TripNavigationLookupState>(() => {
+    if (!fixture) return { status: 'loading' };
+    return fixture.tripId
+      ? { status: 'loaded', tripId: fixture.tripId, route: formatTripRoute(fixture.tripRoute ?? []) }
+      : { status: 'loaded', tripId: null };
+  });
   const [tripLookupKey, setTripLookupKey] = useState(0);
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
   const [isEditingGroupTitle, setIsEditingGroupTitle] = useState(false);
   const [groupTitleDraft, setGroupTitleDraft] = useState('');
   const [groupTitleError, setGroupTitleError] = useState<string | null>(null);
@@ -274,8 +292,8 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
   }, [chat, roomState, session, tripLookupKey]);
 
   const renderedMessages = useMemo(
-    () => (session === null ? [] : mapChatMessages(messages, session.userId)),
-    [messages, session]
+    () => session === null && !fixture ? [] : mapChatMessages(messages, session?.userId ?? fixture?.userId ?? ''),
+    [messages, session, fixture]
   );
   const messageHistoryState = getChatMessageHistoryState(renderedMessages);
 
@@ -403,10 +421,10 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
 
   if (roomState === 'loading') {
     return (
-      <section className="page" aria-live="polite">
-        <article className="surface-card surface-card--compact empty-state-card">
-          <p className="section-kicker">Загружаем чат</p>
-          <p className="surface-card__copy">Получаем историю сообщений.</p>
+      <section className="page chat-room-screen">
+        <article className="chat-screen-status" role="status">
+          <h1>Загружаем чат</h1>
+          <p>Получаем историю сообщений.</p>
         </article>
       </section>
     );
@@ -432,136 +450,129 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
 
   const isGroupChat = chat.type === 'group';
   const companion = chat.type === 'direct' ? chat.companion : null;
-  const chatTitle = isGroupChat ? chat.title ?? 'Групповой чат' : companion?.display_name ?? '';
+  const chatTitle = isGroupChat ? chat.title ?? (chat.participants.map((person) => person.display_name).filter(Boolean).join(', ') || 'Групповой чат') : companion?.display_name ?? '';
   const tripButtonState = getTripNavigationButtonState(tripLookup, isCreatingTrip);
+  const tripDescription = tripError === null ? getTripNavigationDescription(tripLookup) : null;
+  const groupTitleErrorId = `group-title-error-${chat.chat_id}`;
+
+  const identity = <>
+    <span className="profile-hero__avatar" aria-hidden="true">
+      {isGroupChat ? chat.participant_count : getAvatarInitials(chatTitle)}
+    </span>
+    <span className="profile-hero__content">
+      <span className="profile-hero__title" title={chatTitle}>{chatTitle}</span>
+      <span className="profile-hero__city">
+        {isGroupChat ? formatParticipantCount(chat.participant_count) : companion?.city ?? 'Город не указан'}
+      </span>
+    </span>
+  </>;
 
   return (
-    <section className="page">
+    <section className="page chat-room-screen">
       <article className="hero-card chat-room-hero">
-        <div className="profile-header">
+        <div className="chat-room-hero__header">
           <Link className="profile-button profile-button--secondary profile-back-button" href="/chats">
-            Назад к чатам
+            ← К чатам
           </Link>
-          <span className="profile-status">Чат</span>
+          {companion ? <Link className="profile-hero chat-room-hero__identity"
+            href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>{identity}</Link> :
+            <button type="button" className="profile-hero chat-room-hero__identity"
+              aria-expanded={showGroupInfo} aria-controls={`group-info-${chat.chat_id}`}
+              disabled={isSavingGroupTitle} onClick={() => setShowGroupInfo((visible) => !visible)}>{identity}</button>}
         </div>
-        <p className="section-kicker">{isGroupChat ? 'Группа' : 'Диалог'}</p>
-        <div className="profile-hero">
-          <div className="profile-hero__avatar" aria-hidden="true">
-            {getAvatarInitials(chatTitle)}
-          </div>
-          <div className="profile-hero__content">
-            <h2 className="hero-card__title profile-hero__title">{chatTitle}</h2>
-            {isGroupChat ? (
-              <div className="chat-room__group-title-actions">
-                {!isEditingGroupTitle ? (
-                  <button
-                    className="profile-button profile-button--secondary"
-                    type="button"
-                    onClick={() => {
-                      setGroupTitleDraft(chat.title ?? '');
-                      setGroupTitleError(null);
-                      setCanRetryGroupTitleSave(false);
-                      setIsEditingGroupTitle(true);
-                    }}
-                  >
-                    Переименовать группу
-                  </button>
-                ) : (
-                  <form className="group-chat-create" onSubmit={handleRenameGroup}>
-                    <label className="profile-field">
-                      <span>Название группы</span>
-                      <input
-                        autoComplete="off"
-                        disabled={isSavingGroupTitle}
-                        value={groupTitleDraft}
-                        onChange={(event) => setGroupTitleDraft(event.target.value)}
-                      />
-                    </label>
-                    {groupTitleError !== null ? <p className="chat-room__composer-note" role="alert">{groupTitleError}</p> : null}
-                    <div className="chat-room__group-title-actions">
-                      <button className="profile-button profile-button--primary" disabled={isSavingGroupTitle} type="submit">
-                        {isSavingGroupTitle ? 'Сохраняем…' : canRetryGroupTitleSave ? 'Повторить' : 'Сохранить'}
-                      </button>
-                      <button
-                        className="profile-button profile-button--secondary"
-                        disabled={isSavingGroupTitle}
-                        type="button"
-                        onClick={() => setIsEditingGroupTitle(false)}
-                      >
-                        Отмена
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
-            ) : null}
-            {companion !== null ? <p className="profile-hero__city">{companion.city ?? 'Город не указан'}</p> : null}
-            {companion !== null ? <Link href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>Открыть профиль</Link> : null}
-          </div>
-        </div>
-      </article>
-
-      <article className="surface-card surface-card--compact">
-        <div className="chat-room__participants-header">
-          <p className="surface-card__title">{isGroupChat ? 'Участники' : 'Собеседник'}</p>
-          <span className="chat-room__participants-count">
-            {isGroupChat ? `${chat.participant_count} участников` : 'Прямой чат'}
-          </span>
-        </div>
-        <div className="chat-room__participants" aria-label={isGroupChat ? 'Участники чата' : 'Собеседник в чате'}>
-          {isGroupChat ? chat.participants.map((participant) => {
-            const participantName = participant.display_name ?? 'Имя не указано';
-
-            return (
-              <Link
-                className="chat-room__participant"
-                href={getGroupParticipantProfilePath(chat.chat_id, participant.user_id, session?.userId ?? '')}
-                key={participant.user_id}
-              >
-                <div className="chat-room__participant-avatar" aria-hidden="true">
-                  {getAvatarInitials(participantName)}
-                </div>
-                <div className="chat-room__participant-copy">
-                  <p className="chat-room__participant-name">{participantName}</p>
-                </div>
-              </Link>
-            );
-          }) : companion === null ? null : (
-            <Link className="chat-room__participant" href={getChatParticipantProfilePath(chat.chat_id, companion.user_id)}>
-              <div className="chat-room__participant-avatar" aria-hidden="true">
-                {getAvatarInitials(companion.display_name)}
-              </div>
-              <div className="chat-room__participant-copy">
-                <p className="chat-room__participant-name">
-                  {companion.display_name}
-                  {companion.age === null ? '' : `, ${companion.age}`}
-                </p>
-                <p className="chat-room__participant-meta">{companion.city ?? 'Город не указан'}</p>
-              </div>
-            </Link>
+        <div className="chat-room__trip-summary">
+          {tripDescription ? <p className="surface-card__copy">{tripDescription}</p> : null}
+          {tripLookup.status === 'error' ? (
+            <p className="chat-room__composer-note" role="alert">Не удалось проверить поездку.</p>
+          ) : null}
+          {tripError !== null ? <p className="chat-room__composer-note" role="alert">{tripError}</p> : null}
+          {tripButtonState.showRetry ? (
+            <button className="profile-button profile-button--secondary" type="button" onClick={retryTripLookup}>
+              Повторить
+            </button>
+          ) : (
+            <button className="profile-button profile-button--primary" disabled={tripButtonState.disabled} type="button" onClick={handleCreateTrip}>
+              {tripButtonState.label}
+            </button>
           )}
         </div>
       </article>
 
-      <article className="surface-card surface-card--compact">
-        <p className="surface-card__title">Поездка</p>
-        <p className="surface-card__copy">{getTripNavigationDescription(tripLookup)}</p>
-        {tripLookup.status === 'error' ? (
-          <p className="chat-room__composer-note" role="alert">Не удалось проверить поездку. Повторите попытку.</p>
-        ) : null}
-        {tripError !== null ? <p className="chat-room__composer-note" role="alert">{tripError}</p> : null}
-        {tripButtonState.showRetry ? (
-          <button className="profile-button profile-button--secondary" type="button" onClick={retryTripLookup}>
-            Повторить
-          </button>
-        ) : (
-          <button className="profile-button profile-button--primary" disabled={tripButtonState.disabled} type="button" onClick={handleCreateTrip}>
-            {tripButtonState.label}
-          </button>
-        )}
-      </article>
+      {isGroupChat ? (
+        <article className="surface-card surface-card--compact chat-room__group-info" id={`group-info-${chat.chat_id}`} hidden={!showGroupInfo}>
+          <div className="chat-room__participants-header">
+            <h2 className="surface-card__title">Участники</h2>
+            {!isEditingGroupTitle && (
+              <button
+                className="profile-button profile-button--secondary chat-room__rename-action"
+                type="button"
+                aria-label="Переименовать группу"
+                onClick={() => {
+                  setGroupTitleDraft(chat.title ?? '');
+                  setGroupTitleError(null);
+                  setCanRetryGroupTitleSave(false);
+                  setIsEditingGroupTitle(true);
+                }}
+              >
+                Переименовать
+              </button>
+            )}
+          </div>
+          {chat.title && !isEditingGroupTitle ? <p className="chat-room__group-name">{chat.title}</p> : null}
+          {isEditingGroupTitle && (
+            <form className="group-chat-create" onSubmit={handleRenameGroup}>
+              <label className="profile-field">
+                <span>Название группы</span>
+                <input
+                  autoComplete="off"
+                  disabled={isSavingGroupTitle}
+                  aria-invalid={groupTitleError !== null && !canRetryGroupTitleSave ? true : undefined}
+                  aria-describedby={groupTitleError ? groupTitleErrorId : undefined}
+                  value={groupTitleDraft}
+                  onChange={(event) => setGroupTitleDraft(event.target.value)}
+                />
+              </label>
+              {groupTitleError !== null ? <p id={groupTitleErrorId} className="chat-room__composer-note" role="alert">{groupTitleError}</p> : null}
+              <div className="chat-room__group-title-actions">
+                <button className="profile-button profile-button--primary" disabled={isSavingGroupTitle} type="submit">
+                  {isSavingGroupTitle ? 'Сохраняем…' : canRetryGroupTitleSave ? 'Повторить' : 'Сохранить'}
+                </button>
+                <button
+                  className="profile-button profile-button--secondary"
+                  disabled={isSavingGroupTitle}
+                  type="button"
+                  onClick={() => setIsEditingGroupTitle(false)}
+                >
+                  Отмена
+                </button>
+              </div>
+            </form>
+          )}
+          <div className="chat-room__participants" aria-label="Участники чата">
+            {chat.participants.map((participant) => {
+              const participantName = participant.display_name ?? 'Имя не указано';
 
-      <section className="surface-card chat-room" aria-label="История сообщений">
+              return (
+                <Link
+                  className="chat-room__participant"
+                  href={getGroupParticipantProfilePath(chat.chat_id, participant.user_id, session?.userId ?? '')}
+                  key={participant.user_id}
+                >
+                  <div className="chat-room__participant-avatar" aria-hidden="true">
+                    {getAvatarInitials(participantName)}
+                  </div>
+                  <div className="chat-room__participant-copy">
+                    <p className="chat-room__participant-name">{participantName}</p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </article>
+      ) : null}
+
+      <section className="surface-card chat-room" aria-label="История сообщений" tabIndex={0}>
+        <h2 className="surface-card__title">Сообщения</h2>
         {isOffline ? <p className="chat-room__composer-note" role="status">Нет подключения. Сообщения обновятся после восстановления сети; черновик сохранён.</p> : null}
         {syncError ? (
           <p className="chat-room__composer-note" role="status">
@@ -577,7 +588,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
         ) : null}
         <div className="chat-room__timeline">
           {messageHistoryState === 'empty' ? (
-            <p className="surface-card__copy">Сообщений пока нет</p>
+            <p className="surface-card__copy" role="status">Сообщений пока нет</p>
           ) : null}
           {renderedMessages.map((message) => {
             if (message.kind === 'system') {
@@ -595,7 +606,7 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
             }
 
             const sourceMessage = messages.find((source) => source.message_id === message.messageId);
-            const authorLabel = sourceMessage === undefined ? null : getMessageAuthorLabel(chat, sourceMessage, session?.userId ?? '');
+            const authorLabel = sourceMessage === undefined ? null : getMessageAuthorLabel(chat, sourceMessage, session?.userId ?? fixture?.userId ?? '');
 
             return (
               <div className={getMessageClassName(message.isOwn)} key={message.messageId}>
@@ -607,29 +618,29 @@ export function ChatRoom({ chatId }: ChatRoomProps) {
           })}
         </div>
 
-        <form className="chat-room__composer" onSubmit={handleSubmit}>
-          <label className="sr-only" htmlFor="chat-room-message">
-            Сообщение
-          </label>
-          <textarea
-            id="chat-room-message"
-            className="profile-input chat-room__input"
-            value={draftMessage}
-            onChange={(event) => setDraftMessage(event.target.value)}
-            placeholder="Напишите сообщение для старта обсуждения"
-            rows={3}
-            disabled={isSending}
-          />
-          <div className="chat-room__composer-footer">
-            <p className="chat-room__composer-note" role={sendError ? 'alert' : undefined}>
-              {sendError ?? 'Сообщение будет добавлено в чат после подтверждения сервером.'}
-            </p>
-            <button className="profile-button profile-button--primary" type="submit" disabled={isSending}>
-              {isSending ? 'Отправляем…' : 'Отправить сообщение'}
-            </button>
-          </div>
-        </form>
       </section>
+      <form className="surface-card chat-room__composer" onSubmit={handleSubmit}>
+        <label className="sr-only" htmlFor="chat-room-message">
+          Сообщение
+        </label>
+        <textarea
+          id="chat-room-message"
+          className="profile-input chat-room__input"
+          value={draftMessage}
+          onChange={(event) => setDraftMessage(event.target.value)}
+          placeholder="Напишите сообщение для старта обсуждения"
+          rows={2}
+          disabled={isSending}
+        />
+        <div className="chat-room__composer-footer">
+          <p className={`chat-room__composer-note${sendError ? '' : ' sr-only'}`} role={sendError ? 'alert' : undefined}>
+            {sendError ?? 'Сообщение будет добавлено в чат после подтверждения сервером.'}
+          </p>
+          <button className="profile-button profile-button--primary" type="submit" disabled={isSending}>
+            {isSending ? 'Отправляем…' : 'Отправить'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
@@ -640,15 +651,14 @@ function ChatRoomUnavailable({
   onRetry
 }: Readonly<{ title: string; message: string; onRetry?: () => void }>) {
   return (
-    <section className="page">
-      <article className="surface-card surface-card--compact empty-state-card">
-        <p className="section-kicker">{title}</p>
-        <h2 className="empty-state-card__title">{title}</h2>
-        <p className="surface-card__copy">{message}</p>
-        {onRetry ? <button className="profile-button profile-button--secondary" type="button" onClick={onRetry}>Повторить</button> : null}
-        <Link className="profile-button profile-button--secondary" href="/chats">
+    <section className="page chat-room-screen">
+      <article className="chat-screen-status chat-screen-status--error" role="alert">
+        <h1>{title}</h1>
+        <p>{message}</p>
+        <Link className="profile-button profile-button--primary" href="/chats">
           Вернуться к списку чатов
         </Link>
+        {onRetry ? <button className="chat-screen-status__retry" type="button" onClick={onRetry}>Повторить</button> : null}
       </article>
     </section>
   );
