@@ -14,7 +14,13 @@
   --accent: #171717;
   --accent-strong: #171717;
   --shadow: none;
-  --app-nav-bottom: max(37px, calc(16px + env(safe-area-inset-bottom)));
+  --app-safe-area-top: max(env(safe-area-inset-top, 0px), var(--app-telegram-safe-area-top, 0px));
+  --app-safe-area-right: max(env(safe-area-inset-right, 0px), var(--app-telegram-safe-area-right, 0px));
+  --app-safe-area-bottom: max(env(safe-area-inset-bottom, 0px), var(--app-telegram-safe-area-bottom, 0px));
+  --app-safe-area-left: max(env(safe-area-inset-left, 0px), var(--app-telegram-safe-area-left, 0px));
+  --app-viewport-height: var(--app-telegram-viewport-height, 100dvh);
+  --app-viewport-stable-height: var(--app-telegram-viewport-stable-height, 100svh);
+  --app-nav-bottom: max(37px, calc(16px + var(--app-safe-area-bottom)));
   --app-nav-height: 58px;
 }
 
@@ -28,7 +34,7 @@ html {
 
 body {
   margin: 0;
-  min-height: 100svh;
+  min-height: var(--app-viewport-stable-height);
   color: var(--text);
   font-family:
     var(--font-inter), Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -57,18 +63,18 @@ select:focus-visible {
 }
 
 .app-shell {
-  min-height: 100svh;
+  min-height: var(--app-viewport-stable-height);
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: max(16px, env(safe-area-inset-top)) 16px calc(var(--app-nav-bottom) + var(--app-nav-height) + 14px);
+  padding: max(16px, var(--app-safe-area-top)) max(16px, var(--app-safe-area-right)) calc(var(--app-nav-bottom) + var(--app-nav-height) + 14px) max(16px, var(--app-safe-area-left));
 }
 
 .auth-gate {
   display: grid;
-  min-height: 100svh;
+  min-height: var(--app-viewport-stable-height);
   place-items: center;
-  padding: max(16px, env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  padding: max(16px, var(--app-safe-area-top)) max(16px, var(--app-safe-area-right)) calc(24px + var(--app-safe-area-bottom)) max(16px, var(--app-safe-area-left));
 }
 
 .auth-gate__card {
@@ -232,7 +238,7 @@ select:focus-visible {
 }
 
 body[data-profile-edit-mode='true'] .app-content__frame {
-  padding-bottom: calc(112px + env(safe-area-inset-bottom));
+  padding-bottom: calc(112px + var(--app-safe-area-bottom));
 }
 
 .page {
@@ -2101,7 +2107,7 @@ body[data-profile-edit-mode='true'] .bottom-navigation {
 }
 
 .app-shell:has(.chat-room) {
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  padding-bottom: max(16px, var(--app-safe-area-bottom));
 }
 
 .trip-card--link:hover,
@@ -2506,7 +2512,7 @@ body[data-profile-edit-mode='true'] .bottom-navigation {
   min-width: 0;
   padding: 20px 24px;
   background: #fff;
-  scroll-margin-bottom: calc(24px + env(safe-area-inset-bottom));
+  scroll-margin-bottom: calc(24px + var(--app-safe-area-bottom));
 }
 
 .chat-room .surface-card__title {
@@ -2606,7 +2612,7 @@ body[data-profile-edit-mode='true'] .bottom-navigation {
   flex-direction: column;
   gap: 0;
   width: 100%;
-  height: min(738px, calc(100dvh - max(16px, env(safe-area-inset-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 14px));
+  height: min(738px, calc(var(--app-viewport-height) - max(16px, var(--app-safe-area-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 14px));
   min-height: 380px;
   padding: 0 24px 12px;
   overflow: hidden;
@@ -2855,7 +2861,7 @@ body[data-profile-edit-mode='true'] .bottom-navigation {
 }
 
 .profile-design {
-  max-height: calc(100svh - max(16px, env(safe-area-inset-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 14px);
+  max-height: calc(var(--app-viewport-stable-height) - max(16px, var(--app-safe-area-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 14px);
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-width: none;
@@ -3026,7 +3032,7 @@ body[data-profile-edit-mode='true'] .bottom-navigation {
 
 .chats-list-screen,
 .group-create-screen {
-  max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 14px);
+  max-height: calc(var(--app-viewport-height) - max(16px, var(--app-safe-area-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 14px);
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-width: none;
@@ -3341,7 +3347,7 @@ body[data-profile-edit-mode='true'] .bottom-navigation {
 }
 
 .chat-room-screen:has(> .chat-room):not(:has(> .chat-room__group-info:not([hidden]))) {
-  max-height: calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
+  max-height: calc(var(--app-viewport-height) - max(16px, var(--app-safe-area-top)) - max(16px, var(--app-safe-area-bottom)));
 }
 
 .chat-room-screen > .chat-room {

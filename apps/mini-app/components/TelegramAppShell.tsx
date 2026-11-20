@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { BottomNavigation } from '@/components/BottomNavigation';
 import { OnboardingProfileScreen } from '@/components/OnboardingProfileScreen';
 import { useTelegramAuthSession } from '@/components/TelegramAuthBootstrapProvider';
-import { useTelegram } from '@/lib/telegram';
 
 interface TelegramAppShellProps {
   children: React.ReactNode;
@@ -15,7 +14,6 @@ export function TelegramAppShell({ children }: TelegramAppShellProps) {
   const pathname = usePathname();
   const { status: authStatus } = useTelegramAuthSession();
   const shouldHideBottomNavigation = pathname.startsWith('/chats/');
-  useTelegram();
 
   if (process.env.NODE_ENV === 'development' && pathname === '/debug-telegram') {
     return children;

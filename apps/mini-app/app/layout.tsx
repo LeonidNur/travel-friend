@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import Script from 'next/script';
 
@@ -6,6 +6,7 @@ import { CurrentUserProfileProvider } from '@/components/CurrentUserProfileProvi
 import { InterestDecisionProvider } from '@/components/InterestDecisionProvider';
 import { TelegramAuthBootstrapProvider } from '@/components/TelegramAuthBootstrapProvider';
 import { TelegramAppShell } from '@/components/TelegramAppShell';
+import { TelegramViewportController } from '@/components/TelegramViewportController';
 
 import './globals.css';
 
@@ -20,6 +21,12 @@ export const metadata: Metadata = {
   description: 'Мини-приложение Telegram для поиска попутчиков.'
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover'
+};
+
 export default function RootLayout({
   children
 }: Readonly<{
@@ -32,13 +39,15 @@ export default function RootLayout({
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="afterInteractive"
         />
-        <TelegramAuthBootstrapProvider>
-          <CurrentUserProfileProvider>
-            <InterestDecisionProvider>
-              <TelegramAppShell>{children}</TelegramAppShell>
-            </InterestDecisionProvider>
-          </CurrentUserProfileProvider>
-        </TelegramAuthBootstrapProvider>
+        <TelegramViewportController>
+          <TelegramAuthBootstrapProvider>
+            <CurrentUserProfileProvider>
+              <InterestDecisionProvider>
+                <TelegramAppShell>{children}</TelegramAppShell>
+              </InterestDecisionProvider>
+            </CurrentUserProfileProvider>
+          </TelegramAuthBootstrapProvider>
+        </TelegramViewportController>
       </body>
     </html>
   );

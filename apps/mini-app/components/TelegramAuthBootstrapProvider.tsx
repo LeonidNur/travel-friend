@@ -11,7 +11,8 @@ import {
   type RuntimeTelegramSession,
   type TelegramAuthBootstrapState
 } from '@/lib/telegram-auth-bootstrap';
-import { getTelegramInitData, useTelegram } from '@/lib/telegram';
+import { getTelegramInitData } from '@/lib/telegram';
+import { useTelegramViewportState } from '@/components/TelegramViewportController';
 
 type TelegramAuthContextValue = Readonly<{
   status: TelegramAuthBootstrapState['status'];
@@ -27,7 +28,7 @@ const backendApiClient = createBackendApiClient();
 
 export function TelegramAuthBootstrapProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const telegram = useTelegram();
+  const telegram = useTelegramViewportState();
   const [bootstrapState, setBootstrapState] = useState(createInitialTelegramAuthBootstrapState);
   const isDevelopmentDebugRoute = process.env.NODE_ENV === 'development' && pathname === '/debug-telegram';
 

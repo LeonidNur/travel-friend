@@ -63,7 +63,7 @@
 .logisticsList .meta { white-space: pre-line; }
 .logisticsList li[data-details='true']:not(:last-child) { margin-bottom: 8px; }
 .workspace {
-  max-height: calc(100svh - max(16px, env(safe-area-inset-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 23px);
+  max-height: calc(var(--app-viewport-stable-height) - max(16px, var(--app-safe-area-top)) - var(--app-nav-bottom) - var(--app-nav-height) - 23px);
   padding-bottom: 24px;
   overflow-y: auto;
   overscroll-behavior: contain;
